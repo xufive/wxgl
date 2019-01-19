@@ -34,11 +34,12 @@ class GLScene(glcanvas.GLCanvas):
         self.up = np.array([0.0, 1.0, 0.0])
         self.dist, self.phi, self.theta = self.getCamPosition()
         
-        #self.GLinitialized = False
+        self.GLinitialized = False
         self.context = glcanvas.GLContext(self)
         self.size = self.GetClientSize()
         self.lastx = self.x = None
         self.lasty = self.y = None
+        self.assembly = list()
         
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.onEraseBackground)
         self.Bind(wx.EVT_SIZE, self.onResize)
@@ -75,7 +76,9 @@ class GLScene(glcanvas.GLCanvas):
         """重绘"""
         
         self.SetCurrent(self.context)
-        self.initGL()
+        if not self.GLinitialized:
+            self.initGL()
+            self.GLinitialized = True
         self.drawGL()
         self.SwapBuffers()
         
@@ -173,6 +176,13 @@ class GLScene(glcanvas.GLCanvas):
         #glEnable(GL_COLOR_MATERIAL)
         #glEnable(GL_LIGHTING)
         
+        self.initData()
+        
+    def drawGL(self):
+        """绘制"""
+        
+        pass
+        '''
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         
@@ -199,10 +209,35 @@ class GLScene(glcanvas.GLCanvas):
         
         glScale(self.scale[0], self.scale[1], self.scale[2])
         
-    def drawGL(self):
-        """绘制"""
         
-        #pass
+        for item in self.assembly:
+            if item['cmd'] == 'glDrawElements':
+                item['vbo'].bind()
+                glInterleavedArrays(item['vertex_type'], 0, None)
+                item['ebo'].bind()
+                glDrawElements(item['gl_type'], int(item['ebo'].size/4), GL_UNSIGNED_INT, None) 
+                item['vbo'].unbind()
+                item['ebo'].unbind()
+            else:
+                item['cmd'](item['args'])
+        
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
+        '''
+        
+    def initData(self):
+        """3D数据初始化(需要在派生类中重写)"""
+        
+        pass
+     
+    def wxglPolygonMode(self, args):
+        """设置多边形模式：GL_POINT/GL_LINE/GL_FILL"""
+        
+        glPolygonMode(args[0], args[1])
+     
+    def wxglColor3f(self, args):
+        """设置当前颜色：GL_POINT/GL_LINE/GL_FILL"""
+        
+        glColor3f(args[0],args[1],args[2])
 
 
 if __name__ == "__main__":

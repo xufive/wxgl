@@ -19,10 +19,18 @@ class DemoScene(GLScene):
         
         GLScene.__init__(self, parent, databox=databox)
         
-    def drawGL(self):
-        """重写GL绘制方法"""
+    def initData(self):
+        """3D数据初始化(需要在派生类中重写)"""
         
-        vertexes_0 = np.array([
+        #    v4----- v5
+        #   /|      /|
+        #  v0------v1|
+        #  | |     | |
+        #  | v7----|-v6
+        #  |/      |/
+        #  v3------v2
+        
+        vertex_0 = np.array([
             -0.5, 0.5, 0.5,
 			0.5, 0.5, 0.5,
 			0.5, -0.5, 0.5,
@@ -31,9 +39,9 @@ class DemoScene(GLScene):
 			0.5, 0.5, -0.5,
 			0.5, -0.5, -0.5,
 			-0.5, -0.5, -0.5
-        ])
+        ], dtype=np.float32)
 
-        indexes_0 = np.array([
+        face_0 = np.array([
             0, 1, 2, 3,
             4, 5, 1, 0,
             3, 2, 6, 7,
@@ -42,69 +50,95 @@ class DemoScene(GLScene):
             4, 0, 3, 7
         ], dtype=np.int)
         
+        vertex_1 = np.array([
+            0.3, 0.6, 0.9, -0.35, 0.35, 0.35, 
+			0.6, 0.9, 0.3, 0.35, 0.35, 0.35, 
+			0.9, 0.3, 0.6, 0.35, -0.35, 0.35, 
+			0.3, 0.9, 0.6, -0.35, -0.35, 0.35, 
+			0.6, 0.3, 0.9, -0.35, 0.35, -0.35, 
+			0.9, 0.6, 0.3, 0.35, 0.35, -0.35, 
+			0.3, 0.9, 0.9, 0.35, -0.35, -0.35, 
+			0.9, 0.9, 0.3, -0.35, -0.35, -0.35
+        ], dtype=np.float32)
+        
+        face_1 = np.array([
+            0, 1, 3, 1, 2, 3,
+            4, 5, 0, 5, 1, 0,
+            3, 2, 7, 2, 6, 7,
+            5, 4, 6, 4, 7, 6,
+            1, 5, 2, 5, 6, 2,
+            4, 0, 7, 0, 3, 7
+        ], dtype=np.int)
+        
+        vbo_0 = vbo.VBO(vertex_0)
+        vbo_1 = vbo.VBO(vertex_1)
+        ebo_0 = vbo.VBO(face_0, target=GL_ELEMENT_ARRAY_BUFFER)
+        ebo_1 = vbo.VBO(face_1, target=GL_ELEMENT_ARRAY_BUFFER)
+        
+        #self.assembly.append({'cmd':self.wxglColor3f, 'args':[1.0,0.0,0.0]})
+        #self.assembly.append({'cmd':self.wxglPolygonMode, 'args':[GL_FRONT_AND_BACK, GL_LINE]})
+        #self.assembly.append({'cmd':'glDrawElements', 'vbo':vbo_0, 'ebo':ebo_0, 'vertex_type':GL_V3F, 'gl_type':GL_QUADS})
+        #self.assembly.append({'cmd':self.wxglPolygonMode, 'args':[GL_FRONT_AND_BACK, GL_FILL]})
+        #self.assembly.append({'cmd':'glDrawElements', 'vbo':vbo_1, 'ebo':ebo_1, 'vertex_type':GL_C3F_V3F, 'gl_type':GL_TRIANGLES})
+        
+        self.assembly = {'vbo_0':vbo_0, 'vbo_1':vbo_1, 'ebo_0':ebo_0, 'ebo_1':ebo_1}
+        
+    def drawGL(self):
+        """重写GL绘制方法"""
+        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        
+        width, height = self.size
+        if width > height:
+            if self.isOrtho:
+                glOrtho(self.view[0]*width/height, self.view[1]*width/height, self.view[2], self.view[3], self.view[4], self.view[5])
+            else:
+                glFrustum(self.view[0]*width/height, self.view[1]*width/height, self.view[2], self.view[3], self.view[4], self.view[5])
+        else:
+            if self.isOrtho:
+                glOrtho(self.view[0], self.view[1], self.view[2]*height/width, self.view[3]*height/width, self.view[4], self.view[5])
+            else:
+                glFrustum(self.view[0], self.view[1], self.view[2]*height/width, self.view[3]*height/width, self.view[4], self.view[5])
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        
+        gluLookAt(
+            self.eye[0], self.eye[1], self.eye[2], 
+            self.lookat[0], self.lookat[1], self.lookat[2],
+            self.up[0], self.up[1], self.up[2]
+        )
+        
+        glScale(self.scale[0], self.scale[1], self.scale[2])
+        
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
+                
+        #self.assembly.append({'cmd':self.wxglColor3f, 'args':[1.0,0.0,0.0]})
+        #self.assembly.append({'cmd':self.wxglPolygonMode, 'args':[GL_FRONT_AND_BACK, GL_LINE]})
+        #self.assembly.append({'cmd':'glDrawElements', 'vbo':vbo_0, 'ebo':ebo_0, 'vertex_type':GL_V3F, 'gl_type':GL_QUADS})
+        #self.assembly.append({'cmd':self.wxglPolygonMode, 'args':[GL_FRONT_AND_BACK, GL_FILL]})
+        #self.assembly.append({'cmd':'glDrawElements', 'vbo':vbo_1, 'ebo':ebo_1, 'vertex_type':GL_C3F_V3F, 'gl_type':GL_TRIANGLES})
         
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         glColor3f(1.0,0.0,0.0)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         
-        # ---------------------------------------------------
-        vao_1 = glGenVertexArrays(1)
-        glBindVertexArray(vao_1)
+        self.assembly['vbo_0'].bind()
+        glInterleavedArrays(GL_V3F, 0, None)
+        self.assembly['ebo_0'].bind()
+        glDrawElements(GL_QUADS, int(self.assembly['ebo_0'].size/4), GL_UNSIGNED_INT, None) 
+        self.assembly['vbo_0'].unbind()
+        self.assembly['ebo_0'].unbind()
         
-        indexes = (c_uint*len(indexes_0))(*indexes_0)
-        ebo_index = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_index)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexes, GL_STATIC_DRAW)
-        #glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         
-        vertexes = (c_float*len(vertexes_0))(*vertexes_0)
-        vbo_vertex = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_vertex)
-        glBufferData(GL_ARRAY_BUFFER, vertexes, GL_STATIC_DRAW)
-        #glBindBuffer(GL_ARRAY_BUFFER, 0)
+        self.assembly['vbo_1'].bind()
+        glInterleavedArrays(GL_C3F_V3F, 0, None)
+        self.assembly['ebo_1'].bind()
+        glDrawElements(GL_TRIANGLES, int(self.assembly['ebo_1'].size/4), GL_UNSIGNED_INT, None) 
+        self.assembly['vbo_1'].unbind()
+        self.assembly['ebo_1'].unbind()
         
-        #glBindBuffer(GL_ARRAY_BUFFER, vbo_vertex)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, None)
-        #glBindBuffer(GL_ARRAY_BUFFER, 0)
-        
-        glBindVertexArray(0)
-        
-        # ---------------------------------------------------
-        vao_2 = glGenVertexArrays(1)
-        glBindVertexArray(vao_2)
-        
-        indexes = (c_uint*len(indexes_0))(*indexes_0)
-        ebo_index = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_index)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexes, GL_STATIC_DRAW)
-        #glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
-        
-        vertexes = 0.5 * vertexes_0
-        vertexes = (c_float*len(vertexes))(*vertexes)
-        vbo_vertex = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_vertex)
-        glBufferData(GL_ARRAY_BUFFER, vertexes, GL_STATIC_DRAW)
-        #glBindBuffer(GL_ARRAY_BUFFER, 0)
-        
-        #glBindBuffer(GL_ARRAY_BUFFER, vbo_vertex)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, None)
-        #glBindBuffer(GL_ARRAY_BUFFER, 0)
-        
-        glBindVertexArray(0)
-        
-        # --------------------------------------------------
-        glBindVertexArray(vao_1)
-        glDrawElements(GL_QUADS, 24, GL_UNSIGNED_INT, None)
-        glBindVertexArray(0)
-        
-        glColor3f(0.0,0.0,1.0)
-        
-        glBindVertexArray(vao_2)
-        glDrawElements(GL_QUADS, 24, GL_UNSIGNED_INT, None)
-        glBindVertexArray(0)
-
 
 class mainFrame(wx.Frame):
     """程序主窗口类，继承自wx.Frame"""
