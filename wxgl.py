@@ -11,7 +11,7 @@ from OpenGL.GLU import *
 class GLScene(glcanvas.GLCanvas):
     """GL场景类"""
     
-    def __init__(self, parent, databox=None, bgColor=(1,1,1,1), isOrtho=True, view=(-1.2,1.2,-1.2,1.2,-5,5)):
+    def __init__(self, parent, databox=None, bgColor=(1,1,1,1), isOrtho=True, view=(-3.2,3.2,-3.2,3.2,-15,15)):
         """
         构造函数
         
@@ -181,8 +181,6 @@ class GLScene(glcanvas.GLCanvas):
     def drawGL(self):
         """绘制"""
         
-        pass
-        '''
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         
@@ -209,6 +207,7 @@ class GLScene(glcanvas.GLCanvas):
         
         glScale(self.scale[0], self.scale[1], self.scale[2])
         
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
         
         for item in self.assembly:
             if item['cmd'] == 'glDrawElements':
@@ -220,9 +219,6 @@ class GLScene(glcanvas.GLCanvas):
                 item['ebo'].unbind()
             else:
                 item['cmd'](item['args'])
-        
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
-        '''
         
     def initData(self):
         """3D数据初始化(需要在派生类中重写)"""
