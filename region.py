@@ -68,8 +68,13 @@ class GLRegion(object):
         else:
             self.view = view
         
-        # 绘图指令集
-        self.assembly = list()
+        
+        self.assembly = list()                              # 绘图指令集
+        self.models = dict()                                # 管理模式下保存所有模型
+        self.fixed_models = list()                          # 固定显示的模型
+        self.shown_models = list()                          # 显示的模型
+        self.hidden_models = list()                         # 隐藏的模型
+        self.animation = list()                             # 当前动画帧显示的模型
         
     def clearCmd(self):
         """清除视区内所有部件模型的生成命令"""
@@ -143,61 +148,80 @@ class GLRegion(object):
         indices_id = self.createEBO(np.array(indices, dtype=np.int))
         return indices_id
         
-    def setPolygonMode(self, mode):
-        """设置多边形显示模式
+    def createLine(self, v, c, method=0):
+        """生成曲面的顶点集、索引集、顶点数组类型、图元绘制方法
         
-        mode        - 显示模式
-                        0   - 使用当前设置
-                        1   - 前后面填充颜色
-                        2   - 前后面显示线条
-                        3   - 前面填充颜色，后面显示线条
-                        4   - 前面显示线条，后面填充颜色
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
+        c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
+        method      - 绘制方法
+                        0   - 线段
+                        1   - 连续线段
+                        2   - 闭合线段
         """
         
-        if mode == 1:
-            self.appendCmd(self.wxglPolygonMode, GL_FRONT_AND_BACK, GL_FILL)
-        elif mode == 2:
-            self.appendCmd(self.wxglPolygonMode, GL_FRONT_AND_BACK, GL_LINE)
-        elif mode == 3:
-            self.appendCmd(self.wxglPolygonMode, GL_FRONT, GL_FILL)
-            self.appendCmd(self.wxglPolygonMode, GL_BACK, GL_LINE)
-        elif mode == 4:
-            self.appendCmd(self.wxglPolygonMode, GL_FRONT, GL_LINE)
-            self.appendCmd(self.wxglPolygonMode, GL_BACK, GL_FILL)
+        if c.ndim == 1:
+            c = np.tile(c, (v.shape[0], 1))
         
-    def drawElements(self, vertices_id, indices_id, v_type, gl_type):
-        """绘制图元
+        if c.shape[-1] == 3:
+            v_type = GL_C3F_V3F
+            vertices_id = self.createVBO(np.hstack((c,v)).astype(np.float32))
+        else:
+            v_type = GL_C4F_N3F_V3F
+            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
+            n = n.reshape(-1, 3)
+            vertices_id = self.createVBO(np.hstack((c,n,v)).astype(np.float32))
         
-        vertices_id - 顶点VBO的id
-        indices_id  - 索引EBO的id
-        v_type      - 顶点混合数组类型
-        gl_type     - 绘制方法
+        gl_type_options = [GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
+        gl_type = gl_type_options[method]
+        indices_id = self.getIndices(1, v.shape[0], gl_type)
+        
+        return vertices_id, indices_id, v_type, gl_type
+        
+    def createSurface(self, x, y, z, c, method=0):
+        """生成曲面的顶点集、索引集、顶点数组类型、图元绘制方法
+        
+        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
+        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
+        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
+        c           - 顶点的颜色，numpy.ndarray类型，shape=(3,)|(4,)|(rows,cols,3)|(rows,cols,4)
+        method      - 绘制方法
+                        0   - 四边形
+                        1   - 连续四边形
+                        2   - 三角形
+                        3   - 连续三角形
+                        4   - 扇形
         """
         
-        all = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
-        assert gl_type in all, u'参数错误'
+        rows, cols = z.shape
+        v = np.dstack((x,y,z)).reshape(-1,3)
         
-        vertices_vbo = self.scene.buffers[vertices_id]
-        indices_ebo = self.scene.buffers[indices_id]
-        self.appendCmd(self.wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type)
+        if c.ndim == 1:
+            c = np.tile(c, (rows*cols, 1))
+        else:
+            c = c.reshape(-1, c.shape[-1])
         
-    def drawText(self, text, pos, size, color):
+        if c.shape[-1] == 3:
+            v_type = GL_C3F_V3F
+            vertices_id = self.createVBO(np.hstack((c,v)).astype(np.float32))
+        else:
+            v_type = GL_C4F_N3F_V3F
+            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
+            n = n.reshape(-1, 3)
+            vertices_id = self.createVBO(np.hstack((c,n,v)).astype(np.float32))
+        
+        gl_type_options = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN]
+        gl_type = gl_type_options[method]
+        indices_id = self.getIndices(rows, cols, gl_type)
+        
+        return vertices_id, indices_id, v_type, gl_type
+        
+    def createText(self, text, size, color):
         """绘制文字
         
         text        - Unicode字符串
-        pos         - 文本位置坐标，list或numpy.ndarray类型，shape=(3，)
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
         """
-        
-        assert isinstance(pos, (list, np.ndarray)), u'参数类型错误'
-        assert isinstance(color, (list, np.ndarray)), u'参数类型错误'
-        
-        if isinstance(pos, list):
-            pos = np.array(pos)
-        
-        if isinstance(color, list):
-            color = np.array(color)
         
         over, under = -1, -1
         pixels = None
@@ -252,13 +276,84 @@ class GLRegion(object):
         pixels = pixels.reshape(-1, 1)
         pixels = np.hstack((color, pixels)).reshape(rows, cols, 4)
         pixels = pixels[::-1].ravel()
-        
         pixels_id = self.createPBO(pixels)
+        
+        return pixels_id, rows, cols
+        
+    def setPolygonMode(self, mode):
+        """设置多边形显示模式
+        
+        mode        - 显示模式
+                        0   - 使用当前设置
+                        1   - 前后面填充颜色
+                        2   - 前后面显示线条
+                        3   - 前面填充颜色，后面显示线条
+                        4   - 前面显示线条，后面填充颜色
+        """
+        
+        if mode == 1:
+            self.appendCmd(self.wxglPolygonMode, GL_FRONT_AND_BACK, GL_FILL)
+        elif mode == 2:
+            self.appendCmd(self.wxglPolygonMode, GL_FRONT_AND_BACK, GL_LINE)
+        elif mode == 3:
+            self.appendCmd(self.wxglPolygonMode, GL_FRONT, GL_FILL)
+            self.appendCmd(self.wxglPolygonMode, GL_BACK, GL_LINE)
+        elif mode == 4:
+            self.appendCmd(self.wxglPolygonMode, GL_FRONT, GL_LINE)
+            self.appendCmd(self.wxglPolygonMode, GL_BACK, GL_FILL)
+        
+    def drawElements(self, vertices_id, indices_id, v_type, gl_type):
+        """绘制图元
+        
+        vertices_id - 顶点VBO的id
+        indices_id  - 索引EBO的id
+        v_type      - 顶点混合数组类型
+        gl_type     - 绘制方法
+        """
+        
+        all = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
+        assert gl_type in all, u'参数错误'
+        
+        vertices_vbo = self.scene.buffers[vertices_id]
+        indices_ebo = self.scene.buffers[indices_id]
+        self.appendCmd(self.wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type)
+        
+    def drawPixels(self, pixels_id, rows, cols, pos):
+        """绘制像素
+        
+        pixels_id   - 像素VBO的id
+        rows        - 像素行数
+        cols        - 像素列数
+        pos         - 位置
+        """
+        
         pixels_pbo = self.scene.buffers[pixels_id]
         self.appendCmd(self.wxglDrawPixels, pixels_pbo, rows, cols, pos)
         
+    def drawText(self, text, pos, size, color):
+        """绘制文字
+        
+        text        - Unicode字符串
+        pos         - 文本位置坐标，list或numpy.ndarray类型，shape=(3，)
+        size        - 文本大小，整形
+        color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
+        """
+        
+        assert isinstance(pos, (list, np.ndarray)), u'参数类型错误'
+        assert isinstance(color, (list, np.ndarray)), u'参数类型错误'
+        
+        if isinstance(pos, list):
+            pos = np.array(pos)
+        
+        if isinstance(color, list):
+            color = np.array(color)
+        
+        pixels_id, rows, cols = self.createText(text, size, color)
+        self.drawPixels(pixels_id, rows, cols, pos)
+        
     def drawLine(self, v, c, method=0):
         """绘制线段
+        
         v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
         c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
         method      - 绘制方法
@@ -267,22 +362,7 @@ class GLRegion(object):
                         2   - 闭合线段
         """
         
-        if c.ndim == 1:
-            c = np.tile(c, (v.shape[0], 1))
-        
-        if c.shape[-1] == 3:
-            v_type = GL_C3F_V3F
-            vertices_id = self.createVBO(np.hstack((c,v)).astype(np.float32))
-        else:
-            v_type = GL_C4F_N3F_V3F
-            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
-            n = n.reshape(-1, 3)
-            vertices_id = self.createVBO(np.hstack((c,n,v)).astype(np.float32))
-        
-        gl_type_options = [GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
-        gl_type = gl_type_options[method]
-        indices_id = self.getIndices(1, v.shape[0], gl_type)
-        
+        vertices_id, indices_id, v_type, gl_type = self.createLine(v, c, method)
         self.drawElements(vertices_id, indices_id, v_type, gl_type)
         
     def drawSurface(self, x, y, z, c, method=0, mode=0):
@@ -306,31 +386,9 @@ class GLRegion(object):
                         4   - 前面显示线条，后面填充颜色
         """
         
-        rows, cols = z.shape
-        v = np.dstack((x,y,z)).reshape(-1,3)
-        
-        if c.ndim == 1:
-            c = np.tile(c, (rows*cols, 1))
-        else:
-            c = c.reshape(-1, c.shape[-1])
-        
-        if c.shape[-1] == 3:
-            v_type = GL_C3F_V3F
-            vertices_id = self.createVBO(np.hstack((c,v)).astype(np.float32))
-        else:
-            v_type = GL_C4F_N3F_V3F
-            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
-            n = n.reshape(-1, 3)
-            vertices_id = self.createVBO(np.hstack((c,n,v)).astype(np.float32))
-        
-        gl_type_options = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN]
-        gl_type = gl_type_options[method]
-        indices_id = self.getIndices(rows, cols, gl_type)
-        
+        vertices_id, indices_id, v_type, gl_type = self.createSurface(x, y, z, c, method)
         self.setPolygonMode(mode)
         self.drawElements(vertices_id, indices_id, v_type, gl_type)
-        
-        return vertices_id, indices_id, v_type, gl_type, mode
         
     def plotAxes(self, k=1.0, slices=50, half=False, xlabel=None, ylabel=None, zlabel=None, size=40):
         """绘制坐标轴
@@ -523,18 +581,21 @@ class GLRegion(object):
         args[0].bind()
         glInterleavedArrays(args[2], 0, None)
         args[1].bind()
-        glDrawElements(args[3], int(args[1].size/4), GL_UNSIGNED_INT, None) 
+        
+        if args[2] == GL_C4F_N3F_V3F:
+            glDepthMask(GL_FALSE)
+            glDrawElements(args[3], int(args[1].size/4), GL_UNSIGNED_INT, None) 
+            glDepthMask(GL_TRUE)
+        else:
+            glDrawElements(args[3], int(args[1].size/4), GL_UNSIGNED_INT, None) 
+        
         args[0].unbind()
         args[1].unbind()
     
     def wxglDrawPixels(self, args):
         """glDrawElements"""
         
-        if isinstance(self.scale, np.ndarray):
-            scale = self.scale
-        else:
-            scale = self.scene.scale
-        
+        scale = np.array([1.0,1.0,1.0], dtype=np.float)
         glPixelZoom(scale[0], scale[1])
         glDepthMask(GL_FALSE)
         glRasterPos3fv(args[3]*scale)
@@ -542,4 +603,171 @@ class GLRegion(object):
         glDrawPixels(args[2], args[1], GL_RGBA, GL_UNSIGNED_BYTE, None)
         args[0].unbind()
         glDepthMask(GL_TRUE)
+    
+    def update(self):
+        """管理模式下更新显示"""
+        if self.animation:
+            models = self.fixed_models + self.animation
+        else:
+            models = self.fixed_models + self.shown_models
         
+        self.clearCmd()
+        for key in models:
+            if self.models[key]['type'] == 'surface':
+                vertices_id, indices_id, v_type, gl_type, mode = self.models[key]['args']
+                self.setPolygonMode(mode)
+                self.drawElements(vertices_id, indices_id, v_type, gl_type)
+            elif self.models[key]['type'] == 'line':
+                vertices_id, indices_id, v_type, gl_type = self.models[key]['args']
+                self.drawElements(vertices_id, indices_id, v_type, gl_type)
+            elif self.models[key]['type'] == 'text':
+                pixels_id, rows, cols, pos = self.models[key]['args']
+                self.drawPixels(pixels_id, rows, cols, pos)
+        
+        self.scene.Refresh(False)
+    
+    def showModel(self, name):
+        """管理模式下显示模型"""
+        
+        if name in self.hidden_models:
+            self.shown_models.append(name)
+            self.hidden_models.remove(name)
+    
+    def hideModel(self, name):
+        """管理模式下隐藏模型"""
+        
+        if name in self.shown_models:
+            self.shown_models.remove(name)
+            self.hidden_models.append(name)
+    
+    def deleteModel(self, name):
+        """删除模型"""
+        
+        if name in self.shown_models:
+            self.shown_models.remove(name)
+        elif name in self.hidden_models:
+            self.hidden_models.remove(name)
+        elif name in self.fixed_models:
+            self.fixed_models.remove(name)
+        
+        if self.models[name]['type'] == 'text':
+            self.scene.buffers[self.models[name]['args'][0]].delete()
+        else:
+           self.scene.buffers[self.models[name]['args'][0]].delete()
+           self.scene.buffers[self.models[name]['args'][1]].delete()
+        
+        del self.models[name]
+    
+    def startAnimation(self, reverse=False):
+        """管理模式下启动动画"""
+        
+        self.shown_models.sort(reverse=reverse)
+    
+    def stopAnimation(self):
+        """管理模式下停止动画"""
+        
+        self.animation = list()
+        
+    def addText(self, name, text, pos, size, color, display=1):
+        """管理模式下增加文字
+        
+        name        - 模型名
+        text        - Unicode字符串
+        pos         - 文本位置坐标，list或numpy.ndarray类型，shape=(3，)
+        size        - 文本大小，整形
+        color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
+        display     - 模型类型
+                        0   - 隐藏
+                        1   - 显示
+                        2   - 不可隐藏一直显示
+        """
+        
+        assert isinstance(pos, (list, np.ndarray)), u'参数类型错误'
+        assert isinstance(color, (list, np.ndarray)), u'参数类型错误'
+        
+        if isinstance(pos, list):
+            pos = np.array(pos)
+        
+        if isinstance(color, list):
+            color = np.array(color)
+        
+        pixels_id, rows, cols = self.createText(text, size, color)
+        self.models.update({name: {
+            'type': 'text',
+            'args': [pixels_id, rows, cols, pos]
+        }})
+        
+        if display == 2:
+            self.fixed_models.append(name)
+        if display == 1:
+            self.shown_models.append(name)
+        else:
+            self.hidden_models.append(name)
+        
+    def addLine(self, name, v, c, method=0, display=1):
+        """管理模式下增加线段
+        
+        name        - 模型名
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
+        c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
+        method      - 绘制方法
+                        0   - 线段
+                        1   - 连续线段
+                        2   - 闭合线段
+        display     - 模型类型
+                        0   - 隐藏
+                        1   - 显示
+                        2   - 不可隐藏一直显示
+        """
+        
+        vertices_id, indices_id, v_type, gl_type = self.createLine(v, c, method)
+        self.models.update({name: {
+            'type': 'line',
+            'args': [vertices_id, indices_id, v_type, gl_type]
+        }})
+        
+        if display == 2:
+            self.fixed_models.append(name)
+        if display == 1:
+            self.shown_models.append(name)
+        else:
+            self.hidden_models.append(name)
+    
+    def addSurface(self, name, x, y, z, c, method=0, mode=0, display=1):
+        """管理模式下增加曲面
+        
+        name        - 模型名
+        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
+        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
+        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
+        c           - 顶点的颜色，numpy.ndarray类型，shape=(3,)|(4,)|(rows,cols,3)|(rows,cols,4)
+        method      - 绘制方法
+                        0   - 四边形
+                        1   - 连续四边形
+                        2   - 三角形
+                        3   - 连续三角形
+                        4   - 扇形
+        mode        - 显示模式
+                        0   - 使用当前设置
+                        1   - 前后面填充颜色
+                        2   - 前后面显示线条
+                        3   - 前面填充颜色，后面显示线条
+                        4   - 前面显示线条，后面填充颜色
+        display     - 模型类型
+                        0   - 隐藏
+                        1   - 显示
+                        2   - 不可隐藏一直显示
+        """
+        
+        vertices_id, indices_id, v_type, gl_type = self.createSurface(x, y, z, c, method)
+        self.models.update({name: {
+            'type': 'surface',
+            'args': [vertices_id, indices_id, v_type, gl_type, mode]
+        }})
+        
+        if display == 2:
+            self.fixed_models.append(name)
+        if display == 1:
+            self.shown_models.append(name)
+        else:
+            self.hidden_models.append(name)
