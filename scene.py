@@ -24,6 +24,7 @@ WxGL以wx为显示后端，以加速渲染为第一追求目标
 import wx
 from wx import glcanvas
 import numpy as np
+from PIL import Image
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
@@ -236,7 +237,7 @@ class GLScene(glcanvas.GLCanvas):
         else:
             self.phi = 0.0
             self.theta = 0.0
-            
+           
         self.updateUP()
         
     def initGL(self):
@@ -412,4 +413,31 @@ class GLScene(glcanvas.GLCanvas):
         """删除视区"""
         
         self.regions.pop(region_name)
+        
+    def savePosture(self):
+        """保存姿态"""
+        
+        pass
+        
+    def restorePosture(self):
+        """还原姿态"""
+        
+        pass
+        
+    def screenshot(self, fn, alpha=True):
+        """屏幕截图"""
+        
+        self.SwapBuffers()
+        
+        if alpha:
+            gl_mode = GL_RGBA
+            pil_mode = 'RGBA'
+        else:
+            gl_mode = GL_RGB
+            pil_mode = 'RGB'
+            
+        data = glReadPixels(0, 0, self.size[0], self.size[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
+        img = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+        img.save(fn)
         
