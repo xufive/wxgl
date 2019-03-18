@@ -29,9 +29,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from . import region
+from . import colormap
 
-
-class GLScene(glcanvas.GLCanvas):
+class WxGLScene(glcanvas.GLCanvas):
     """GL场景类"""
     
     def __init__(self, parent, font, bg=[0,0,0,0], cam=[5,0,0], aim=[0,0,0], head='z+', view=[-1,1,-1,1,3.5,10], mode='cone'):
@@ -74,6 +74,7 @@ class GLScene(glcanvas.GLCanvas):
         self.size = self.GetClientSize()                        # OpenGL窗口的大小
         self.context = glcanvas.GLContext(self)                 # OpenGL上下文
         
+        self.cm = colormap.WxGLColorMap()                       # 调色板对象
         self.regions = dict()                                   # 存储视口设置信息
         self.buffers = dict()                                   # 存储GPU缓冲区数据对象
         self.store = dict()                                     # 存储相机姿态、视口缩放因子、模型矩阵缩放比例等
@@ -177,9 +178,6 @@ class GLScene(glcanvas.GLCanvas):
                 self.zoom = 0.1
         
         self.Refresh(False)
-        
-        # 更新父级窗口信息显示
-        self.parent.st_port.SetLabel(u'%.2f'%self.zoom)
         
     def initGL(self):
         """初始化GL"""
@@ -306,14 +304,6 @@ class GLScene(glcanvas.GLCanvas):
         if save:
             self.store.update({'cam':self.cam.tolist(), 'aim':self.aim.tolist(), 'head':self.head})
         
-        # 更新父级窗口信息显示
-        self.parent.st_cam.SetLabel(u'[%.2f, %.2f, %.2f]'%(self.cam[0], self.cam[1], self.cam[2]))
-        self.parent.st_aim.SetLabel(u'[%.2f, %.2f, %.2f]'%(self.aim[0], self.aim[1], self.aim[2]))
-        self.parent.st_head.SetLabel(self.head)
-        self.parent.st_elevation.SetLabel(u'%.2f°'%np.degrees(self.elevation))
-        self.parent.st_azimuth.SetLabel(u'%.2f°'%np.degrees(self.azimuth))
-        self.parent.st_dist.SetLabel(u'%.2f'%self.dist)
-        
     def _setPosture(self, elevation, azimuth, dist):
         """设置仰角、方位角、相机位置与目标点位之间的距离
         
@@ -339,14 +329,6 @@ class GLScene(glcanvas.GLCanvas):
             self.up = -1*np.abs(self.up)
         else:
             self.up = np.abs(self.up)
-        
-        # 更新父级窗口信息显示
-        self.parent.st_cam.SetLabel(u'[%.2f, %.2f, %.2f]'%(self.cam[0], self.cam[1], self.cam[2]))
-        self.parent.st_aim.SetLabel(u'[%.2f, %.2f, %.2f]'%(self.aim[0], self.aim[1], self.aim[2]))
-        self.parent.st_head.SetLabel(self.head)
-        self.parent.st_elevation.SetLabel(u'%.2f°'%np.degrees(self.elevation))
-        self.parent.st_azimuth.SetLabel(u'%.2f°'%np.degrees(self.azimuth))
-        self.parent.st_dist.SetLabel(u'%.2f'%self.dist)
         
     def setPosture(self, elevation=None, azimuth=None, dist=None, save=False):
         """设置仰角、方位角、相机位置与目标点位之间的距离
@@ -466,10 +448,6 @@ class GLScene(glcanvas.GLCanvas):
         
         self.Refresh(False)
         
-        # 更新父级窗口信息显示
-        self.parent.st_port.SetLabel(u'%.2f'%self.zoom)
-        self.parent.st_scale.SetLabel(u'[%.2f, %.2f, %.2f]'%(self.scale[0],self.scale[1],self.scale[2]))
-        
     def screenshot(self, fn, alpha=True, buffer='FRONT'):
         """屏幕截图
         
@@ -509,7 +487,7 @@ class GLScene(glcanvas.GLCanvas):
                         cone    - 透视投影
         """
         
-        reg = region.GLRegion(self, region_name, box, lookat=lookat, scale=scale, view=view, mode=mode)
+        reg = region.WxGLRegion(self, region_name, box, lookat=lookat, scale=scale, view=view, mode=mode)
         self.regions.update({region_name: reg})
         
         return reg

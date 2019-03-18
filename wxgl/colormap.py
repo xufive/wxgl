@@ -27,7 +27,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-class ColorMap(object):
+class WxGLColorMap(object):
     """颜色映射类"""
     
     def __init__(self):

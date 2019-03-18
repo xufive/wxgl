@@ -27,10 +27,8 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 
-from * import colormap
 
-
-class GLRegion(object):
+class WxGLRegion(object):
     """GL视区类"""
     
     def __init__(self, scene, name, box, lookat=None, scale=None, view=None, mode=None):
@@ -69,7 +67,7 @@ class GLRegion(object):
         else:
             self.view = view
 
-        self.cm = colormap.ColorMap()                       # 调色板对象
+        self.cm = self.scene.cm                             # 调色板对象
         self.assembly = list()                              # 绘图指令集
         self.models = dict()                                # 所有模型
     
