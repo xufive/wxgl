@@ -105,3 +105,6 @@ venv.bak/
 
 # custem
 demo/
+build/
+wxgl.egg-info/
+

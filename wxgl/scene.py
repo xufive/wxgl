@@ -28,7 +28,7 @@ from PIL import Image
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-from region import *
+from . import region
 
 
 class GLScene(glcanvas.GLCanvas):
@@ -201,25 +201,25 @@ class GLScene(glcanvas.GLCanvas):
         
         width, height = self.size
         for key in self.regions:
-            region = self.regions[key]
-            x0, y0 = int(region.box[0]*width), int(region.box[1]*height)
-            w, h = int(region.box[2]*width), int(region.box[3]*height)
+            reg = self.regions[key]
+            x0, y0 = int(reg.box[0]*width), int(reg.box[1]*height)
+            w, h = int(reg.box[2]*width), int(reg.box[3]*height)
             
             glViewport(x0, y0, w, h)
             glMatrixMode(GL_PROJECTION)
             glLoadIdentity()
             
-            if isinstance(region.view, np.ndarray):
-                view = region.view
+            if isinstance(reg.view, np.ndarray):
+                view = reg.view
             else:
                 view = self.view
             
-            if region.mode:
-                mode = region.mode
+            if reg.mode:
+                mode = reg.mode
             else:
                 mode = self.mode
             
-            if isinstance(region.scale, np.ndarray):
+            if isinstance(reg.scale, np.ndarray):
                 zoom = 1.0
             else:
                 zoom = self.zoom
@@ -235,11 +235,11 @@ class GLScene(glcanvas.GLCanvas):
                 else:
                     glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
             
-            if isinstance(region.lookat, np.ndarray):
+            if isinstance(reg.lookat, np.ndarray):
                 gluLookAt(
-                    region.lookat[0], region.lookat[1], region.lookat[2], 
-                    region.lookat[3], region.lookat[4], region.lookat[5],
-                    region.lookat[6], region.lookat[7], region.lookat[8]
+                    reg.lookat[0], reg.lookat[1], reg.lookat[2], 
+                    reg.lookat[3], reg.lookat[4], reg.lookat[5],
+                    reg.lookat[6], reg.lookat[7], reg.lookat[8]
                 )
             else:
                 gluLookAt(
@@ -251,12 +251,12 @@ class GLScene(glcanvas.GLCanvas):
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
             
-            if isinstance(region.scale, np.ndarray):
-                glScale(region.scale[0], region.scale[1], region.scale[2])
+            if isinstance(reg.scale, np.ndarray):
+                glScale(reg.scale[0], reg.scale[1], reg.scale[2])
             else:
                 glScale(self.scale[0], self.scale[1], self.scale[2])
             
-            for item in region.assembly:
+            for item in reg.assembly:
                 item['cmd'](item['args'])
         
     def setCamera(self, cam=None, aim=None, head=None, save=False):
@@ -509,14 +509,14 @@ class GLScene(glcanvas.GLCanvas):
                         cone    - 透视投影
         """
         
-        region = GLRegion(self, region_name, box, lookat=lookat, scale=scale, view=view, mode=mode)
-        self.regions.update({region_name: region})
+        reg = region.GLRegion(self, region_name, box, lookat=lookat, scale=scale, view=view, mode=mode)
+        self.regions.update({region_name: reg})
         
-        return region
+        return reg
         
     def delRegion(self, region_name):
         """删除视区"""
         
-        region = self.regions.pop(region_name)
-        del region
+        reg = self.regions.pop(region_name)
+        del reg
         

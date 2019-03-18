@@ -27,7 +27,7 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 
-from colormap import *
+from * import colormap
 
 
 class GLRegion(object):
@@ -69,6 +69,7 @@ class GLRegion(object):
         else:
             self.view = view
 
+        self.cm = colormap.ColorMap()                       # 调色板对象
         self.assembly = list()                              # 绘图指令集
         self.models = dict()                                # 所有模型
     
@@ -677,8 +678,8 @@ class GLRegion(object):
         kwds        - 其他参数
         """
         
-        cm = ColorMap()
-        ccfg = cm.cms[cmap]
+        
+        ccfg = self.cm.cms[cmap]
         value = []
         color = []
         for item in ccfg:
