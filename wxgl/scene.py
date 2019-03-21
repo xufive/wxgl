@@ -80,7 +80,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.store = dict()                                     # 存储相机姿态、视口缩放因子、模型矩阵缩放比例等
         
         self.setView(view, save=True)                           # 设置视景体
-        self.setZoom(1, save=True)                              # 设置视口缩放因子（0.1~10.0）
+        self.setZoom(1, save=True)                              # 设置视口缩放因子（0.01~100.0）
         self.setScale([1,1,1], save=True)                       # 设置模型矩阵缩放比例
         self.setCamera(save=True)                               # 设置相机位置
         self.initGL()                                           # 画布初始化
@@ -170,12 +170,12 @@ class WxGLScene(glcanvas.GLCanvas):
         
         if evt.WheelRotation < 0:
             self.zoom *= 1.1
-            if self.zoom > 10:
-                self.zoom = 10
+            if self.zoom > 100:
+                self.zoom = 100
         elif evt.WheelRotation > 0:
             self.zoom *= 0.9
-            if self.zoom < 0.1:
-                self.zoom = 0.1
+            if self.zoom < 0.01:
+                self.zoom = 0.01
         
         self.Refresh(False)
         
@@ -311,6 +311,10 @@ class WxGLScene(glcanvas.GLCanvas):
         azimuth     - 方位角(弧度)
         dist        - 相机位置与目标点位之间的距离
         """
+        
+        elevation %= 2*np.pi
+        if elevation > np.pi:
+            elevation -= 2*np.pi
         
         self.elevation = elevation
         self.azimuth = azimuth

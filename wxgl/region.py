@@ -93,7 +93,13 @@ class WxGLRegion(object):
                         self._setPolygonMode(mode)
                         self._addElements(vertices_id, indices_id, v_type, gl_type)
                     elif item['type'] == 'line':
-                        vertices_id, indices_id, v_type, gl_type = item['args']
+                        vertices_id, indices_id, v_type, gl_type, width, stipple = item['args']
+                        self._setLineWidth(width)
+                        self._setLineStipple(stipple)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type)
+                    elif item['type'] == 'point':
+                        vertices_id, indices_id, v_type, gl_type, size = item['args']
+                        self._setPointSize(size)
                         self._addElements(vertices_id, indices_id, v_type, gl_type)
                     elif item['type'] == 'text':
                         pixels_id, rows, cols, pos = item['args']
@@ -129,8 +135,8 @@ class WxGLRegion(object):
             del self.models[name]
             self.update()
     
-    def getTextOffsets(self, textList, size):
-        """根据传入文字列表，获取每个字符串宽度，返回每个字符串宽度与最大宽度值的差值
+    def getTextSize(self, textList, size):
+        """返回字符串列表中每个字符串的宽度、高度
         
         textList    - 字符串列表
         size        - 字符大小
@@ -139,23 +145,68 @@ class WxGLRegion(object):
         face = freetype.Face(self.font)
         face.set_char_size(size*size)
         
-        widthList = []
-        
+        size = list()
         for text in textList:
             twidth = 0
+            charHlist = []
             for ch in text:
                 face.load_char(ch)
                 twidth += int(face.glyph.metrics.horiAdvance/64)
-            widthList.append(twidth)
-        widthList = np.array(widthList)
-        width_max = np.max(widthList)
+                charHlist.append(face.glyph.bitmap.rows)
+            size.append((twidth, max(charHlist)))
+            
+        return size
+    
+    def getTickLabele(self, vmin, vmax):
+        """返回合适的Colorbar标注值
         
-        return width_max-widthList
+        vmin        - 最小值
+        vmax        - 最大值
+        """
+        
+        r = vmax - vmin
+        tmp = list()
+        tmp_min = list()
+        option = [1, 2, 5]
+        for k in option:
+            tmp.append(np.array([abs(float(('%E'%(r/i)).split('E')[0])-k) for i in range(4,10)]))
+            tmp_min.append(np.min(tmp[-1]))
+        
+        k = tmp_min.index(min(tmp_min))
+        step = option[k]
+        steps = tmp[k].argmin() + 4
+        m = int(('%E'%(r/steps)).split('E')[1])
+        step *= 10**m
+        
+        label = list()
+        v = round(int(vmin/step)*step, 6)
+        while v <= vmax:
+            if v >= vmin:
+                label.append(v)
+            v += step
+            v = round(v, 6)
+        
+        return label
     
     def _wxglPolygonMode(self, args):
         """glPolygonMode"""
         
         glPolygonMode(args[0], args[1])
+    
+    def _wxglPointSize(self, args):
+        """glPointSize"""
+        
+        glPointSize(args[0])
+    
+    def _wxglLineWidth(self, args):
+        """glLineWidth"""
+        
+        glLineWidth(args[0])
+    
+    def _wxglLineStipple(self, args):
+        """glLineStipple"""
+        
+        glLineStipple(args[0][0], args[0][1])
     
     def _wxglDrawElements(self, args):
         """glDrawElements"""
@@ -178,6 +229,16 @@ class WxGLRegion(object):
         glDrawPixels(args[2], args[1], GL_RGBA, GL_UNSIGNED_BYTE, None)
         args[0].unbind()
         glDepthMask(GL_TRUE)
+    
+    def _wxglEnable(self, args):
+        """glEnable"""
+        
+        glEnable(args[0])
+    
+    def _wxglDisable(self, args):
+        """glDisable"""
+        
+        glDisable(args[0])
     
     def _createVBO(self, vertices):
         """创建顶点缓冲区对象"""
@@ -263,6 +324,34 @@ class WxGLRegion(object):
             self.appendCmd(self._wxglPolygonMode, GL_FRONT, GL_LINE)
             self.appendCmd(self._wxglPolygonMode, GL_BACK, GL_FILL)
         
+    def _setPointSize(self, size):
+        """设置点的大小
+        
+        size        - 点的大小
+        """
+        
+        if size:
+            self.appendCmd(self._wxglPointSize, size)
+        
+    def _setLineWidth(self, width):
+        """设置线宽
+        
+        width       - 线宽
+        """
+        
+        if width:
+            self.appendCmd(self._wxglLineWidth, width)
+        
+    def _setLineStipple(self, stipple):
+        """设置线型
+        
+        stipple     - 线型
+        """
+        
+        if stipple:
+            self.appendCmd(self._wxglEnable, GL_LINE_STIPPLE)
+            self.appendCmd(self._wxglLineStipple, stipple)
+        
     def _createText(self, text, size, color, offset=0, align='left'):
         """生成文字的像素集、高度、宽度
         
@@ -270,7 +359,7 @@ class WxGLRegion(object):
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
         offset      - 偏移数
-        align       - 对其方式 left左对齐 right右对齐
+        align       - 对其方式 left|center|right
         """
         
         over, under = -1, -1
@@ -325,6 +414,10 @@ class WxGLRegion(object):
             patch = np.zeros((rows, offset), dtype=np.uint8)
             if align == 'left':
                 pixels = np.hstack((pixels, patch))
+            elif align == 'center':
+                patch_left = np.zeros((rows, int(offset/2)), dtype=np.uint8)
+                patch_right = np.zeros((rows, offset-int(offset/2)), dtype=np.uint8)
+                pixels = np.hstack((patch_left, pixels, patch_right))
             else:
                 pixels = np.hstack((patch, pixels))
         rows, cols = pixels.shape
@@ -337,8 +430,33 @@ class WxGLRegion(object):
         
         return pixels_id, rows, cols
         
+    def _createPoint(self, v, c):
+        """生成点的顶点集、索引集、顶点数组类型、图元绘制方法
+        
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
+        c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
+        """
+        
+        if c.ndim == 1:
+            c = np.tile(c, (v.shape[0], 1))
+        
+        if c.shape[-1] == 3:
+            v_type = GL_C3F_V3F
+            vertices_id = self._createVBO(np.hstack((c,v)).astype(np.float32))
+        else:
+            v_type = GL_C4F_N3F_V3F
+            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
+            n = n.reshape(-1, 3)
+            
+            vertices_id = self._createVBO(np.hstack((c,n,v)).astype(np.float32))
+        
+        gl_type = GL_POINTS
+        indices_id = self._getIndices(gl_type, v.shape[0])
+        
+        return vertices_id, indices_id, v_type, gl_type
+        
     def _createLine(self, v, c, method=0):
-        """生成曲面的顶点集、索引集、顶点数组类型、图元绘制方法
+        """生成线段的顶点集、索引集、顶点数组类型、图元绘制方法
         
         v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
         c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
@@ -358,6 +476,7 @@ class WxGLRegion(object):
             v_type = GL_C4F_N3F_V3F
             n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
             n = n.reshape(-1, 3)
+            
             vertices_id = self._createVBO(np.hstack((c,n,v)).astype(np.float32))
         
         gl_type_options = [GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
@@ -416,9 +535,6 @@ class WxGLRegion(object):
         v_type      - 顶点混合数组类型
         gl_type     - 绘制方法
         """
-        
-        all = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
-        assert gl_type in all, u'参数错误'
         
         vertices_vbo = self.scene.buffers[vertices_id]
         indices_ebo = self.scene.buffers[indices_id]
@@ -525,7 +641,32 @@ class WxGLRegion(object):
                 }]
             }})
         
-    def drawLine(self, name, v, c, method=0, display=True):
+    def drawPoint(self, name, v, c, size=None, display=True):
+        """绘制点
+        
+        name        - 模型名
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
+        c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
+        size        - 点的大小，整数，系统默认为1，None表示使用当前设置
+        display     - 是否显示
+        """
+        
+        vertices_id, indices_id, v_type, gl_type = self._createPoint(v, c)
+        if name in self.models:
+            self.models[name]['component'].append({
+                'type': 'point',
+                'args': [vertices_id, indices_id, v_type, gl_type, size]
+            })
+        else:
+            self.models.update({name: {
+                'display': display,
+                'component': [{
+                    'type': 'point',
+                    'args': [vertices_id, indices_id, v_type, gl_type, size]
+                }]
+            }})
+        
+    def drawLine(self, name, v, c, method=0, width=None, stipple=None, display=True):
         """绘制线段
         
         name        - 模型名
@@ -535,6 +676,8 @@ class WxGLRegion(object):
                         0   - 线段
                         1   - 连续线段
                         2   - 闭合线段
+        width       - 线宽，0.0~10.0之间，None表示使用当前设置
+        stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None表示使用当前设置
         display     - 是否显示
         """
         
@@ -542,14 +685,14 @@ class WxGLRegion(object):
         if name in self.models:
             self.models[name]['component'].append({
                 'type': 'line',
-                'args': [vertices_id, indices_id, v_type, gl_type]
+                'args': [vertices_id, indices_id, v_type, gl_type, width, stipple]
             })
         else:
             self.models.update({name: {
                 'display': display,
                 'component': [{
                     'type': 'line',
-                    'args': [vertices_id, indices_id, v_type, gl_type]
+                    'args': [vertices_id, indices_id, v_type, gl_type, width, stipple]
                 }]
             }})
     
@@ -660,22 +803,21 @@ class WxGLRegion(object):
         v = np.array([[start,0,0],[0.8*k,0,0],[0,start,0],[0,0.8*k,0],[0,0,start],[0,0,0.8*k]])
         c = np.array([[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,0,1],[0,0,1]])
         
-        self.drawLine(name, v, c, method=0, display=display)
+        self.drawLine(name, v, c, method=0, width=1, display=display)
         
         self._plotAxisCone(name, 'x', k=k, slices=slices, label=xlabel, size=size)
         self._plotAxisCone(name, 'y', k=k, slices=slices, label=ylabel, size=size)
         self._plotAxisCone(name, 'z', k=k, slices=slices, label=zlabel, size=size)
         
-    def drawColorBar(self, name, drange, cmap, location, **kwds):
+    def drawColorBar(self, name, drange, cmap, orient, **kwds):
         """绘制colorBar 
         
         name        - 模型名
         drange      - 值域范围，tuple类型
         cmap        - 调色板名称
-        location    - 位置：top|right|bottom|left
+        orient      - 方向：h|v|horizontal|vertical
         kwds        - 其他参数
         """
-        
         
         ccfg = self.cm.cms[cmap]
         value = []
@@ -685,34 +827,73 @@ class WxGLRegion(object):
             value.append((drange[1] - drange[0]) * v + drange[0])
             color.append(rgb)
         
+        # 允许输入的可选参数
+        allowedKwds = [
+            'title_name', 'title_size', 'title_color', 'title_offset', 'title_align', 
+            'label_color','label_size', 'label_offset', 'label_align', 'label_precision', 
+            'line_length', 'line_color', 
+            'ticklabel', 'bar_offset', 'display'
+        ]
+        
         for key in kwds:
-            if key not in ['title','title_size','label_size','text_color','bar_offset','title_offset','label_offset','ticket_line','ticklabel','precision','display']:
+            if key not in allowedKwds:
                 raise TypeError(u'未知的参数%s'%key)
         
-        title = kwds['title'] if 'title' in kwds else None                              # ColorBar标题
-        title_size = kwds['title_size'] if 'title_size' in kwds else 40                 # 标题字号
-        text_color = kwds['text_color'] if 'text_color' in kwds else [1,1,1]            # 标题颜色
-        title_offset = kwds['title_offset'] if 'title_offset' in kwds else (0,0)        # 标题偏移量
-        label_size = kwds['label_size'] if 'label_size' in kwds else 32                 # 标注字号
-        label_offset = kwds['label_offset'] if 'label_offset' in kwds else (0,0)        # 标注偏移量
-        precision = kwds['precision'] if 'precision' in kwds else None                  # 标注文字精度，形如u'%.2f' u'%d'
-        ticklabel = kwds['ticklabel'] if 'ticklabel' in kwds else None                  # 标注文字列表，为None则按照调色板中的值显示
-        ticket_line = kwds['ticket_line'] if 'ticket_line' in kwds else 0.1             # 刻度线长度，0表示不显示刻度线
-        bar_offset = kwds['bar_offset'] if 'bar_offset' in kwds else (0,0)              # ColorBar偏移量
-        display = kwds['display'] if 'display' in kwds else True 
+        # title设置
+        title_name      = kwds['title_name']      if 'title_name'      in kwds else None               # ColorBar标题
+        title_size      = kwds['title_size']      if 'title_size'      in kwds else 40                 # 标题字号
+        title_color     = kwds['title_color']     if 'title_color'     in kwds else [1,1,1]            # 标题颜色
+        title_offset    = kwds['title_offset']    if 'title_offset'    in kwds else (0,0)              # 标题偏移量
+        title_align     = kwds['title_align']     if 'title_align'     in kwds else 'center'           # 标题对齐方式 left|center|right
         
+        # label设置     
+        label_color     = kwds['label_color']     if 'label_color'     in kwds else [1,1,1]            # 标题颜色
+        label_size      = kwds['label_size']      if 'label_size'      in kwds else 32                 # 标注字号
+        label_offset    = kwds['label_offset']    if 'label_offset'    in kwds else (0,0)              # 标注偏移量
+        label_align     = kwds['label_align']     if 'label_align'     in kwds else 'center'           # 标注对齐方式 left|center|right
+        label_precision = kwds['label_precision'] if 'label_precision' in kwds else None               # 标注文字精度，形如u'%.2f' u'%d'
+        
+        # 刻度线设置
+        line_length     = kwds['line_length']     if 'ticket_line'     in kwds else 0.1                # 刻度线长度，0表示不显示刻度线
+        line_color      = kwds['line_color']      if 'line_color'      in kwds else [1,1,1]            # 刻度线颜色
+        
+        # 其他设置
+        ticklabel       = kwds['ticklabel']       if 'ticklabel'       in kwds else None               # 标注值列表，为None则按照调色板中的值显示
+        bar_offset      = kwds['bar_offset']      if 'bar_offset'      in kwds else (0,0)              # ColorBar偏移量
+        display         = kwds['display']         if 'display'         in kwds else True 
+        
+        # 计算当前region的宽度、高度（像素）
         w = int(self.box[2]*self.scene.size[0])
         h = int(self.box[3]*self.scene.size[1])
+        vmin, vmax = np.nanmin(value), np.nanmax(value)
         
-        if location == 'right' or location == 'left':
+        # 计算刻度值
+        if not ticklabel:
+            ticklabel = self.getTickLabele(vmin, vmax)
+        
+        if orient in ['v', 'vertical']:
             x_min, x_max = -0.6+bar_offset[0], 0.0+bar_offset[0]
             y_min, y_max = -0.8*h/w+bar_offset[1], 0.7*h/w+bar_offset[1]
-            if title:
-                title_pos = [(x_min+x_max)/2+title_offset[0], y_max+title_offset[1], 0.0]
-                self.drawText(name, title, title_pos, title_size, text_color, display=display)
-                
+            
+            totalxmin, totalxmax = -1, 1
+            totalymin, totalymax = -h/w, h/w
+            kx = (totalxmax-totalxmin)/w
+            ky = (totalymax-totalymin)/h
+            
+            if title_name:
+                textw, texth = self.getTextSize([title_name], title_size)[0]
+                if title_align == "left":
+                    xpos = x_min
+                elif title_align == "right":
+                    xpos = x_max - (kx*textw)
+                else: # center
+                    xpos = x_min + ((x_max-x_min) - (kx*textw)) / 2
+                    
+                title_pos = [xpos+title_offset[0], y_max+title_offset[1]+(ky*texth*0.4), 0.0]
+                self.drawText(name, title_name, title_pos, title_size, title_color, display=display)
+            
             x, y, z, c = list(), list(), list(), list()
-            vmin, vmax = np.nanmin(value), np.nanmax(value)
+            
             for i in range(len(value)):
                 k = (value[i]-vmin) / (vmax-vmin)
                 newy  = k * (y_max-y_min) + y_min
@@ -724,19 +905,76 @@ class WxGLRegion(object):
             x, y, z, c = np.array(x), np.array(y), np.array(z), np.array(c)/255.0
             self.drawSurface(name, x, y, z, c, method=0, mode=1, display=display)
             
-            if not ticklabel:
-                ticklabel = np.arange(int(vmin/10)+1, int(vmax/10)+1)*10
             for i in range(len(ticklabel)):
-                k = (ticklabel[i]-vmin) / (vmax-vmin)
-                newy  = k * (y_max-y_min) + y_min
-                mark = precision % ticklabel[i] if precision else ticklabel[i]
-                self.drawText(name, mark, [x_max+ticket_line*1.5+label_offset[0], newy+label_offset[1]-0.05, 0], label_size, text_color, display=display)
-                if ticket_line > 0:
-                    v = np.array([[x_max, newy, 0], [x_max+ticket_line, newy, 0]])
-                    self.drawLine(name, v, np.array(text_color), method=0, display=display)
+                mark = label_precision % ticklabel[i] if label_precision else str(ticklabel[i])
+                textw, texth  = self.getTextSize([mark], label_size)[0]
+                kd = (ticklabel[i]-vmin) / (vmax-vmin)
+                newy  = kd * (y_max-y_min) + y_min
+                
+                xpos = x_max + line_length + (totalxmax-totalxmin) * 0.04
+                ypos = newy - (ky*texth)/2
+                self.drawText(name, mark, [xpos+label_offset[0], ypos+label_offset[1], 0], label_size, label_color, display=display)
+                
+                if line_length > 0:
+                    v = np.array([[x_max, newy, 0], [x_max+line_length, newy, 0]])
+                    self.drawLine(name, v, np.array(line_color), method=0, display=display)
         
-        elif location == 'top' or location == 'bottom':
-            pass
+        elif orient in ['h', 'horizontal']:
+            x_min, x_max = -0.7*w/h+bar_offset[0], 0.7*w/h+bar_offset[0]
+            y_min, y_max = -0+bar_offset[1], 0.5+bar_offset[1]
+            
+            totalxmin, totalxmax = -w/h, w/h
+            totalymin, totalymax = -1.0, 1.0
+            kx = (totalxmax-totalxmin)/w
+            ky = (totalymax-totalymin)/h
+            
+            if title_name:
+                textw, texth = self.getTextSize([title_name], title_size)[0]
+                if title_align == "left":
+                    xpos = x_min
+                elif title_align == "right":
+                    xpos = x_max - (kx*textw)
+                else: # center
+                    xpos = x_min + ((x_max-x_min) - (kx*textw)) / 2
+                    
+                title_pos = [xpos+title_offset[0], y_max+title_offset[1]+(ky*texth*0.4), 0.0]
+                self.drawText(name, title_name, title_pos, title_size, title_color, display=display)
+                
+            x, z, c = list(), list(), list()
+            for i in range(len(value)-1, -1, -1):
+                kd = (value[i]-vmin) / (vmax-vmin)
+                newx  = kd * (x_max-x_min) + x_min
+                x.append(newx)
+                z.append(0.0)
+                c.append(color[i])
+                
+            x, z, c = np.array(x), np.array(z), np.array(c)/255.0
+            y = np.vstack((np.tile(np.array([y_max]), (1, len(x))), np.tile(np.array([y_min]), (1, len(x)))))
+            x = np.tile(x, (2, 1))
+            z = np.tile(z, (2, 1))
+            c = np.tile(c, (2, 1, 1))
+            
+            self.drawSurface(name, x, y, z, c, method=0, mode=1, display=display)
+            
+            for i in range(len(ticklabel)):
+                mark = label_precision % ticklabel[i] if label_precision else str(ticklabel[i])
+                textw, texth  = self.getTextSize([mark], label_size)[0]
+                kd = (ticklabel[i]-vmin) / (vmax-vmin)
+                newx  = kd * (x_max-x_min) + x_min
+                
+                if label_align == "left":
+                    xpos = newx
+                elif label_align == "right":
+                    xpos = newx - (kx * textw)
+                else:
+                    xpos = newx - (kx * textw)/2
+                
+                ypos = y_min - line_length - (ky * texth) - (totalymax-totalymin)*0.04
+                self.drawText(name, mark, [xpos+label_offset[0], ypos+label_offset[1], 0], label_size, label_color, display=display)
+                
+                if line_length > 0:
+                    v = np.array([[newx, y_min, 0], [newx, y_min-line_length, 0]])
+                    self.drawLine(name, v, np.array(line_color), method=0, display=display)
         
         
         

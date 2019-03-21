@@ -104,7 +104,10 @@ venv.bak/
 .mypy_cache/
 
 # custem
-demo/
-build/
 wxgl.egg-info/
+build/
+data/
+capture/
+demo.py
+
 
