@@ -316,6 +316,10 @@ class WxGLScene(glcanvas.GLCanvas):
         if elevation > np.pi:
             elevation -= 2*np.pi
         
+        azimuth %= 2*np.pi
+        if azimuth > np.pi:
+            azimuth -= 2*np.pi
+        
         self.elevation = elevation
         self.azimuth = azimuth
         self.dist = dist

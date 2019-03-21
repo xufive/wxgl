@@ -157,7 +157,7 @@ class WxGLRegion(object):
             
         return size
     
-    def getTickLabele(self, vmin, vmax):
+    def getTickLabel(self, vmin, vmax):
         """返回合适的Colorbar标注值
         
         vmin        - 最小值
@@ -352,14 +352,13 @@ class WxGLRegion(object):
             self.appendCmd(self._wxglEnable, GL_LINE_STIPPLE)
             self.appendCmd(self._wxglLineStipple, stipple)
         
-    def _createText(self, text, size, color, offset=0, align='left'):
+    def _createText(self, text, size, color, offset=0):
         """生成文字的像素集、高度、宽度
         
         text        - Unicode字符串
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
         offset      - 偏移数
-        align       - 对其方式 left|center|right
         """
         
         over, under = -1, -1
@@ -412,14 +411,8 @@ class WxGLRegion(object):
         rows, cols = pixels.shape
         if offset != 0:
             patch = np.zeros((rows, offset), dtype=np.uint8)
-            if align == 'left':
-                pixels = np.hstack((pixels, patch))
-            elif align == 'center':
-                patch_left = np.zeros((rows, int(offset/2)), dtype=np.uint8)
-                patch_right = np.zeros((rows, offset-int(offset/2)), dtype=np.uint8)
-                pixels = np.hstack((patch_left, pixels, patch_right))
-            else:
-                pixels = np.hstack((patch, pixels))
+            pixels = np.hstack((patch, pixels))
+        
         rows, cols = pixels.shape
         color = color*255
         color = np.tile(color, (rows*cols, 1)).astype(np.uint8)
@@ -604,7 +597,7 @@ class WxGLRegion(object):
         if label:
             self.drawText(name, label, spire, size, c)
         
-    def drawText(self, name, text, pos, size, color, offset=0, align='left', display=True):
+    def drawText(self, name, text, pos, size, color, offset=0, display=True):
         """绘制文字
         
         name        - 模型名
@@ -613,7 +606,6 @@ class WxGLRegion(object):
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
         offset      - 偏移数
-        align       - left左对齐  right右对齐
         display     - 是否显示
         """
         
@@ -626,7 +618,7 @@ class WxGLRegion(object):
         if isinstance(color, list):
             color = np.array(color)
         
-        pixels_id, rows, cols = self._createText(text, size, color, offset, align)
+        pixels_id, rows, cols = self._createText(text, size, color, offset)
         if name in self.models:
             self.models[name]['component'].append({
                 'type': 'text',
@@ -703,7 +695,7 @@ class WxGLRegion(object):
         x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
         y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
         z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
-        c           - 顶点的颜色，numpy.ndarray类型，shape=(3,)|(4,)|(rows,cols,3)|(rows,cols,4)
+        c           - 顶点的颜色，numpy.ndarray类型，shape=(3|4,)|(rows,cols,3|4)
         method      - 绘制方法
                         0   - 四边形
                         1   - 连续四边形
@@ -803,7 +795,7 @@ class WxGLRegion(object):
         v = np.array([[start,0,0],[0.8*k,0,0],[0,start,0],[0,0.8*k,0],[0,0,start],[0,0,0.8*k]])
         c = np.array([[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,0,1],[0,0,1]])
         
-        self.drawLine(name, v, c, method=0, width=1, display=display)
+        self.drawLine(name, v, c, method=0, width=1, stipple=(1,0xFFFF), display=display)
         
         self._plotAxisCone(name, 'x', k=k, slices=slices, label=xlabel, size=size)
         self._plotAxisCone(name, 'y', k=k, slices=slices, label=ylabel, size=size)
@@ -869,7 +861,7 @@ class WxGLRegion(object):
         
         # 计算刻度值
         if not ticklabel:
-            ticklabel = self.getTickLabele(vmin, vmax)
+            ticklabel = self.getTickLabel(vmin, vmax)
         
         if orient in ['v', 'vertical']:
             x_min, x_max = -0.6+bar_offset[0], 0.0+bar_offset[0]
@@ -917,7 +909,7 @@ class WxGLRegion(object):
                 
                 if line_length > 0:
                     v = np.array([[x_max, newy, 0], [x_max+line_length, newy, 0]])
-                    self.drawLine(name, v, np.array(line_color), method=0, display=display)
+                    self.drawLine(name, v, np.array(line_color), method=0, width=1, stipple=(1,0xFFFF), display=display)
         
         elif orient in ['h', 'horizontal']:
             x_min, x_max = -0.7*w/h+bar_offset[0], 0.7*w/h+bar_offset[0]
@@ -974,7 +966,7 @@ class WxGLRegion(object):
                 
                 if line_length > 0:
                     v = np.array([[newx, y_min, 0], [newx, y_min-line_length, 0]])
-                    self.drawLine(name, v, np.array(line_color), method=0, display=display)
+                    self.drawLine(name, v, np.array(line_color), method=0, width=1, stipple=(1,0xFFFF), display=display)
         
         
         
