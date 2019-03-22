@@ -156,11 +156,8 @@ class WxGLScene(glcanvas.GLCanvas):
             dx, dy = pos - self.mpos
             self.mpos = pos
             
-            if -0.5*np.pi < self.elevation < 0.5*np.pi:
-                dx *= -1
-            
             elevation = self.elevation + 2*np.pi*dy/self.size[1]
-            azimuth = self.azimuth + 2*np.pi*dx/self.size[0]
+            azimuth = self.azimuth - 2*np.pi*dx/self.size[0]
             self._setPosture(elevation=elevation, azimuth=azimuth, dist=self.dist)
             
             self.Refresh(False)
