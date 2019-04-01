@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 
 name = 'wxgl'
-version = "0.3.3"
-version_info = (0, 3, 3, 0)
+version = "0.4.0"
+version_info = (0, 4, 0, 0)
