@@ -26,16 +26,16 @@ import freetype
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
+from PIL import Image
 
 
 class WxGLRegion(object):
     """GL视区类"""
     
-    def __init__(self, scene, name, box, lookat=None, scale=None, view=None, mode=None):
+    def __init__(self, scene, box, lookat=None, scale=None, view=None, mode=None):
         """构造函数
         
         scene       - 所属场景对象
-        name        - 视区的名字
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
         lookat      - 相机、目标点和头部指向。若为None，表示使用父级场景的设置
         scale       - 模型矩阵缩放比例。若为None，表示使用父级场景的设置
@@ -48,7 +48,6 @@ class WxGLRegion(object):
         
         self.scene = scene
         self.font = self.scene.font
-        self.name = name
         self.box = box
         self.mode = mode
         
@@ -69,7 +68,9 @@ class WxGLRegion(object):
 
         self.cm = self.scene.cm                             # 调色板对象
         self.assembly = list()                              # 绘图指令集
-        self.models = dict()                                # 所有模型
+        self.models = dict()                                # 模型字典
+        self.textures = list()                              # 纹理对象列表
+        self.buffers = dict()                               # 缓冲区字典
     
     def clearCmd(self):
         """清除视区内所有部件模型的生成命令"""
@@ -88,19 +89,19 @@ class WxGLRegion(object):
         for key in self.models:
             if self.models[key]['display']:
                 for item in self.models[key]['component']:
-                    if item['type'] == 'surface':
-                        vertices_id, indices_id, v_type, gl_type, mode = item['args']
+                    if item['type'] == 'surface' or item['type'] == 'mesh':
+                        vertices_id, indices_id, v_type, gl_type, mode, texture = item['args']
                         self._setPolygonMode(mode)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, texture)
                     elif item['type'] == 'line':
                         vertices_id, indices_id, v_type, gl_type, width, stipple = item['args']
                         self._setLineWidth(width)
                         self._setLineStipple(stipple)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, None)
                     elif item['type'] == 'point':
                         vertices_id, indices_id, v_type, gl_type, size = item['args']
                         self._setPointSize(size)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, None)
                     elif item['type'] == 'text':
                         pixels_id, rows, cols, pos = item['args']
                         self._addPixels(pixels_id, rows, cols, pos)
@@ -127,13 +128,44 @@ class WxGLRegion(object):
         if name in self.models:
             for item in self.models[name]['component']:
                 if item['type'] == 'text':
-                    self.scene.buffers[item['args'][0]].delete()
+                    self.buffers[item['args'][0]].delete()
                 elif item['type'] in ['line', 'surface']:
-                   self.scene.buffers[item['args'][0]].delete()
-                   self.scene.buffers[item['args'][1]].delete()
+                   self.buffers[item['args'][0]].delete()
+                   self.buffers[item['args'][1]].delete()
             
             del self.models[name]
             self.update()
+    
+    def createTexture(self, img_file, alpha=True):
+        """创建纹理对象
+        
+        img_file    - 纹理图片文件名
+        alpha       - 是否使用透明通道
+        """
+        
+        mode = 'RGBA' if alpha else 'RGB'
+        im = Image.open(img_file)
+        ix, iy, image = im.size[0], im.size[1], im.tobytes('raw', mode, 0, -1)
+        
+        mode = GL_RGBA if alpha else GL_RGB
+        self.textures.append(glGenTextures(1))
+        glBindTexture(GL_TEXTURE_2D, self.textures[-1])
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, mode, ix, iy, 0, mode, GL_UNSIGNED_BYTE, image)
+        
+        return self.textures[-1]
+    
+    def deleteTexture(self, texture):
+        """删除纹理对象"""
+        
+        try:
+            glDeleteTextures(self.textures.pop(self.textures.index(texture)))
+        except:
+            pass
     
     def getTextSize(self, textList, size):
         """返回字符串列表中每个字符串的宽度、高度
@@ -208,6 +240,14 @@ class WxGLRegion(object):
         
         glLineStipple(args[0][0], args[0][1])
     
+    def _wxglDrawTexture(self, args):
+        """glDrawElements us texture"""
+        
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, args[4])
+        self._wxglDrawElements(args[:-1])
+        glDisable(GL_TEXTURE_2D)
+    
     def _wxglDrawElements(self, args):
         """glDrawElements"""
         
@@ -245,7 +285,7 @@ class WxGLRegion(object):
         
         id = uuid.uuid1().hex
         buff = vbo.VBO(vertices)
-        self.scene.buffers.update({id: buff})
+        self.buffers.update({id: buff})
         
         return id
         
@@ -254,7 +294,7 @@ class WxGLRegion(object):
         
         id = uuid.uuid1().hex
         buff = vbo.VBO(indices, target=GL_ELEMENT_ARRAY_BUFFER)
-        self.scene.buffers.update({id: buff})
+        self.buffers.update({id: buff})
         
         return id
         
@@ -263,64 +303,28 @@ class WxGLRegion(object):
         
         id = uuid.uuid1().hex
         buff = vbo.VBO(pixels, target=GL_PIXEL_UNPACK_BUFFER)
-        self.scene.buffers.update({id: buff})
+        self.buffers.update({id: buff})
         
         return id
-        
-    def _getIndices(self, glMethod, cols, rows=None):
-        """生成索引集
-        
-        glMethod    - 图元绘制方法
-        cols        - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
-        rows        - 仅对GL_QUADS|GL_QUAD_STRIP|GL_TRIANGLES|GL_TRIANGLE_STRIP有效
-        """
-        
-        if glMethod in [GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP, GL_POLYGON, GL_TRIANGLE_FAN]:
-            indices = list(range(cols))
-        elif glMethod == GL_QUADS:
-            indices = list()
-            for i in range(1, rows):
-                for j in range(1, cols):
-                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j]
-        elif glMethod == GL_QUAD_STRIP:
-            indices = list()
-            for i in range(1, rows):
-                indices += [(i-1)*cols, i*cols]
-                for j in range(1, cols):
-                    indices += [(i-1)*cols+j, i*cols+j]
-        elif glMethod == GL_TRIANGLES:
-            indices = list()
-            for i in range(1, rows):
-                for j in range(1,cols):
-                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, i*cols+j, (i-1)*cols+j, (i-1)*cols+j-1]
-        elif glMethod == GL_TRIANGLE_STRIP:
-            indices = list()
-            for i in range(1, rows):
-                indices += [(i-1)*cols, i*cols]
-                for j in range(1,cols):
-                    indices += [(i-1)*cols+j, i*cols+j]
-        
-        return self._createEBO(np.array(indices, dtype=np.int))
         
     def _setPolygonMode(self, mode):
         """设置多边形显示模式
         
         mode        - 显示模式
-                        0   - 使用当前设置
-                        1   - 前后面填充颜色
-                        2   - 前后面显示线条
-                        3   - 前面填充颜色，后面显示线条
-                        4   - 前面显示线条，后面填充颜色
+                        'FCBC'      - 前后面填充颜色FCBC
+                        'FLBL'      - 前后面显示线条FLBL
+                        'FCBL'      - 前面填充颜色，后面显示线条FCBL
+                        'FLBC'      - 前面显示线条，后面填充颜色FLBC
         """
         
-        if mode == 1:
+        if mode == 'FCBC':
             self.appendCmd(self._wxglPolygonMode, GL_FRONT_AND_BACK, GL_FILL)
-        elif mode == 2:
+        elif mode == 'FLBL':
             self.appendCmd(self._wxglPolygonMode, GL_FRONT_AND_BACK, GL_LINE)
-        elif mode == 3:
+        elif mode == 'FCBL':
             self.appendCmd(self._wxglPolygonMode, GL_FRONT, GL_FILL)
             self.appendCmd(self._wxglPolygonMode, GL_BACK, GL_LINE)
-        elif mode == 4:
+        elif mode == 'FLBC':
             self.appendCmd(self._wxglPolygonMode, GL_FRONT, GL_LINE)
             self.appendCmd(self._wxglPolygonMode, GL_BACK, GL_FILL)
         
@@ -358,7 +362,7 @@ class WxGLRegion(object):
         text        - Unicode字符串
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
-        offset      - 偏移数
+        offset      - 文本左侧插入空格的像素点数
         """
         
         over, under = -1, -1
@@ -423,8 +427,8 @@ class WxGLRegion(object):
         
         return pixels_id, rows, cols
         
-    def _createPoint(self, v, c):
-        """生成点的顶点集、索引集、顶点数组类型、图元绘制方法
+    def _createPointOrLine(self, v, c):
+        """生成点或线段的顶点集、索引集、顶点数组类型
         
         v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
         c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
@@ -435,103 +439,131 @@ class WxGLRegion(object):
         
         if c.shape[-1] == 3:
             v_type = GL_C3F_V3F
-            vertices_id = self._createVBO(np.hstack((c,v)).astype(np.float32))
+            vertices = np.hstack((c,v)).astype(np.float32)
         else:
             v_type = GL_C4F_N3F_V3F
             n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
             n = n.reshape(-1, 3)
-            
-            vertices_id = self._createVBO(np.hstack((c,n,v)).astype(np.float32))
+            vertices = np.hstack((c,n,v)).astype(np.float32)
         
-        gl_type = GL_POINTS
-        indices_id = self._getIndices(gl_type, v.shape[0])
+        vertices_id = self._createVBO(vertices)
+        indices_id = self._createEBO(np.array(list(range(v.shape[0])), dtype=np.int))
         
-        return vertices_id, indices_id, v_type, gl_type
+        return vertices_id, indices_id, v_type
         
-    def _createLine(self, v, c, method=0):
-        """生成线段的顶点集、索引集、顶点数组类型、图元绘制方法
+    def _createSurface(self, v, c, t):
+        """生成曲面的顶点集、索引集、顶点数组类型
         
-        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
-        c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
-        method      - 绘制方法
-                        0   - 线段
-                        1   - 连续线段
-                        2   - 闭合线段
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(clos,3)
+        c           - 顶点的颜色集，None或numpy.ndarray类型，shape=(3|4,)|(cols,3|4)
+        t           - 顶点的纹理坐标集，None或numpy.ndarray类型，shape=(cols,2)
         """
         
-        if c.ndim == 1:
-            c = np.tile(c, (v.shape[0], 1))
-        
-        if c.shape[-1] == 3:
-            v_type = GL_C3F_V3F
-            vertices_id = self._createVBO(np.hstack((c,v)).astype(np.float32))
+        if isinstance(t, np.ndarray):
+            if isinstance(c, np.ndarray):
+                if c.ndim == 1:
+                    c = np.tile(c, (v.shape[0], 1))
+                else:
+                    c = c.reshape(-1, c.shape[-1])
+                
+                v_type = GL_T2F_C3F_V3F
+                vertices = np.hstack((t,c,v)).astype(np.float32)
+            else:
+                v_type = GL_T2F_V3F
+                vertices = np.hstack((t,v)).astype(np.float32)
         else:
-            v_type = GL_C4F_N3F_V3F
-            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
-            n = n.reshape(-1, 3)
+            if c.ndim == 1:
+                c = np.tile(c, (v.shape[0], 1))
+            else:
+                c = c.reshape(-1, c.shape[-1])
             
-            vertices_id = self._createVBO(np.hstack((c,n,v)).astype(np.float32))
+            if c.shape[-1] == 3:
+                v_type = GL_C3F_V3F
+                vertices = np.hstack((c,v)).astype(np.float32)
+            else:
+                v_type = GL_C4F_N3F_V3F
+                n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
+                n = n.reshape(-1, 3)
+                vertices = np.hstack((c,n,v)).astype(np.float32)
         
-        gl_type_options = [GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP]
-        gl_type = gl_type_options[method]
-        indices_id = self._getIndices(gl_type, v.shape[0])
+        vertices_id = self._createVBO(vertices)
+        indices_id = self._createEBO(np.array(list(range(v.shape[0])), dtype=np.int))
         
-        return vertices_id, indices_id, v_type, gl_type
+        return vertices_id, indices_id, v_type
         
-    def _createSurface(self, x, y, z, c, method=0):
-        """生成曲面的顶点集、索引集、顶点数组类型、图元绘制方法
+    def _createMesh(self, x, y, z, c, t, gl_type):
+        """生成网格的顶点集、索引集、顶点数组类型
         
-        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(clos,)|(rows,cols)
-        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(clos,)|(rows,cols)
-        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(clos,)|(rows,cols)
-        c           - 顶点的颜色，numpy.ndarray类型，shape=(3|4,)|(cols,3|4)|(rows,cols,3|4)
-        method      - 绘制方法
-                        0   - 四边形
-                        1   - 连续四边形
-                        2   - 三角形
-                        3   - 连续三角形
-                        4   - 扇形
-                        5   - 多边形
+        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
+        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
+        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
+        c           - 顶点的颜色集，None或numpy.ndarray类型，shape=(3|4,)|(rows,cols,3|4)
+        t           - 顶点的纹理坐标集，None或numpy.ndarray类型，shape=(rows,cols,2)
+        gl_type     - 绘制方法，GL_QUADS|GL_TRIANGLES
         """
-        if method < 4:
-            rows, cols = z.shape
-        else:
-            rows, cols = 1, z.shape[0]
         
+        rows, cols = z.shape
         v = np.dstack((x,y,z)).reshape(-1,3)
         
-        if c.ndim == 1:
-            c = np.tile(c, (rows*cols, 1))
+        if isinstance(t, np.ndarray):
+            if isinstance(c, np.ndarray):
+                if c.ndim == 1:
+                    c = np.tile(c, (rows*cols, 1))
+                else:
+                    c = c.reshape(-1, c.shape[-1])
+                
+                v_type = GL_T2F_C3F_V3F
+                vertices = np.hstack((t,c,v)).astype(np.float32)
+            else:
+                v_type = GL_T2F_V3F
+                vertices = np.hstack((t,v)).astype(np.float32)
         else:
-            c = c.reshape(-1, c.shape[-1])
+            if c.ndim == 1:
+                c = np.tile(c, (rows*cols, 1))
+            else:
+                c = c.reshape(-1, c.shape[-1])
+            
+            if c.shape[-1] == 3:
+                v_type = GL_C3F_V3F
+                vertices = np.hstack((c,v)).astype(np.float32)
+            else:
+                v_type = GL_C4F_N3F_V3F
+                n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
+                n = n.reshape(-1, 3)
+                vertices = np.hstack((c,n,v)).astype(np.float32)
         
-        if c.shape[-1] == 3:
-            v_type = GL_C3F_V3F
-            vertices_id = self._createVBO(np.hstack((c,v)).astype(np.float32))
-        else:
-            v_type = GL_C4F_N3F_V3F
-            n = np.tile(np.array([1.0, 1.0, 1.0]), v.shape[0])
-            n = n.reshape(-1, 3)
-            vertices_id = self._createVBO(np.hstack((c,n,v)).astype(np.float32))
+        if gl_type == GL_QUADS:
+            indices = list()
+            for i in range(1, rows):
+                for j in range(1, cols):
+                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j]
+        elif gl_type == GL_TRIANGLES:
+            indices = list()
+            for i in range(1, rows):
+                for j in range(1,cols):
+                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, i*cols+j, (i-1)*cols+j, (i-1)*cols+j-1]
         
-        gl_type_options = [GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_POLYGON]
-        gl_type = gl_type_options[method]
-        indices_id = self._getIndices(gl_type, cols, rows)
+        vertices_id = self._createVBO(vertices)
+        indices_id = self._createEBO(np.array(indices, dtype=np.int))
         
-        return vertices_id, indices_id, v_type, gl_type
+        return vertices_id, indices_id, v_type
         
-    def _addElements(self, vertices_id, indices_id, v_type, gl_type):
+    def _addElements(self, vertices_id, indices_id, v_type, gl_type, texture):
         """生成绘制图元命令
         
         vertices_id - 顶点VBO的id
         indices_id  - 索引EBO的id
         v_type      - 顶点混合数组类型
         gl_type     - 绘制方法
+        texture     - 纹理对象
         """
         
-        vertices_vbo = self.scene.buffers[vertices_id]
-        indices_ebo = self.scene.buffers[indices_id]
-        self.appendCmd(self._wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type)
+        vertices_vbo = self.buffers[vertices_id]
+        indices_ebo = self.buffers[indices_id]
+        if texture:
+            self.appendCmd(self._wxglDrawTexture, vertices_vbo, indices_ebo, v_type, gl_type, texture)
+        else:
+            self.appendCmd(self._wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type)
         
     def _addPixels(self, pixels_id, rows, cols, pos):
         """生成绘制像素命令
@@ -542,7 +574,7 @@ class WxGLRegion(object):
         pos         - 位置
         """
         
-        pixels_pbo = self.scene.buffers[pixels_id]
+        pixels_pbo = self.buffers[pixels_id]
         self.appendCmd(self._wxglDrawPixels, pixels_pbo, rows, cols, pos)
         
     def _plotAxisCone(self, name, axis, k, slices, label, size):
@@ -567,7 +599,6 @@ class WxGLRegion(object):
             x = np.ones_like(angles)*0.8*k
             y = np.sin(angles)*r
             z = np.cos(angles)*r
-            #v = np.dstack((x,y,z)).reshape(-1,3)
         elif axis == 'y':
             center = np.array([0,0.8*k,0])
             spire = np.array([0,k,0])
@@ -575,7 +606,6 @@ class WxGLRegion(object):
             y = np.ones_like(angles)*0.8*k
             z = np.sin(angles)*r
             x = np.cos(angles)*r
-            #v = np.dstack((x,y,z)).reshape(-1,3)
         elif axis == 'z':
             center = np.array([0,0,0.8*k])
             spire = np.array([0,0,k])
@@ -583,17 +613,12 @@ class WxGLRegion(object):
             z = np.ones_like(angles)*0.8*k
             x = np.sin(angles)*r
             y = np.cos(angles)*r
-            #v = np.dstack((x,y,z)).reshape(-1,3)
             
-        x_cone = np.hstack((spire[0], x))
-        y_cone = np.hstack((spire[1], y))
-        z_cone = np.hstack((spire[2], z))
-        x_ground = np.hstack((center[0], x))
-        y_ground = np.hstack((center[1], y))
-        z_ground = np.hstack((center[2], z))
+        v_cone = np.dstack((np.hstack((spire[0], x)), np.hstack((spire[1], y)), np.hstack((spire[2], z))))[0]
+        v_ground = np.dstack((np.hstack((center[0], x)), np.hstack((center[1], y)), np.hstack((center[2], z))))[0]
         
-        self.drawSurface(name, x_cone, y_cone, z_cone, c, method=4, mode=1)
-        self.drawSurface(name, x_ground, y_ground, z_ground, c, method=4, mode=1)
+        self.drawSurface(name, v_cone, c, method='F', mode='FCBC')
+        self.drawSurface(name, v_ground, c, method='F', mode='FCBC')
         if label:
             self.drawText(name, label, spire, size, c)
         
@@ -605,7 +630,7 @@ class WxGLRegion(object):
         pos         - 文本位置坐标，list或numpy.ndarray类型，shape=(3，)
         size        - 文本大小，整形
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
-        offset      - 偏移数
+        offset      - 文本左侧插入空格的像素点数
         display     - 是否显示
         """
         
@@ -643,37 +668,40 @@ class WxGLRegion(object):
         display     - 是否显示
         """
         
-        vertices_id, indices_id, v_type, gl_type = self._createPoint(v, c)
+        vertices_id, indices_id, v_type = self._createPointOrLine(v, c)
+        
         if name in self.models:
             self.models[name]['component'].append({
                 'type': 'point',
-                'args': [vertices_id, indices_id, v_type, gl_type, size]
+                'args': [vertices_id, indices_id, v_type, GL_POINTS, size]
             })
         else:
             self.models.update({name: {
                 'display': display,
                 'component': [{
                     'type': 'point',
-                    'args': [vertices_id, indices_id, v_type, gl_type, size]
+                    'args': [vertices_id, indices_id, v_type, GL_POINTS, size]
                 }]
             }})
         
-    def drawLine(self, name, v, c, method=0, width=None, stipple=None, display=True):
+    def drawLine(self, name, v, c, method='MULTI', width=None, stipple=None, display=True):
         """绘制线段
         
         name        - 模型名
         v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
         c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
         method      - 绘制方法
-                        0   - 线段
-                        1   - 连续线段
-                        2   - 闭合线段
+                        'MULTI'     - 线段
+                        'SINGLE'    - 连续线段
+                        'LOOP'      - 闭合线段
         width       - 线宽，0.0~10.0之间，None表示使用当前设置
         stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None表示使用当前设置
         display     - 是否显示
         """
         
-        vertices_id, indices_id, v_type, gl_type = self._createLine(v, c, method)
+        gl_type = {'MULTI':GL_LINES, 'SINGLE':GL_LINE_STRIP, 'LOOP':GL_LINE_LOOP}[method]
+        vertices_id, indices_id, v_type = self._createPointOrLine(v, c)
+        
         if name in self.models:
             self.models[name]['component'].append({
                 'type': 'line',
@@ -688,45 +716,99 @@ class WxGLRegion(object):
                 }]
             }})
     
-    def drawSurface(self, name, x, y, z, c, method=0, mode=0, display=True):
+    def drawSurface(self, name, v, c=None, t=None, texture=None, method='Q', mode=None, display=True):
         """绘制曲面
         
         name        - 模型名
-        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
-        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
-        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
-        c           - 顶点的颜色，numpy.ndarray类型，shape=(3|4,)|(rows,cols,3|4)
+        v           - 顶点坐标集，numpy.ndarray类型，shape=(cols,3)
+        c           - 顶点的颜色集，numpy.ndarray类型，shape=(3|4,)|(cols,3|4)
+        t           - 顶点的纹理坐标集，numpy.ndarray类型，shape=(cols,2)
+        texture     - 2D纹理对象
         method      - 绘制方法
-                        0   - 四边形
-                        1   - 连续四边形
-                        2   - 三角形
-                        3   - 连续三角形
-                        4   - 扇形
+                        'Q'         - 四边形
+                                        0--3 4--7
+                                        |  | |  |
+                                        1--2 5--6
+                        'T'         - 三角形
+                                        0--2 3--5
+                                         \/   \/
+                                          1    4
+                        'Q+'        - 边靠边的连续四边形
+                                       0--2--4
+                                       |  |  |
+                                       1--3--5
+                        'T+'        - 边靠边的连续三角形
+                                       0--2--4
+                                        \/_\/_\
+                                         1  3  5
+                        'F'         - 扇形
+                        'P'         - 多边形
         mode        - 显示模式
-                        0   - 使用当前设置
-                        1   - 前后面填充颜色
-                        2   - 前后面显示线条
-                        3   - 前面填充颜色，后面显示线条
-                        4   - 前面显示线条，后面填充颜色
+                        None        - 使用当前设置
+                        'FCBC'      - 前后面填充颜色FCBC
+                        'FLBL'      - 前后面显示线条FLBL
+                        'FCBL'      - 前面填充颜色，后面显示线条FCBL
+                        'FLBC'      - 前面显示线条，后面填充颜色FLBC
         display     - 是否显示
         """
         
-        vertices_id, indices_id, v_type, gl_type = self._createSurface(x, y, z, c, method)
+        gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES, 'Q+':GL_QUAD_STRIP, 'T+':GL_TRIANGLE_STRIP, 'F':GL_TRIANGLE_FAN, 'P':GL_POLYGON}[method]
+        vertices_id, indices_id, v_type = self._createSurface(v, c, t)
+        
         if name in self.models:
             self.models[name]['component'].append({
                 'type': 'surface',
-                'args': [vertices_id, indices_id, v_type, gl_type, mode]
+                'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
             })
         else:
             self.models.update({name: {
                 'display': display,
                 'component': [{
                     'type': 'surface',
-                    'args': [vertices_id, indices_id, v_type, gl_type, mode]
+                    'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
                 }]
             }})
     
-    def drawVolume(self, name, volume, x=None, y=None, z=None, display=True):
+    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, display=True):
+        """绘制网格
+        
+        name        - 模型名
+        x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
+        y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)
+        z           - 顶点的z坐标集，numpy.ndarray类型，shape=(rows,cols)
+        c           - 顶点的颜色集，numpy.ndarray类型，shape=(3|4,)|(rows,cols,3|4)
+        t           - 顶点的纹理坐标集，numpy.ndarray类型，shape=(rows,cols,2)
+        texture     - 2D纹理对象
+        method      - 绘制方法：
+                        'Q'         - 四边形
+                        'T'         - 三角形
+        mode        - 显示模式
+                        None        - 使用当前设置
+                        'FCBC'      - 前后面填充颜色FCBC
+                        'FLBL'      - 前后面显示线条FLBL
+                        'FCBL'      - 前面填充颜色，后面显示线条FCBL
+                        'FLBC'      - 前面显示线条，后面填充颜色FLBC
+        display     - 是否显示
+        """
+        
+        gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES}[method]
+        vertices_id, indices_id, v_type = self._createMesh(x, y, z, c, t, gl_type)
+        
+        if name in self.models:
+            self.models[name]['component'].append({
+                'type': 'mesh',
+                'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
+            })
+        else:
+            self.models.update({name: {
+                'display': display,
+                'component': [{
+                    'type': 'mesh',
+                    'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
+                }]
+            }})
+    
+    def drawVolume(self, name, volume, x=None, y=None, z=None, method='Q', display=True):
         """绘制体数据
         
         name        - 模型名
@@ -734,11 +816,13 @@ class WxGLRegion(object):
         x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)。缺省则使用volume的2轴索引构造
         y           - 顶点的y坐标集，numpy.ndarray类型，shape=(rows,cols)。缺省则使用volume的1轴索引构造
         z           - 顶点的z坐标集，numpy.ndarray类型，shape=(layers,)。缺省则使用volume的0轴索引构造
+        method      - 绘制方法：
+                        'Q'         - 四边形
+                        'T'         - 三角形
         display     - 是否显示
         """
         
-        method = 0  # 四边形
-        mode = 1    # 前后面填充颜色
+        mode = 'FCBC'
         d, h, w  = volume.shape[0], volume.shape[1], volume.shape[2]
         
         if not isinstance(x, np.ndarray) and x == None:
@@ -757,21 +841,21 @@ class WxGLRegion(object):
             z -= z.max()/2.0
         
         for i in range(d):
-            self.drawSurface(name, x, y, z[i]*np.ones_like(x), volume[i], method=method, mode=mode, display=display)
+            self.drawMesh(name, x, y, z[i]*np.ones_like(x), volume[i], method=method, mode=mode, display=display)
         
         z_h = z.repeat(h).reshape((-1, h))
         for i in range(w):
             x_h = np.tile(x[:,i], (d,1))
             y_h = np.tile(y[:,i], (d,1))
             c_h = volume[:d,:,i]
-            self.drawSurface(name, x_h, y_h, z_h, c_h, method=method, mode=mode, display=display)
+            self.drawMesh(name, x_h, y_h, z_h, c_h, method=method, mode=mode, display=display)
         
         z_v = z.repeat(w).reshape((-1, w))
         for i in range(h):
             x_v = np.tile(x[i,:], (d,1))
             y_v = np.tile(y[i,:], (d,1))
             c_v = volume[:d,i,:]
-            self.drawSurface(name, x_v, y_v, z_v, c_v, method=method, mode=mode, display=display)
+            self.drawMesh(name, x_v, y_v, z_v, c_v, method=method, mode=mode, display=display)
     
     def drawAxes(self, name, k=1.0, slices=50, half=False, xlabel=None, ylabel=None, zlabel=None, size=40, display=True):
         """绘制坐标轴
@@ -795,7 +879,7 @@ class WxGLRegion(object):
         v = np.array([[start,0,0],[0.8*k,0,0],[0,start,0],[0,0.8*k,0],[0,0,start],[0,0,0.8*k]])
         c = np.array([[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,0,1],[0,0,1]])
         
-        self.drawLine(name, v, c, method=0, width=1, stipple=(1,0xFFFF), display=display)
+        self.drawLine(name, v, c, method='MULTI', width=1, stipple=(1,0xFFFF), display=display)
         
         self._plotAxisCone(name, 'x', k=k, slices=slices, label=xlabel, size=size)
         self._plotAxisCone(name, 'y', k=k, slices=slices, label=ylabel, size=size)
@@ -895,7 +979,7 @@ class WxGLRegion(object):
                 c.append([color[i], color[i]])
                 
             x, y, z, c = np.array(x), np.array(y), np.array(z), np.array(c)/255.0
-            self.drawSurface(name, x, y, z, c, method=0, mode=1, display=display)
+            self.drawMesh(name, x, y, z, c, method='Q', mode='FCBC', display=display)
             
             for i in range(len(ticklabel)):
                 mark = label_precision % ticklabel[i] if label_precision else str(ticklabel[i])
@@ -909,7 +993,7 @@ class WxGLRegion(object):
                 
                 if line_length > 0:
                     v = np.array([[x_max, newy, 0], [x_max+line_length, newy, 0]])
-                    self.drawLine(name, v, np.array(line_color), method=0, width=1, stipple=(1,0xFFFF), display=display)
+                    self.drawLine(name, v, np.array(line_color), method='MULTI', width=1, stipple=(1,0xFFFF), display=display)
         
         elif orient in ['h', 'horizontal']:
             x_min, x_max = -0.7*w/h+bar_offset[0], 0.7*w/h+bar_offset[0]
@@ -946,7 +1030,7 @@ class WxGLRegion(object):
             z = np.tile(z, (2, 1))
             c = np.tile(c, (2, 1, 1))
             
-            self.drawSurface(name, x, y, z, c, method=0, mode=1, display=display)
+            self.drawMesh(name, x, y, z, c, method='Q', mode='FCBC', display=display)
             
             for i in range(len(ticklabel)):
                 mark = label_precision % ticklabel[i] if label_precision else str(ticklabel[i])
@@ -966,7 +1050,6 @@ class WxGLRegion(object):
                 
                 if line_length > 0:
                     v = np.array([[newx, y_min, 0], [newx, y_min-line_length, 0]])
-                    self.drawLine(name, v, np.array(line_color), method=0, width=1, stipple=(1,0xFFFF), display=display)
-        
+                    self.drawLine(name, v, np.array(line_color), method='MULTI', width=1, stipple=(1,0xFFFF), display=display)
         
         

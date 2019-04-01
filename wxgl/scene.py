@@ -75,8 +75,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.context = glcanvas.GLContext(self)                 # OpenGL上下文
         
         self.cm = colormap.WxGLColorMap()                       # 调色板对象
-        self.regions = dict()                                   # 存储视口设置信息
-        self.buffers = dict()                                   # 存储GPU缓冲区数据对象
+        self.regions = list()                                   # 存储视口设置信息
         self.store = dict()                                     # 存储相机姿态、视口缩放因子、模型矩阵缩放比例等
         
         self.setView(view, save=True)                           # 设置视景体
@@ -99,8 +98,11 @@ class WxGLScene(glcanvas.GLCanvas):
     def onDestroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
-        for id in self.buffers:
-            self.buffers[id].delete()
+        for reg in self.regions:
+            for id in reg.buffers:
+                reg.buffers[id].delete()
+            for item in reg.textures:
+                reg.deleteTexture(item)
         
         evt.Skip()
         
@@ -190,13 +192,12 @@ class WxGLScene(glcanvas.GLCanvas):
         glEnable(GL_ALPHA_TEST)                                     # 启用Alpha测试 
         glAlphaFunc(GL_GREATER, 0.05)                               # 设置Alpha测试条件为大于0.05则通过
         glFrontFace(GL_CW)                                          # 设置逆时针索引为正面（GL_CCW/GL_CW）
-        
+                
     def drawGL(self):
         """绘制"""
         
         width, height = self.size
-        for key in self.regions:
-            reg = self.regions[key]
+        for reg in self.regions:
             x0, y0 = int(reg.box[0]*width), int(reg.box[1]*height)
             w, h = int(reg.box[2]*width), int(reg.box[3]*height)
             
@@ -478,10 +479,9 @@ class WxGLScene(glcanvas.GLCanvas):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
         img.save(fn)
         
-    def addRegion(self, region_name, box, lookat=None, scale=None, view=None, mode=None):
+    def addRegion(self, box, lookat=None, scale=None, view=None, mode=None):
         """添加视区
         
-        region_name - 视区的名字
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
         lookat      - 视点、参考点和向上的方向。若为None，表示使用父级场景的设置
         scale       - 模型矩阵缩放比例。若为None，表示使用父级场景的设置
@@ -492,14 +492,16 @@ class WxGLScene(glcanvas.GLCanvas):
                         cone    - 透视投影
         """
         
-        reg = region.WxGLRegion(self, region_name, box, lookat=lookat, scale=scale, view=view, mode=mode)
-        self.regions.update({region_name: reg})
+        reg = region.WxGLRegion(self, box, lookat=lookat, scale=scale, view=view, mode=mode)
+        self.regions.append(reg)
         
         return reg
         
-    def delRegion(self, region_name):
+    def delRegion(self, reg):
         """删除视区"""
         
-        reg = self.regions.pop(region_name)
-        del reg
+        try:
+            del self.regions[self.regions.index(reg)]
+        except:
+            pass
         
