@@ -32,7 +32,7 @@ from PIL import Image
 class WxGLRegion(object):
     """GL视区类"""
     
-    def __init__(self, scene, box, lookat=None, scale=None, view=None, mode=None):
+    def __init__(self, scene, box, lookat=None, scale=None, view=None, projection=None):
         """构造函数
         
         scene       - 所属场景对象
@@ -40,7 +40,7 @@ class WxGLRegion(object):
         lookat      - 相机、目标点和头部指向。若为None，表示使用父级场景的设置
         scale       - 模型矩阵缩放比例。若为None，表示使用父级场景的设置
         view        - 视景体。若为None，表示使用父级场景的设置
-        mode        - 投影模式
+        projection  - 投影模式
                         None    - 使用父级设置
                         ortho   - 平行投影
                         cone    - 透视投影
@@ -49,7 +49,7 @@ class WxGLRegion(object):
         self.scene = scene
         self.font = self.scene.font
         self.box = box
-        self.mode = mode
+        self.projection = projection
         
         if lookat:
             self.lookat = np.array(lookat, dtype=np.float)
@@ -136,15 +136,21 @@ class WxGLRegion(object):
             del self.models[name]
             self.update()
     
-    def createTexture(self, img_file, alpha=True):
+    def createTexture(self, img, alpha=True):
         """创建纹理对象
         
-        img_file    - 纹理图片文件名
+        img         - 纹理图片文件名或数据
         alpha       - 是否使用透明通道
         """
         
+        assert isinstance(img, (np.ndarray, str)), u'参数类型错误'
+        
+        if isinstance(img, np.ndarray):
+            im = Image.fromarray(np.uint8(img))
+        else:
+            im = Image.open(img)
+        
         mode = 'RGBA' if alpha else 'RGB'
-        im = Image.open(img_file)
         ix, iy, image = im.size[0], im.size[1], im.tobytes('raw', mode, 0, -1)
         
         mode = GL_RGBA if alpha else GL_RGB

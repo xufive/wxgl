@@ -34,7 +34,7 @@ from . import colormap
 class WxGLScene(glcanvas.GLCanvas):
     """GL场景类"""
     
-    def __init__(self, parent, font, bg=[0,0,0,0], cam=[5,0,0], aim=[0,0,0], head='z+', view=[-1,1,-1,1,3.5,10], mode='cone'):
+    def __init__(self, parent, font, bg=[0,0,0,0], cam=[5,0,0], aim=[0,0,0], head='z+', view=[-1,1,-1,1,3.5,10], projection='cone'):
         """构造函数
         
         parent      - 父级窗口对象
@@ -47,7 +47,7 @@ class WxGLScene(glcanvas.GLCanvas):
                         y+      - 头部指向y轴正方向
                         z+      - 头部指向z轴正方向
         view        - 视景体
-        mode        - 投影模式
+        projection  - 投影模式
                         ortho   - 平行投影
                         cone    - 透视投影
         """
@@ -57,7 +57,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.parent = parent                                    # 父级窗口对象
         self.font = font                                        # 字体文件
         self.bg = np.array(bg, dtype=np.float)                  # OpenGL窗口的背景色
-        self.mode = mode                                        # 投影模式（平行投影/透视投影）
+        self.projection = projection                            # 投影模式（平行投影/透视投影）
         
         self.cam = np.array(cam, dtype=np.float)                # 相机位置
         self.aim = np.array(aim, dtype=np.float)                # 目标点位
@@ -210,10 +210,10 @@ class WxGLScene(glcanvas.GLCanvas):
             else:
                 view = self.view
             
-            if reg.mode:
-                mode = reg.mode
+            if reg.projection:
+                projection = reg.projection
             else:
-                mode = self.mode
+                projection = self.projection
             
             if isinstance(reg.scale, np.ndarray):
                 zoom = 1.0
@@ -221,12 +221,12 @@ class WxGLScene(glcanvas.GLCanvas):
                 zoom = self.zoom
             
             if w > h:
-                if mode == 'ortho':
+                if projection == 'ortho':
                     glOrtho(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
                 else:
                     glFrustum(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
             else:
-                if mode == 'ortho':
+                if projection == 'ortho':
                     glOrtho(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
                 else:
                     glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
@@ -297,6 +297,11 @@ class WxGLScene(glcanvas.GLCanvas):
         else:
             self.elevation = 0.0
             self.azimuth = 0.0
+        
+        if 0.5*np.pi < self.elevation or self.elevation < -.5*np.pi:
+            self.up = -1*np.abs(self.up)
+        else:
+            self.up = np.abs(self.up)
         
         self.Refresh(False)
         if save:
@@ -371,12 +376,12 @@ class WxGLScene(glcanvas.GLCanvas):
             #self.store.update({'elevation':self.elevation, 'azimuth':self.azimuth, 'dist':self.dist})
             self.store.update({'cam':self.cam.tolist()})
         
-    def setMode(self, mode_str):
+    def setProjection(self, projection):
         """设置投影模式"""
         
-        assert mode_str in ['ortho', 'cone'], u'参数错误'
+        assert projection in ['ortho', 'cone'], u'参数错误'
         
-        self.mode = mode_str
+        self.projection = projection
         self.Refresh(False)
         
     def setView(self, view_list, save=False):
@@ -412,10 +417,10 @@ class WxGLScene(glcanvas.GLCanvas):
         if save:
             self.store.update({'zoom':zoom})
         
-    def getMode(self):
+    def getProjection(self):
         """获取投影模式"""
         
-        return self.mode
+        return self.projection
         
     def getView(self):
         """获取视景体"""
@@ -479,20 +484,20 @@ class WxGLScene(glcanvas.GLCanvas):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
         img.save(fn)
         
-    def addRegion(self, box, lookat=None, scale=None, view=None, mode=None):
+    def addRegion(self, box, lookat=None, scale=None, view=None, projection=None):
         """添加视区
         
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
         lookat      - 视点、参考点和向上的方向。若为None，表示使用父级场景的设置
         scale       - 模型矩阵缩放比例。若为None，表示使用父级场景的设置
         view        - 视景体。若为None，表示使用父级场景的设置
-        mode        - 投影模式
+        projection  - 投影模式
                         None    - 使用父级设置
                         ortho   - 平行投影
                         cone    - 透视投影
         """
         
-        reg = region.WxGLRegion(self, box, lookat=lookat, scale=scale, view=view, mode=mode)
+        reg = region.WxGLRegion(self, box, lookat=lookat, scale=scale, view=view, projection=projection)
         self.regions.append(reg)
         
         return reg
