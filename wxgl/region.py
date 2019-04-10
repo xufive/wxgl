@@ -497,7 +497,7 @@ class WxGLRegion(object):
         
         return vertices_id, indices_id, v_type
         
-    def _createMesh(self, x, y, z, c, t, gl_type):
+    def _createMesh(self, x, y, z, c, t, gl_type, smooth):
         """生成网格的顶点集、索引集、顶点数组类型
         
         x           - 顶点的x坐标集，numpy.ndarray类型，shape=(rows,cols)
@@ -506,6 +506,7 @@ class WxGLRegion(object):
         c           - 顶点的颜色集，None或numpy.ndarray类型，shape=(3|4,)|(rows,cols,3|4)
         t           - 顶点的纹理坐标集，None或numpy.ndarray类型，shape=(rows,cols,2)
         gl_type     - 绘制方法，GL_QUADS|GL_TRIANGLES
+        smooth      - 是否平滑（若图元中包含透明度为零的顶点，则剔除该图元）
         """
         
         rows, cols = z.shape
@@ -540,14 +541,31 @@ class WxGLRegion(object):
         
         if gl_type == GL_QUADS:
             indices = list()
-            for i in range(1, rows):
-                for j in range(1, cols):
-                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j]
+            if smooth:
+                for i in range(1, rows):
+                    for j in range(1, cols):
+                        g = [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j]
+                        if c[g[0],3]>0 and c[g[1],3]>0 and c[g[2],3]>0 and c[g[3],3]>0:
+                            indices += g
+            else:
+                for i in range(1, rows):
+                    for j in range(1, cols):
+                        indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j]
         elif gl_type == GL_TRIANGLES:
             indices = list()
-            for i in range(1, rows):
-                for j in range(1,cols):
-                    indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, i*cols+j, (i-1)*cols+j, (i-1)*cols+j-1]
+            if smooth:
+                for i in range(1, rows):
+                    for j in range(1,cols):
+                        p0, p1, p2, p3 = (i-1)*cols+j-1, i*cols+j-1, i*cols+j, (i-1)*cols+j
+                        if c[p0,3]>0 and c[p2,3]>0:
+                            if c[p1,3]>0:
+                                indices += [p0, p1, p2]
+                            if c[p3,3]>0:
+                                indices += [p2, p3, p0]
+            else:
+                for i in range(1, rows):
+                    for j in range(1,cols):
+                        indices += [(i-1)*cols+j-1, i*cols+j-1, i*cols+j, i*cols+j, (i-1)*cols+j, (i-1)*cols+j-1]
         
         vertices_id = self._createVBO(vertices)
         indices_id = self._createEBO(np.array(indices, dtype=np.int))
@@ -775,7 +793,7 @@ class WxGLRegion(object):
                 }]
             }})
     
-    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, display=True):
+    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, smooth=False, display=True):
         """绘制网格
         
         name        - 模型名
@@ -794,11 +812,12 @@ class WxGLRegion(object):
                         'FLBL'      - 前后面显示线条FLBL
                         'FCBL'      - 前面填充颜色，后面显示线条FCBL
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
+        smooth      - 是否平滑（若图元中包含透明度为零的顶点，则剔除该图元）
         display     - 是否显示
         """
         
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES}[method]
-        vertices_id, indices_id, v_type = self._createMesh(x, y, z, c, t, gl_type)
+        vertices_id, indices_id, v_type = self._createMesh(x, y, z, c, t, gl_type, smooth)
         
         if name in self.models:
             self.models[name]['component'].append({
@@ -814,7 +833,7 @@ class WxGLRegion(object):
                 }]
             }})
     
-    def drawVolume(self, name, volume, x=None, y=None, z=None, method='Q', display=True):
+    def drawVolume(self, name, volume, x=None, y=None, z=None, method='Q', smooth=False, display=True):
         """绘制体数据
         
         name        - 模型名
@@ -825,6 +844,7 @@ class WxGLRegion(object):
         method      - 绘制方法：
                         'Q'         - 四边形
                         'T'         - 三角形
+        smooth      - 是否平滑（若图元中包含透明度为零的顶点，则剔除该图元）
         display     - 是否显示
         """
         
@@ -847,21 +867,21 @@ class WxGLRegion(object):
             z -= z.max()/2.0
         
         for i in range(d):
-            self.drawMesh(name, x, y, z[i]*np.ones_like(x), volume[i], method=method, mode=mode, display=display)
+            self.drawMesh(name, x, y, z[i]*np.ones_like(x), volume[i], method=method, mode=mode, smooth=smooth, display=display)
         
         z_h = z.repeat(h).reshape((-1, h))
         for i in range(w):
             x_h = np.tile(x[:,i], (d,1))
             y_h = np.tile(y[:,i], (d,1))
             c_h = volume[:d,:,i]
-            self.drawMesh(name, x_h, y_h, z_h, c_h, method=method, mode=mode, display=display)
+            self.drawMesh(name, x_h, y_h, z_h, c_h, method=method, mode=mode, smooth=smooth, display=display)
         
         z_v = z.repeat(w).reshape((-1, w))
         for i in range(h):
             x_v = np.tile(x[i,:], (d,1))
             y_v = np.tile(y[i,:], (d,1))
             c_v = volume[:d,i,:]
-            self.drawMesh(name, x_v, y_v, z_v, c_v, method=method, mode=mode, display=display)
+            self.drawMesh(name, x_v, y_v, z_v, c_v, method=method, mode=mode, smooth=smooth, display=display)
     
     def drawAxes(self, name, k=1.0, slices=50, half=False, xlabel=None, ylabel=None, zlabel=None, size=40, display=True):
         """绘制坐标轴
