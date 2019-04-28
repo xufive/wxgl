@@ -21,6 +21,7 @@ WxGL以wx为显示后端，以加速渲染为第一追求目标
 """
 
 
+import uuid
 import wx
 from wx import glcanvas
 import numpy as np
@@ -30,6 +31,22 @@ from OpenGL.GLU import *
 
 from . import region
 from . import colormap
+
+class CustomEvent(wx.PyCommandEvent):
+    """自定义事件类"""
+    
+    def __init__(self, evtType, id):                 
+        wx.PyCommandEvent.__init__(self, evtType, id)
+        self.eventArgs = ""
+        
+    def GetEventArgs(self): 
+        return self.eventArgs 
+
+    def SetEventArgs(self, args): 
+        self.eventArgs = args 
+        
+SCENE_EVT_PICK_TYPE = wx.NewEventType()  
+SCENE_EVT_PICK = wx.PyEventBinder(SCENE_EVT_PICK_TYPE)
 
 class WxGLScene(glcanvas.GLCanvas):
     """GL场景类"""
@@ -70,12 +87,13 @@ class WxGLScene(glcanvas.GLCanvas):
         self.zoom = None                                        # 视口缩放因子
         self.scale = None                                       # 模型矩阵缩放比例
         self.mpos = None                                        # 鼠标位置
+        self.pickpoint = None                                   # 选择模式开关，None表示未开启选择模式
         
         self.size = self.GetClientSize()                        # OpenGL窗口的大小
         self.context = glcanvas.GLContext(self)                 # OpenGL上下文
         
         self.cm = colormap.WxGLColorMap()                       # 调色板对象
-        self.regions = list()                                   # 存储视口设置信息
+        self.regions = dict()                                   # 存储视口设置信息
         self.store = dict()                                     # 存储相机姿态、视口缩放因子、模型矩阵缩放比例等
         
         self.setView(view, save=True)                           # 设置视景体
@@ -98,11 +116,11 @@ class WxGLScene(glcanvas.GLCanvas):
     def onDestroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
-        for reg in self.regions:
-            for id in reg.buffers:
-                reg.buffers[id].delete()
-            for item in reg.textures:
-                reg.deleteTexture(item)
+        for reg_id in self.regions:
+            for buf_id in self.regions[reg_id].buffers:
+                self.regions[reg_id].buffers[buf_id].delete()
+            for item in self.regions[reg_id].textures:
+                self.regions[reg_id].deleteTexture(item)
         
         evt.Skip()
         
@@ -128,7 +146,6 @@ class WxGLScene(glcanvas.GLCanvas):
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)    # 清除屏幕及深度缓存
         self.drawGL()                                       # 绘图
         self.SwapBuffers()                                  # 切换缓冲区，以显示绘制内容
-        
         evt.Skip()
         
     def onLeftDown(self, evt):
@@ -148,14 +165,18 @@ class WxGLScene(glcanvas.GLCanvas):
     def onRightUp(self, evt):
         """响应鼠标右键弹起事件"""
         
-        pass
+        self.pickpoint = evt.GetPosition()
+        self.Refresh(False)
         
     def onMouseMotion(self, evt):
         """响应鼠标移动事件"""
         
         if evt.Dragging() and evt.LeftIsDown():
             pos = evt.GetPosition()
-            dx, dy = pos - self.mpos
+            try:
+                dx, dy = pos - self.mpos
+            except:
+                return
             self.mpos = pos
             
             elevation = self.elevation + 2*np.pi*dy/self.size[1]
@@ -193,67 +214,112 @@ class WxGLScene(glcanvas.GLCanvas):
         glAlphaFunc(GL_GREATER, 0.05)                               # 设置Alpha测试条件为大于0.05则通过
         glFrontFace(GL_CW)                                          # 设置逆时针索引为正面（GL_CCW/GL_CW）
                 
+    def _drawGL(self, reg_id, ispick=False):
+        """视口、矩阵设置"""
+        
+        reg = self.regions[reg_id]
+        x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
+        w, h = int(reg.box[2]*self.size[0]), int(reg.box[3]*self.size[1])
+        
+        glViewport(x0, y0, w, h)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        
+        if ispick:
+            viewport = glGetIntegerv(GL_VIEWPORT)
+            gluPickMatrix(self.pickpoint[0], viewport[3]-self.pickpoint[1], 2, 2, viewport)
+        
+        if isinstance(reg.view, np.ndarray):
+            view = reg.view
+        else:
+            view = self.view
+        
+        if reg.projection:
+            projection = reg.projection
+        else:
+            projection = self.projection
+        
+        if isinstance(reg.scale, np.ndarray):
+            zoom = 1.0
+        else:
+            zoom = self.zoom
+        
+        if w > h:
+            if projection == 'ortho':
+                glOrtho(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
+            else:
+                glFrustum(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
+        else:
+            if projection == 'ortho':
+                glOrtho(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
+            else:
+                glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
+        
+        if isinstance(reg.lookat, np.ndarray):
+            gluLookAt(
+                reg.lookat[0], reg.lookat[1], reg.lookat[2], 
+                reg.lookat[3], reg.lookat[4], reg.lookat[5],
+                reg.lookat[6], reg.lookat[7], reg.lookat[8]
+            )
+        else:
+            gluLookAt(
+                self.cam[0], self.cam[1], self.cam[2], 
+                self.aim[0], self.aim[1], self.aim[2],
+                self.up[0], self.up[1], self.up[2]
+            )
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        
+        if isinstance(reg.scale, np.ndarray):
+            glScale(reg.scale[0], reg.scale[1], reg.scale[2])
+        else:
+            glScale(self.scale[0], self.scale[1], self.scale[2])
+                
     def drawGL(self):
         """绘制"""
         
-        width, height = self.size
-        for reg in self.regions:
-            x0, y0 = int(reg.box[0]*width), int(reg.box[1]*height)
-            w, h = int(reg.box[2]*width), int(reg.box[3]*height)
-            
-            glViewport(x0, y0, w, h)
-            glMatrixMode(GL_PROJECTION)
-            glLoadIdentity()
-            
-            if isinstance(reg.view, np.ndarray):
-                view = reg.view
-            else:
-                view = self.view
-            
-            if reg.projection:
-                projection = reg.projection
-            else:
-                projection = self.projection
-            
-            if isinstance(reg.scale, np.ndarray):
-                zoom = 1.0
-            else:
-                zoom = self.zoom
-            
-            if w > h:
-                if projection == 'ortho':
-                    glOrtho(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
-                else:
-                    glFrustum(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
-            else:
-                if projection == 'ortho':
-                    glOrtho(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
-                else:
-                    glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
-            
-            if isinstance(reg.lookat, np.ndarray):
-                gluLookAt(
-                    reg.lookat[0], reg.lookat[1], reg.lookat[2], 
-                    reg.lookat[3], reg.lookat[4], reg.lookat[5],
-                    reg.lookat[6], reg.lookat[7], reg.lookat[8]
-                )
-            else:
-                gluLookAt(
-                    self.cam[0], self.cam[1], self.cam[2], 
-                    self.aim[0], self.aim[1], self.aim[2],
-                    self.up[0], self.up[1], self.up[2]
-                )
-            
-            glMatrixMode(GL_MODELVIEW)
-            glLoadIdentity()
-            
-            if isinstance(reg.scale, np.ndarray):
-                glScale(reg.scale[0], reg.scale[1], reg.scale[2])
-            else:
-                glScale(self.scale[0], self.scale[1], self.scale[2])
-            
+        picks = dict()
+        for reg_id in self.regions:
+            self._drawGL(reg_id, ispick=False)
+            reg = self.regions[reg_id]
             for item in reg.assembly:
                 item['cmd'](item['args'])
+                if item['pick']:
+                    if item['pick'][0] in picks:
+                        picks[item['pick'][0]].append(item)
+                    else:
+                        picks.update({item['pick'][0]: [item]})
+            
+        if self.pickpoint and picks:
+            glSelectBuffer(1024)
+            glRenderMode(GL_SELECT)
+            pick_name = list()
+            pick_id = 0
+            
+            for reg_id in picks:
+                self._drawGL(reg_id, ispick=True)
+                glInitNames()
+                for i in range(len(picks[reg_id])):
+                    glPushName(pick_id)
+                    picks[reg_id][i]['cmd'](picks[reg_id][i]['args'])
+                    glPopName()
+                    pick_name.append(picks[reg_id][i]['pick'])
+                    pick_id += 1
+            
+            glFlush()
+            self.pickpoint = None
+            hit_buffer = glRenderMode(GL_RENDER)
+            
+            if hit_buffer:
+                index, z_min = hit_buffer[0][2][0], hit_buffer[0][0]
+                for i in range(1, len(hit_buffer)):
+                    if hit_buffer[i][0] < z_min:
+                        index, z_min = hit_buffer[i][2][0], hit_buffer[i][0]
+                
+                evt = CustomEvent(SCENE_EVT_PICK_TYPE, wx.NewId())   
+                evt.SetEventArgs(pick_name[index]) 
+                self.GetEventHandler().ProcessEvent(evt)
         
     def setCamera(self, cam=None, aim=None, head=None, save=False):
         """设置相机位置、目标点位、观察者头部的指向"""
@@ -497,16 +563,17 @@ class WxGLScene(glcanvas.GLCanvas):
                         cone    - 透视投影
         """
         
-        reg = region.WxGLRegion(self, box, lookat=lookat, scale=scale, view=view, projection=projection)
-        self.regions.append(reg)
+        id = uuid.uuid1().hex
+        reg = region.WxGLRegion(self, id, box, lookat=lookat, scale=scale, view=view, projection=projection)
+        self.regions.update({id:reg})
         
         return reg
         
-    def delRegion(self, reg):
+    def delRegion(self, reg_id):
         """删除视区"""
         
         try:
-            del self.regions[self.regions.index(reg)]
+            del self.regions[reg_id]
         except:
             pass
         

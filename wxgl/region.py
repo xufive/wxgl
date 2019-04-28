@@ -20,7 +20,7 @@ WxGL以wx为显示后端，以加速渲染为第一追求目标
 借助于wxpython，WxGL可以很好的融合matplotlib等其他数据展示技术
 """
 
-
+import wx
 import uuid
 import freetype
 import numpy as np
@@ -32,10 +32,11 @@ from PIL import Image
 class WxGLRegion(object):
     """GL视区类"""
     
-    def __init__(self, scene, box, lookat=None, scale=None, view=None, projection=None):
+    def __init__(self, scene, id, box, lookat=None, scale=None, view=None, projection=None):
         """构造函数
         
         scene       - 所属场景对象
+        id          - 唯一标识
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
         lookat      - 相机、目标点和头部指向。若为None，表示使用父级场景的设置
         scale       - 模型矩阵缩放比例。若为None，表示使用父级场景的设置
@@ -47,6 +48,7 @@ class WxGLRegion(object):
         """
         
         self.scene = scene
+        self.id = id
         self.font = self.scene.font
         self.box = box
         self.projection = projection
@@ -77,10 +79,10 @@ class WxGLRegion(object):
         
         self.assembly = list()
     
-    def appendCmd(self, cmd, *args):
+    def appendCmd(self, cmd, *args, pick=False):
         """添加部件或模型"""
         
-        self.assembly.append({'cmd':cmd, 'args':args})
+        self.assembly.append({'cmd':cmd, 'args':args, 'pick':pick})
     
     def update(self):
         """模型指令化"""
@@ -88,39 +90,38 @@ class WxGLRegion(object):
         self.clearCmd()
         for key in self.models:
             if self.models[key]['display']:
+                pick = self.models[key]['pick']
                 for item in self.models[key]['component']:
                     if item['type'] == 'surface' or item['type'] == 'mesh':
                         vertices_id, indices_id, v_type, gl_type, mode, texture = item['args']
                         self._setPolygonMode(mode)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type, texture)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, texture, pick)
                     elif item['type'] == 'line':
                         vertices_id, indices_id, v_type, gl_type, width, stipple = item['args']
                         self._setLineWidth(width)
                         self._setLineStipple(stipple)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type, None)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, None, pick)
                     elif item['type'] == 'point':
                         vertices_id, indices_id, v_type, gl_type, size = item['args']
                         self._setPointSize(size)
-                        self._addElements(vertices_id, indices_id, v_type, gl_type, None)
+                        self._addElements(vertices_id, indices_id, v_type, gl_type, None, pick)
                     elif item['type'] == 'text':
                         pixels_id, rows, cols, pos = item['args']
-                        self._addPixels(pixels_id, rows, cols, pos)
+                        self._addPixels(pixels_id, rows, cols, pos, pick)
         
-        self.scene.Refresh(False)
+        wx.CallAfter(self.scene.Refresh, False)
     
     def showModel(self, name):
         """显示模型"""
         
         if name in self.models:
             self.models[name]['display'] = True
-            self.update()
     
     def hideModel(self, name):
         """隐藏模型"""
         
         if name in self.models:
             self.models[name]['display'] = False
-            self.update()
     
     def deleteModel(self, name):
         """删除模型"""
@@ -129,12 +130,11 @@ class WxGLRegion(object):
             for item in self.models[name]['component']:
                 if item['type'] == 'text':
                     self.buffers[item['args'][0]].delete()
-                elif item['type'] in ['line', 'surface']:
+                elif item['type'] in ['line', 'point', 'surface', 'mesh']:
                    self.buffers[item['args'][0]].delete()
                    self.buffers[item['args'][1]].delete()
             
             del self.models[name]
-            self.update()
     
     def createTexture(self, img, alpha=True):
         """创建纹理对象
@@ -572,7 +572,7 @@ class WxGLRegion(object):
         
         return vertices_id, indices_id, v_type
         
-    def _addElements(self, vertices_id, indices_id, v_type, gl_type, texture):
+    def _addElements(self, vertices_id, indices_id, v_type, gl_type, texture, pick):
         """生成绘制图元命令
         
         vertices_id - 顶点VBO的id
@@ -585,11 +585,11 @@ class WxGLRegion(object):
         vertices_vbo = self.buffers[vertices_id]
         indices_ebo = self.buffers[indices_id]
         if texture:
-            self.appendCmd(self._wxglDrawTexture, vertices_vbo, indices_ebo, v_type, gl_type, texture)
+            self.appendCmd(self._wxglDrawTexture, vertices_vbo, indices_ebo, v_type, gl_type, texture, pick=pick)
         else:
-            self.appendCmd(self._wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type)
+            self.appendCmd(self._wxglDrawElements, vertices_vbo, indices_ebo, v_type, gl_type, pick=pick)
         
-    def _addPixels(self, pixels_id, rows, cols, pos):
+    def _addPixels(self, pixels_id, rows, cols, pos, pick):
         """生成绘制像素命令
         
         pixels_id   - 像素VBO的id
@@ -599,7 +599,7 @@ class WxGLRegion(object):
         """
         
         pixels_pbo = self.buffers[pixels_id]
-        self.appendCmd(self._wxglDrawPixels, pixels_pbo, rows, cols, pos)
+        self.appendCmd(self._wxglDrawPixels, pixels_pbo, rows, cols, pos, pick=pick)
         
     def _plotAxisCone(self, name, axis, k, slices, label, size):
         """绘制单个坐标轴的圆锥和标注
@@ -646,7 +646,7 @@ class WxGLRegion(object):
         if label:
             self.drawText(name, label, spire, size, c)
         
-    def drawText(self, name, text, pos, size, color, offset=0, display=True):
+    def drawText(self, name, text, pos, size, color, offset=0, display=True, pick=False):
         """绘制文字
         
         name        - 模型名
@@ -656,6 +656,7 @@ class WxGLRegion(object):
         color       - 文本颜色，list或numpy.ndarray类型，shape=(3,)
         offset      - 文本左侧插入空格的像素点数
         display     - 是否显示
+        pick        - 是否可以被拾取
         """
         
         assert isinstance(pos, (list, np.ndarray)), u'参数类型错误'
@@ -676,13 +677,14 @@ class WxGLRegion(object):
         else:
             self.models.update({name: {
                 'display': display,
+                'pick': (self.id, name) if pick else False,
                 'component': [{
                     'type': 'text',
                     'args': [pixels_id, rows, cols, pos]
                 }]
             }})
         
-    def drawPoint(self, name, v, c, size=None, display=True):
+    def drawPoint(self, name, v, c, size=None, display=True, pick=False):
         """绘制点
         
         name        - 模型名
@@ -690,6 +692,7 @@ class WxGLRegion(object):
         c           - 顶点颜色集，numpy.ndarray类型，shape=(3,)|(4,)|(cols,3)|(cols,4)
         size        - 点的大小，整数，系统默认为1，None表示使用当前设置
         display     - 是否显示
+        pick        - 是否可以被拾取
         """
         
         vertices_id, indices_id, v_type = self._createPointOrLine(v, c)
@@ -702,13 +705,14 @@ class WxGLRegion(object):
         else:
             self.models.update({name: {
                 'display': display,
+                'pick': (self.id, name) if pick else False,
                 'component': [{
                     'type': 'point',
                     'args': [vertices_id, indices_id, v_type, GL_POINTS, size]
                 }]
             }})
         
-    def drawLine(self, name, v, c, method='MULTI', width=None, stipple=None, display=True):
+    def drawLine(self, name, v, c, method='MULTI', width=None, stipple=None, display=True, pick=False):
         """绘制线段
         
         name        - 模型名
@@ -721,6 +725,7 @@ class WxGLRegion(object):
         width       - 线宽，0.0~10.0之间，None表示使用当前设置
         stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None表示使用当前设置
         display     - 是否显示
+        pick        - 是否可以被拾取
         """
         
         gl_type = {'MULTI':GL_LINES, 'SINGLE':GL_LINE_STRIP, 'LOOP':GL_LINE_LOOP}[method]
@@ -734,13 +739,14 @@ class WxGLRegion(object):
         else:
             self.models.update({name: {
                 'display': display,
+                'pick': (self.id, name) if pick else False,
                 'component': [{
                     'type': 'line',
                     'args': [vertices_id, indices_id, v_type, gl_type, width, stipple]
                 }]
             }})
     
-    def drawSurface(self, name, v, c=None, t=None, texture=None, method='Q', mode=None, display=True):
+    def drawSurface(self, name, v, c=None, t=None, texture=None, method='Q', mode=None, display=True, pick=False):
         """绘制曲面
         
         name        - 模型名
@@ -774,6 +780,7 @@ class WxGLRegion(object):
                         'FCBL'      - 前面填充颜色，后面显示线条FCBL
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         display     - 是否显示
+        pick        - 是否可以被拾取
         """
         
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES, 'Q+':GL_QUAD_STRIP, 'T+':GL_TRIANGLE_STRIP, 'F':GL_TRIANGLE_FAN, 'P':GL_POLYGON}[method]
@@ -787,13 +794,14 @@ class WxGLRegion(object):
         else:
             self.models.update({name: {
                 'display': display,
+                'pick': (self.id, name) if pick else False,
                 'component': [{
                     'type': 'surface',
                     'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
                 }]
             }})
     
-    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, smooth=False, display=True):
+    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, smooth=False, display=True, pick=False):
         """绘制网格
         
         name        - 模型名
@@ -814,6 +822,7 @@ class WxGLRegion(object):
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         smooth      - 是否平滑（若图元中包含透明度为零的顶点，则剔除该图元）
         display     - 是否显示
+        pick        - 是否可以被拾取
         """
         
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES}[method]
@@ -827,6 +836,7 @@ class WxGLRegion(object):
         else:
             self.models.update({name: {
                 'display': display,
+                'pick': (self.id, name) if pick else False,
                 'component': [{
                     'type': 'mesh',
                     'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
@@ -1077,5 +1087,4 @@ class WxGLRegion(object):
                 if line_length > 0:
                     v = np.array([[newx, y_min, 0], [newx, y_min-line_length, 0]])
                     self.drawLine(name, v, np.array(line_color), method='MULTI', width=1, stipple=(1,0xFFFF), display=display)
-        
         
