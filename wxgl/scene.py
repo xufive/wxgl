@@ -75,6 +75,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.font = font                                        # 字体文件
         self.bg = np.array(bg, dtype=np.float)                  # OpenGL窗口的背景色
         self.projection = projection                            # 投影模式（平行投影/透视投影）
+        self.wheel_mode = None
         
         self.cam = np.array(cam, dtype=np.float)                # 相机位置
         self.aim = np.array(aim, dtype=np.float)                # 目标点位
@@ -112,6 +113,21 @@ class WxGLScene(glcanvas.GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.onRightUp)
         self.Bind(wx.EVT_MOTION, self.onMouseMotion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.onMouseWheel)
+        
+        self.parent.Bind(wx.EVT_KEY_DOWN, self.onKeyDown)
+        self.parent.Bind(wx.EVT_KEY_UP, self.onKeyUp)
+        
+    def onKeyboardDwon(self, evt):
+        """响应背景擦除事件"""
+        
+        print('DOWN', evt.Key)
+        return True
+        
+    def onKeyboardUp(self, evt):
+        """响应背景擦除事件"""
+        
+        print('UP', evt.Key)
+        return True
 
     def onDestroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
@@ -153,6 +169,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.CaptureMouse()
         self.mpos = evt.GetPosition()
+        self.parent.SetFocus()
         
     def onLeftUp(self, evt):
         """响应鼠标左键弹起事件"""
@@ -165,8 +182,11 @@ class WxGLScene(glcanvas.GLCanvas):
     def onRightUp(self, evt):
         """响应鼠标右键弹起事件"""
         
-        self.pickpoint = evt.GetPosition()
-        self.Refresh(False)
+        if self.wheel_mode:
+            self.restorePosture()
+        else:
+            self.pickpoint = evt.GetPosition()
+            self.Refresh(False)
         
     def onMouseMotion(self, evt):
         """响应鼠标移动事件"""
@@ -188,16 +208,55 @@ class WxGLScene(glcanvas.GLCanvas):
     def onMouseWheel(self, evt):
         """响应鼠标滚轮事件"""
         
-        if evt.WheelRotation < 0:
-            self.zoom *= 1.1
-            if self.zoom > 100:
-                self.zoom = 100
-        elif evt.WheelRotation > 0:
-            self.zoom *= 0.9
-            if self.zoom < 0.01:
-                self.zoom = 0.01
+        if self.wheel_mode in ['X', 'Y', 'Z']:
+            curr = self.getCamera()
+            if self.wheel_mode == 'X':
+                if evt.WheelRotation < 0:
+                    self.setCamera(aim=[curr['aim'][0]-0.1, curr['aim'][1], curr['aim'][2]])
+                else:
+                    self.setCamera(aim=[curr['aim'][0]+0.1, curr['aim'][1], curr['aim'][2]])
+                self.setPosture(elevation=curr['elevation'], azimuth=curr['azimuth'], dist=curr['dist'])
+            elif self.wheel_mode == 'Y':
+                if evt.WheelRotation < 0:
+                    self.setCamera(aim=[curr['aim'][0], curr['aim'][1]-0.1, curr['aim'][2]])
+                else:
+                    self.setCamera(aim=[curr['aim'][0], curr['aim'][1]+0.1, curr['aim'][2]])
+                self.setPosture(elevation=curr['elevation'], azimuth=curr['azimuth'], dist=curr['dist'])
+            elif self.wheel_mode == 'Z':
+                if evt.WheelRotation < 0:
+                    self.setCamera(aim=[curr['aim'][0], curr['aim'][1], curr['aim'][2]-0.1])
+                else:
+                    self.setCamera(aim=[curr['aim'][0], curr['aim'][1], curr['aim'][2]+0.1])
+            self.setPosture(elevation=curr['elevation'], azimuth=curr['azimuth'], dist=curr['dist'])
+        else:
+            if evt.WheelRotation < 0:
+                self.zoom *= 1.1
+                if self.zoom > 100:
+                    self.zoom = 100
+            elif evt.WheelRotation > 0:
+                self.zoom *= 0.9
+                if self.zoom < 0.01:
+                    self.zoom = 0.01
         
         self.Refresh(False)
+        
+    def onKeyDown(self, evt):
+        """响应键盘按下事件"""
+        
+        keycode = evt.GetKeyCode()
+        if keycode in [88,89,90,120,121,122]:
+            self.wheel_mode = chr(keycode).upper()
+        
+        evt.Skip()
+        
+    def onKeyUp(self, evt):
+        """响应键盘弹起事件"""
+        
+        keycode = evt.GetKeyCode()
+        if keycode in [88,89,90,120,121,122]:
+            self.wheel_mode = None
+        
+        evt.Skip()
         
     def initGL(self):
         """初始化GL"""
@@ -491,12 +550,12 @@ class WxGLScene(glcanvas.GLCanvas):
     def getView(self):
         """获取视景体"""
         
-        return self.view
+        return list(self.view)
         
     def getScale(self):
         """获取模型矩阵缩放比例"""
         
-        return self.scale
+        return list(self.scale)
         
     def getZoom(self):
         """获取视口缩放因子"""
@@ -507,8 +566,8 @@ class WxGLScene(glcanvas.GLCanvas):
         """获取相机信息"""
         
         return {
-            'cam':          self.cam, 
-            'aim':          self.aim, 
+            'cam':          list(self.cam), 
+            'aim':          list(self.aim), 
             'head':         self.head, 
             'elevation':    np.degrees(self.elevation), 
             'azimuth':      np.degrees(self.azimuth), 

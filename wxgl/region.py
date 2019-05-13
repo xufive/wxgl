@@ -84,6 +84,11 @@ class WxGLRegion(object):
         
         self.assembly.append({'cmd':cmd, 'args':args, 'pick':pick})
     
+    def resetBox(self, box):
+        """重置视区大小"""
+        
+        self.box = box
+    
     def update(self):
         """模型指令化"""
         
