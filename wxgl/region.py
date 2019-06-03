@@ -806,7 +806,7 @@ class WxGLRegion(object):
                 }]
             }})
     
-    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, smooth=False, display=True, pick=False):
+    def drawMesh(self, name, x, y, z, c=None, t=None, texture=None, method='Q', mode=None, smooth=False, display=True, pick=False, border=None):
         """绘制网格
         
         name        - 模型名
@@ -828,6 +828,7 @@ class WxGLRegion(object):
         smooth      - 是否平滑（若图元中包含透明度为零的顶点，则剔除该图元）
         display     - 是否显示
         pick        - 是否可以被拾取
+        border      - 是否有边框，None无边框、或者[r, g, b, a]指定颜色
         """
         
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES}[method]
@@ -847,6 +848,29 @@ class WxGLRegion(object):
                     'args': [vertices_id, indices_id, v_type, gl_type, mode, texture]
                 }]
             }})
+        
+        if border is not None:
+            topline_x = x[0, :][1:-1]
+            topline_y = y[0, :][1:-1]
+            topline_z = z[0, :][1:-1]
+
+            bottomline_x = x[-1, :][1:-1][::-1]
+            bottomline_y = y[-1, :][1:-1][::-1]
+            bottomline_z = z[-1, :][1:-1][::-1]
+
+            rightline_x = x[:, -1]
+            rightline_y = y[:, -1]
+            rightline_z = z[:, -1]
+
+            leftline_x = x[:, 0][::-1]
+            leftline_y = y[:, 0][::-1]
+            leftline_z = z[:, 0][::-1]
+
+            x = np.hstack((topline_x, rightline_x, bottomline_x, leftline_x))
+            y = np.hstack((topline_y, rightline_y, bottomline_y, leftline_y))
+            z = np.hstack((topline_z, rightline_z, bottomline_z, leftline_z))
+            v = np.dstack((x, y, z))[0]
+            self.drawLine(name, v, np.array(border), method='LOOP', width=0.5)
     
     def drawVolume(self, name, volume, x=None, y=None, z=None, method='Q', smooth=False, display=True):
         """绘制体数据
@@ -1021,6 +1045,14 @@ class WxGLRegion(object):
                 
             x, y, z, c = np.array(x), np.array(y), np.array(z), np.array(c)/255.0
             self.drawMesh(name, x, y, z, c, method='Q', mode='FCBC', display=display)
+            
+            v = np.array([
+                [x_min, y_min, 0],
+                [x_max, y_min, 0],
+                [x_max, y_max, 0],
+                #[x_min, y_max, 0]
+            ])
+            self.drawLine(name, v, np.array([0.4,0.4,0.4]), method='SINGLE', width=1, stipple=(1,0xFFFF), display=display)
             
             for i in range(len(ticklabel)):
                 mark = label_precision % ticklabel[i] if label_precision else str(ticklabel[i])

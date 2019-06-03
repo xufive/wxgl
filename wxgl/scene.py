@@ -116,18 +116,6 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.parent.Bind(wx.EVT_KEY_DOWN, self.onKeyDown)
         self.parent.Bind(wx.EVT_KEY_UP, self.onKeyUp)
-        
-    def onKeyboardDwon(self, evt):
-        """响应背景擦除事件"""
-        
-        print('DOWN', evt.Key)
-        return True
-        
-    def onKeyboardUp(self, evt):
-        """响应背景擦除事件"""
-        
-        print('UP', evt.Key)
-        return True
 
     def onDestroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
@@ -272,6 +260,8 @@ class WxGLScene(glcanvas.GLCanvas):
         glEnable(GL_ALPHA_TEST)                                     # 启用Alpha测试 
         glAlphaFunc(GL_GREATER, 0.05)                               # 设置Alpha测试条件为大于0.05则通过
         glFrontFace(GL_CW)                                          # 设置逆时针索引为正面（GL_CCW/GL_CW）
+        glEnable(GL_LINE_SMOOTH)                                    # 开启线段反走样
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
                 
     def _drawGL(self, reg_id, ispick=False):
         """视口、矩阵设置"""
