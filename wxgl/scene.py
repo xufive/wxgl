@@ -263,10 +263,10 @@ class WxGLScene(glcanvas.GLCanvas):
         glEnable(GL_LINE_SMOOTH)                                    # 开启线段反走样
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
                 
-    def _drawGL(self, reg_id, ispick=False):
+    def _drawGL(self, reg, ispick=False):
         """视口、矩阵设置"""
         
-        reg = self.regions[reg_id]
+        #reg = self.regions[reg_id]
         x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
         w, h = int(reg.box[2]*self.size[0]), int(reg.box[3]*self.size[1])
         
@@ -329,9 +329,15 @@ class WxGLScene(glcanvas.GLCanvas):
         """绘制"""
         
         picks = dict()
-        for reg_id in self.regions:
-            self._drawGL(reg_id, ispick=False)
-            reg = self.regions[reg_id]
+        #for reg_id in self.regions:
+        for reg_id in list(self.regions.keys()):
+            #self._drawGL(reg_id, ispick=False)
+            if reg_id in self.regions:
+                reg = self.regions[reg_id]
+            else:
+                return
+            
+            self._drawGL(reg, ispick=False)
             for item in reg.assembly:
                 item['cmd'](item['args'])
                 if item['pick']:
@@ -347,7 +353,7 @@ class WxGLScene(glcanvas.GLCanvas):
             pick_id = 0
             
             for reg_id in picks:
-                self._drawGL(reg_id, ispick=True)
+                self._drawGL(reg, ispick=True)
                 glInitNames()
                 for i in range(len(picks[reg_id])):
                     glPushName(pick_id)
