@@ -266,9 +266,9 @@ class WxGLScene(glcanvas.GLCanvas):
     def _drawGL(self, reg, ispick=False):
         """视口、矩阵设置"""
         
-        #reg = self.regions[reg_id]
         x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
         w, h = int(reg.box[2]*self.size[0]), int(reg.box[3]*self.size[1])
+        wdh, hdw = self.size[0]/self.size[1], self.size[1]/self.size[0]
         
         glViewport(x0, y0, w, h)
         glMatrixMode(GL_PROJECTION)
@@ -293,16 +293,16 @@ class WxGLScene(glcanvas.GLCanvas):
         else:
             zoom = self.zoom
         
-        if w > h:
+        if self.size[0] > self.size[1]:
             if projection == 'ortho':
-                glOrtho(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
+                glOrtho(zoom*view[0]*wdh, zoom*view[1]*wdh, zoom*view[2], zoom*view[3], view[4], view[5])
             else:
-                glFrustum(zoom*view[0]*w/h, zoom*view[1]*w/h, zoom*view[2], zoom*view[3], view[4], view[5])
+                glFrustum(zoom*view[0]*wdh, zoom*view[1]*wdh, zoom*view[2], zoom*view[3], view[4], view[5])
         else:
             if projection == 'ortho':
-                glOrtho(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
+                glOrtho(zoom*view[0], zoom*view[1], zoom*view[2]*hdw, zoom*view[3]*hdw, view[4], view[5])
             else:
-                glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*h/w, zoom*view[3]*h/w, view[4], view[5])
+                glFrustum(zoom*view[0], zoom*view[1], zoom*view[2]*hdw, zoom*view[3]*hdw, view[4], view[5])
         
         if isinstance(reg.lookat, np.ndarray):
             gluLookAt(
@@ -329,9 +329,7 @@ class WxGLScene(glcanvas.GLCanvas):
         """绘制"""
         
         picks = dict()
-        #for reg_id in self.regions:
         for reg_id in list(self.regions.keys()):
-            #self._drawGL(reg_id, ispick=False)
             if reg_id in self.regions:
                 reg = self.regions[reg_id]
             else:
@@ -353,6 +351,7 @@ class WxGLScene(glcanvas.GLCanvas):
             pick_id = 0
             
             for reg_id in picks:
+                reg = self.regions[reg_id]
                 self._drawGL(reg, ispick=True)
                 glInitNames()
                 for i in range(len(picks[reg_id])):
@@ -494,7 +493,6 @@ class WxGLScene(glcanvas.GLCanvas):
         self.Refresh(False)
         
         if save:
-            #self.store.update({'elevation':self.elevation, 'azimuth':self.azimuth, 'dist':self.dist})
             self.store.update({'cam':self.cam.tolist()})
         
     def setProjection(self, projection):
