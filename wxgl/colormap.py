@@ -1,53 +1,91 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright 2019 xufive@gmail.com
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
 
-"""
-WxGL是一个基于pyopengl的三维数据展示库
-
-WxGL以wx为显示后端，以加速渲染为第一追求目标
-借助于wxpython，WxGL可以很好的融合matplotlib等其他数据展示技术
-"""
-
-
-import os, json
+import os, json, re
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
 
 
-class WxGLColorMap(object):
+class WxGLColorMap:
     """颜色映射类"""
     
     def __init__(self):
-        """构造函数"""
-        self.cms = self._getCM()
+        self.colors = self._colors()
+        self.cms = self._cms()
         
-    def getColorMaps(self):
+    def _cms(self):
         """获取可用colormap的名字"""
         
-        return self.cms.keys()
+        return list(self.cms.keys())
         
-    def map(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], mode="RGBA", datamax=None, datamin=None):
+    def hex2rgb(self, color):
+        """十六进制颜色转RGB"""
+        
+        return np.array((int(color[1:3],base=16)/255, int(color[3:5],base=16)/255, int(color[5:],base=16)/255))
+        
+    def color2c(self, color, shape=None, alpha=1.0):
+        """颜色参数处理"""
+        
+        if isinstance(color, np.ndarray):
+            if color.ndim == 1 and shape:
+                out = np.tile(color, (*shape,1))
+            elif color.ndim > 1 or color.ndim == 1 and not shape:
+                out = color
+        elif isinstance(color, (list, tuple)):
+            if len(color) in [3, 4]:
+                color = np.array(color)
+                if shape:
+                    out = np.tile(color, (*shape,1))
+                else:
+                    out = color
+            else:
+                raise ValueError("期望参数color是长度为3或4的python列表")
+        elif isinstance(color, str):
+            if color in self.colors:
+                color = self.hex2rgb(self.colors[color])
+            elif re.compile(r'^#([\da-fA-F]{2}){3}$').match(color):
+                color = self.hex2rgb(color)
+            else:
+                raise ValueError('未知的颜色："%s"'%color)
+            
+            if shape:
+                out = np.tile(color, (*shape,1))
+            else:
+                out = color
+        else:
+            raise ValueError('未知的颜色："%s"'%str(color))
+        
+        if alpha:
+            if out.shape[-1] == 3:
+                struct = list(out.shape)
+                struct[-1] = 4
+                out = out.reshape(-1, 3)
+                a = np.tile(np.array([alpha]), (out.shape[0],1))
+                out = np.hstack((out,a))
+                out = out.reshape(*struct)
+                return out
+            else:
+                return out
+        else:
+            if out.shape[-1] == 3:
+                return out
+            else:
+                struct = list(out.shape)
+                struct[-1] = 3
+                out = out.reshape(-1, 4)[:,:3]
+                out = out.reshape(*struct)
+                return out
+        
+    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], datamax=None, datamin=None, alpha=1.0):
         """数值颜色映射
         
         data        - 数据
-        cm          - colormap的名字
+        cm          - ColorMap名
         invalid     - 无效数据的标识
-        mode        - 返回结果的格式：RGBA|RGB
+        invalid_c   - 无效数据的颜色
         datamax     - 数据最大值，默认为None
         datamin     - 数据最小值，默认为None
+        alpha       - 透明度，None表示返回RGB格式
         """
         
         assert cm in self.cms, u'使用的调色板不存在'
@@ -94,7 +132,6 @@ class WxGLColorMap(object):
             v_min = tempCM[i-1][0]
             index = np.where((data<v_max)&(data>=v_min))
 
-            #red ------
             c_max = tempCM[i][1][0]
             c_min = tempCM[i-1][1][0]
             kr = (c_max - c_min)*1.0 / (v_max - v_min)
@@ -102,7 +139,6 @@ class WxGLColorMap(object):
             r[index] *= kr
             r[index] -= vr
 
-            #gren ------
             c_max = tempCM[i][1][1]
             c_min = tempCM[i-1][1][1]
             kg = (c_max - c_min)*1.0 / (v_max - v_min)
@@ -110,7 +146,6 @@ class WxGLColorMap(object):
             g[index] *= kg
             g[index] -= vg
 
-            #blue ------
             c_max = tempCM[i][1][2]
             c_min = tempCM[i-1][1][2]
             kb = (c_max - c_min)*1.0 / (v_max - v_min)
@@ -134,28 +169,48 @@ class WxGLColorMap(object):
         g[g_right_index] = tempCM[-1][1][1]
         b[b_right_index] = tempCM[-1][1][2]
         
-        if mode == 'RGBA':
-            alpha = 255*np.ones(data.shape)
-            w = np.where(np.isnan(data)==True)
-            r[w] = invalid_c[0] * 255
-            g[w] = invalid_c[1] * 255
-            b[w] = invalid_c[2] * 255
-            alpha[w] = invalid_c[3] * 255
-            color = np.dstack([r, g, b, alpha])/255
+        w = np.where(np.isnan(data)==True)
+        r[w] = invalid_c[0] * 255
+        g[w] = invalid_c[1] * 255
+        b[w] = invalid_c[2] * 255
+        
+        if alpha:
+            a = alpha * 255 * np.ones(data.shape)
+            a[w] = invalid_c[3] * alpha * 255
+            color = np.dstack([r, g, b, a])/255
             datashape.append(4)
         else:
-            w = np.where(np.isnan(data)==True)
-            r[w] = invalid_c[0] * 255
-            g[w] = invalid_c[1] * 255
-            b[w] = invalid_c[2] * 255
-            
             color = np.dstack([r, g, b])/255
             datashape.append(3)
         
         return color.reshape(tuple(datashape))
 
-    def _getCM(self):
-        cms = {
+    def _colors(self):
+        """预定义的颜色"""
+        
+        return {
+            'red':          '#FF0000',
+            'red_dark':     '#C00000',
+            'green':        '#00C000',
+            'green_dark':   '#008000',
+            'blue':         '#0000FF',
+            'blue_dark':    '#0000C0',
+            'yellow':       '#FFFF00',
+            'orange':       '#FFA500',
+            'purple':       '#F020F0',
+            'purple_dark':  '#C000C0',
+            'cyan':         '#00FFFF',
+            'cyan_dark':    '#00C0C0',
+            'gray':         '#C0C0C0',
+            'dark':         '#808080',
+            'black':        '#000000',
+            'white':        '#FFFFFF'
+        }
+
+    def _cms(self):
+        """颜色映射表"""
+        
+        return {
             "autumn": [
                 [
                     0.0,
@@ -1286,24 +1341,6 @@ class WxGLColorMap(object):
                     ]
                 ]
             ],
-            "summer": [
-                [
-                    0.0,
-                    [
-                        0,
-                        127,
-                        102
-                    ]
-                ],
-                [
-                    1.0,
-                    [
-                        255,
-                        255,
-                        102
-                    ]
-                ]
-            ],
             "terrain": [
                 [
                     0.0,
@@ -1413,11 +1450,39 @@ class WxGLColorMap(object):
                         0
                     ]
                 ]
+            ],
+            "wind": [
+                [
+                    0.0,
+                    [
+                        0,
+                        255,
+                        0
+                    ]
+                ],
+                [
+                    0.2,
+                    [
+                        192,
+                        255,
+                        0
+                    ]
+                ],
+                [
+                    0.5,
+                    [
+                        255,
+                        0,
+                        0
+                    ]
+                ],
+                [
+                    1.0,
+                    [
+                        255,
+                        0,
+                        255
+                    ]
+                ]
             ]
         }
-        
-        return cms
-    
-if __name__ == "__main__":
-    pass
-    
