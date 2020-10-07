@@ -27,7 +27,7 @@ setuptools.setup(
             'wxgl/res/tb_grid.png', 
             'wxgl/res/tb_restore.png', 
             'wxgl/res/tb_save.png',
-            'wxgl/res/wxplot.ico'
+            'wxgl/res/wxgl.ico'
         ])
     ],
     install_requires = [
