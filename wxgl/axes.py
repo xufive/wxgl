@@ -1,25 +1,4 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright 2019 xufive@gmail.com
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-
-"""
-WxGL是一个基于pyopengl的三维数据展示库
-
-WxGL以wx为显示后端，以加速渲染为第一追求目标
-借助于wxpython，WxGL可以很好的融合matplotlib等其他数据展示技术
-"""
-
 
 import re
 import uuid
@@ -35,7 +14,9 @@ class WxAxes:
         """构造函数
         
         scene       - 所属场景对象
-        pos         - 三个数字组成的字符串或四元组，表示子图在场景中的位置和大小
+        pos         - 子图在画布上的位置和大小
+                        三位数字    - 指定分割画布的行数、列数和子图序号。例如，223表示两行两列的第3个位置
+                        四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
         padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
         """
         
@@ -45,7 +26,8 @@ class WxAxes:
         self.figure = self.scene.parent.parent
         self.cm = self.scene.cm
         
-        if isinstance(pos, str) and re.compile(r'^[\d]{3}$').match(pos):
+        pos = str(pos)
+        if isinstance(pos, (str, int)) and re.compile(r'^[\d]{3}$').match(pos):
             rows, cols, cell = [int(ch) for ch in pos]
             i, j = (cell-1)//cols, (cell-1)%cols
             w_cell, h_cell = self.scene.size[0]/cols, self.scene.size[1]/rows 
@@ -75,9 +57,10 @@ class WxAxes:
                         label_format    - 标注格式化所用lambda函数
                         label_precision - 标注精度，形如'%.2f'或'%d'
                         tick_line       - 刻度线长度
-                        name        - 模型名
-                        inside      - 是否数据动态范围
-                        visible     - 是否显示
+                        endpoint        - 刻度是否包含值域范围的两个端点值
+                        name            - 模型名
+                        inside          - 是否更新数据动态范围
+                        visible         - 是否显示
         """
         
         if loc == 'left':
@@ -103,8 +86,8 @@ class WxAxes:
         
         self.figure.add_widget(reg_cb, 'colorbar', drange, cmap, loc, **kwds)
     
-    def title(self, text, size=96, color=None, pos=[0,0,0], **kwds):
-        """设置子图标题
+    def title(self, text, size=48, color=None, pos=(0,0,0), **kwds):
+        """绘制标题
         
         text        - 文本字符串
         size        - 文字大小，整形
@@ -132,9 +115,9 @@ class WxAxes:
             self.reg_main.reset_box((b0, b1, b2, b3*0.88))
             self.reg_title = self.scene.add_region(box, fixed=True)
         
-        self.figure.add_widget(self.reg_title, 'text3d', text, size=size, color=color, pos=pos, **kwds)
+        self.figure.add_widget(self.reg_title, 'text3d', text, size=size*4, color=color, pos=pos, **kwds)
     
-    def text(self, text, size=64, color=None, pos=[0,0,0], **kwds):
+    def text(self, text, size=32, color=None, pos=(0,0,0), **kwds):
         """绘制文本
         
         text        - 文本字符串
@@ -205,7 +188,7 @@ class WxAxes:
                 color = self.cm.cmap(zs, cmap)
         
         vs = np.stack((xs, ys, zs), axis=1)
-        style = {'solid':(1, 0xFFFF), 'dashed':(2, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(2, 0xFF18)}[style]
+        style = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
         
         if width > 0:
             self.figure.add_widget(self.reg_main, 'line', vs, color, method='SINGLE', width=width, stipple=style)
@@ -239,7 +222,7 @@ class WxAxes:
         
         self.figure.add_widget(self.reg_main, 'point', vs, color, size=size)
     
-    def mesh(self, xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z'):
+    def mesh(self, xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', light=None):
         """绘制mesh
         
         xs/ys/zs    - 顶点的x/y/z坐标集，二维数组
@@ -251,6 +234,7 @@ class WxAxes:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         cmap        - 颜色映射表，color为None时有效。使用zs映射颜色
         caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
+        light       - 材质灯光颜色，None表示关闭材质灯光
         """
         
         assert isinstance(xs, np.ndarray) and xs.ndim == 2, '期望参数vs是二维数组'
@@ -270,9 +254,9 @@ class WxAxes:
             else:
                 color = self.cm.cmap(zs, cmap)
         
-        self.figure.add_widget(self.reg_main, 'mesh', xs, ys, zs, color, mode=mode)
+        self.figure.add_widget(self.reg_main, 'mesh', xs, ys, zs, color, mode=mode, light=light)
     
-    def surface(self, vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True):
+    def surface(self, vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, light=None):
         """绘制surface
         
         vs          - 顶点坐标集，二维数组类型，shape=(n,3)
@@ -303,6 +287,7 @@ class WxAxes:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         texture     - 用于纹理的图像文件，仅当method为Q时有效
         alpha       - 纹理是否使用透明通道，仅当texture存在时有效
+        light       - 材质灯光颜色，None表示关闭材质灯光
         """
         
         assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维数组'
@@ -313,7 +298,7 @@ class WxAxes:
         else:
             texture, texcoord = None, None
         
-        self.figure.add_widget(self.reg_main, 'surface', vs, color=color, texcoord=texcoord, texture=texture, method=method, mode=mode)
+        self.figure.add_widget(self.reg_main, 'surface', vs, color=color, texcoord=texcoord, texture=texture, method=method, mode=mode, light=light)
     
     def pipe(self, vs, radius, color=None, slices=36, mode='FCBC', cmap='hsv', caxis='z'):
         """绘制圆管
@@ -382,7 +367,7 @@ class WxAxes:
         
         self.figure.add_widget(self.reg_main, 'cube', center, side, color, mode=mode)
     
-    def cylinder(self, v_top, v_bottom, radius, color, slices=60, mode='FLBL'):
+    def cylinder(self, v_top, v_bottom, radius, color, slices=60, mode='FCBC'):
         """绘制圆柱体
         
         v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
@@ -402,7 +387,7 @@ class WxAxes:
         
         self.figure.add_widget(self.reg_main, 'cylinder', v_top, v_bottom, radius, color, slices=slices, mode=mode)
     
-    def cone(self, center, spire, radius, color, slices=60, mode='FLBL'):
+    def cone(self, center, spire, radius, color, slices=60, mode='FCBC'):
         """绘制圆锥体
         
         center      - 锥底圆心坐标，元组、列表或数组
@@ -421,8 +406,8 @@ class WxAxes:
         
         self.figure.add_widget(self.reg_main, 'cone', center, spire, radius, color, slices=slices, mode=mode)
     
-    def capsule(self, data, threshold, color, r_x=None, r_y=None, r_z=None, mode='FLBL', **kwds):
-        """绘制囊性结构
+    def capsule(self, data, threshold, color, r_x=None, r_y=None, r_z=None, mode='FCBC', **kwds):
+        """绘制囊（三维等值面）
         
         data        - 数据集，numpy.ndarray类型，shape=(layers,rows,cols)
         threshold   - 阈值，浮点型
@@ -438,8 +423,8 @@ class WxAxes:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
                         visible     - 是否显示
+                        light       - 材质灯光开关
         """
         
         self.figure.add_widget(self.reg_main, 'capsule', data, threshold, color, r_x=r_x, r_y=r_y, r_z=r_z, mode=mode, **kwds)
@@ -452,7 +437,8 @@ class WxAxes:
         vs          - 顶点v分量集，numpy.ndarray类型，shape=(n,)
         ws          - 顶点w分量集，numpy.ndarray类型，shape=(n,)
         kwds        - 关键字参数
-                        actor       - 顶点模型类型，point|line两个选项
+                        color       - 轨迹线颜色，None表示使用速度映射颜色
+                        actor       - 顶点模型类型，'point'|'line'两个选项
                         size        - point大小
                         width       - line宽度
                         length      - 轨迹线长度，以速度矢量的模为单位

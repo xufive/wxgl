@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 import setuptools
 
 with open("README.md", "r", encoding="utf8") as fh:
@@ -8,7 +7,7 @@ with open("README.md", "r", encoding="utf8") as fh:
 
 setuptools.setup(
     name="wxgl",
-    version="0.9.0",
+    version="0.6.2",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",

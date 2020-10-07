@@ -13,11 +13,6 @@ class WxGLColorMap:
         self.colors = self._colors()
         self.cms = self._cms()
         
-    def _cms(self):
-        """获取可用colormap的名字"""
-        
-        return list(self.cms.keys())
-        
     def hex2rgb(self, color):
         """十六进制颜色转RGB"""
         

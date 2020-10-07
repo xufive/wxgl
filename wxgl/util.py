@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as sstr
 
+
 def normalize(v):
     """对二维数组正则化"""
     
@@ -23,7 +24,6 @@ def rotate(v):
     rotator = sstr.from_euler('xyz', [0, a_y, a_z], degrees=False)
     
     return rotator, h
-
 
 def find_capsule(data, level):
     """从数据体中找到囊性结构。本算法借鉴了vispy的isosurface算法，谨致谢意！"""
@@ -93,7 +93,6 @@ def find_capsule(data, level):
         ptr += nv
     
     return vertexes, faces
-
 
 def _get_data_cache():
     edge_table = np.array([

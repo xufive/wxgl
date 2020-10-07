@@ -1,25 +1,4 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright 2019 xufive@gmail.com
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-
-"""
-WxGL是一个基于pyopengl的三维数据展示库
-
-WxGL以wx为显示后端，以加速渲染为第一追求目标
-借助于wxpython，WxGL可以很好的融合matplotlib等其他数据展示技术
-"""
-
 
 import os, wx
 import uuid
@@ -61,7 +40,7 @@ class FigureFrame(wx.Frame):
         self.SetSize(size)
         self.Center()
         
-        icon = wx.Icon(os.path.join(BASE_PATH, 'res', 'wxplot.ico'))
+        icon = wx.Icon(os.path.join(BASE_PATH, 'res', 'wxgl.ico'))
         self.SetIcon(icon)
         
         bmp_restore = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_restore.png'), wx.BITMAP_TYPE_ANY)
@@ -131,25 +110,34 @@ class FigureFrame(wx.Frame):
     def on_args(self, evt):
         """调整参数"""
         
-        self.scene.set_style('white')
-        self.scene.init_gl()
+        choices = ['暗黑', '纯白', '浅灰', '幽蓝']
+        styles = ['black', 'white', 'gray', 'blue']
+        dlg = wx.SingleChoiceDialog(self, '请选择配色方案', '设置背景颜色', choices, wx.CHOICEDLG_STYLE)
+        dlg.SetSelection(styles.index(self.scene.style))
         
-        for rid in self.scene.regions:
-            reg = self.scene.regions[rid]
-            reg.assembly = dict()
-            reg.models = dict()
-        
-        self.parent.draw()
-        
-        if self.scene.mode == '3D':
-            self.xyz.coordinate(name='xyz')
-            if not self.xyz_visible:
-                self.xyz.set_model_visible('xyz', False)
-                self.xyz.refresh()
-            
-            if self.grid_visible:
-                for ax in self.parent.subgraphs:
-                    ax.reg_main.show_ticks()
+        if dlg.ShowModal() == wx.ID_OK:
+            style = styles[choices.index(dlg.GetStringSelection())]
+            if style != self.scene.style:
+                self.scene.set_style(style)
+                self.scene.init_gl()
+                
+                for rid in self.scene.regions:
+                    reg = self.scene.regions[rid]
+                    reg.assembly = dict()
+                    reg.models = dict()
+                
+                self.parent.draw()
+                
+                if self.scene.mode == '3D':
+                    self.xyz.coordinate(name='xyz')
+                    if not self.xyz_visible:
+                        self.xyz.set_model_visible('xyz', False)
+                        self.xyz.refresh()
+                    
+                    if self.grid_visible:
+                        for ax in self.parent.subgraphs:
+                            ax.reg_main.show_ticks()
+        dlg.Destroy()
     
     def on_save(self, evt):
         """保存为文件"""
@@ -245,33 +233,58 @@ class Figure:
             for ax in self.subgraphs:
                 ax.reg_main.ticks2d()
     
-    def show(self):
-        """显示画布"""
+    def show(self, rotation=None, **kwds):
+        """显示画布
+        
+        rotation    - 旋转模式
+                        None        - 无旋转
+                        'h+'        - 水平顺时针旋转（默认方式）
+                        'h-'        - 水平逆时针旋转
+                        'v+'        - 垂直前翻旋转
+                        'v-'        - 垂直后翻旋转
+        kwds        - 关键字参数
+                        elevation   - 初始仰角，以度（°）为单位，默认值为0
+                        azimuth     - 初始方位角以度（°）为单位，默认值为0
+                        step        - 帧增量，以度（°）为单位，默认值为5
+                        interval    - 帧间隔，以ms为单位，默认值为20
+        """
         
         self.create_frame()
-        self.draw()
-        self.ff.Show()
-        self.app.MainLoop()
-        self.destroy_frame()
+        try:
+            self.draw()
+            self.ff.Show()
+            if rotation:
+                self.ff.scene.auto_rotate(rotation=rotation, **kwds)
+        except Exception as e:
+            print(str(e))
+        finally:
+            self.app.MainLoop()
+            self.destroy_frame()
     
     def savefig(self, fn, alpha=False):
         """保存画布为文件
         
         fn          - 文件名
-        alpha       - 背景是否透明
+        alpha       - 透明通道开关
         """
         
         self.create_frame()
-        self.draw()
-        self.ff.Show()
-        self.ff.scene.save_scene(fn, alpha=alpha)
-        self.ff.Destroy()
-        self.destroy_frame()
+        try:
+            self.draw()
+            self.ff.Show()
+            self.ff.scene.save_scene(fn, alpha=alpha)
+        except Exception as e:
+            print(str(e))
+        finally:
+            self.ff.Destroy()
+            self.destroy_frame()
     
     def add_axes(self, pos, padding=(20,20,20,20)):
         """添加子图
         
-        pos         - 三个数字组成的字符串或四元组，表示子图在场景中的位置和大小
+        pos         - 子图在场景中的位置和大小
+                        三位数字    - 指定分割画布的行数、列数和子图序号。例如，223表示两行两列的第3个位置
+                        四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
         padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
         """
         
@@ -281,6 +294,21 @@ class Figure:
         self.curr_ax = ax
         
         return ax
+    
+    def cmap(self, *args, **kwds):
+        """数值颜色映射
+        
+        data        - 数据
+        cm          - 颜色映射表名
+        kwds        - 关键字参数
+                        invalid     - 无效数据的标识
+                        invalid_c   - 无效数据的颜色
+                        datamax     - 数据最大值，默认为None
+                        datamin     - 数据最小值，默认为None
+                        alpha       - 透明度，None表示返回RGB格式
+        """
+        
+        return self.cm.cmap(*args, **kwds)
     
     def add_widget(self, reg, func, *args, **kwds):
         """添加部件"""

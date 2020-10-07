@@ -57,6 +57,7 @@ class WxGLScene(glcanvas.GLCanvas):
                         'black'     - 背景黑色，文本白色
                         'white'     - 背景白色，文本黑色
                         'gray'      - 背景浅灰色，文本深蓝色
+                        'blue'      - 背景深蓝色，文本淡青色
         kwds        - 关键字参数
                         elevation   - 仰角
                         azimuth     - 方位角
@@ -103,6 +104,10 @@ class WxGLScene(glcanvas.GLCanvas):
         self.azimuth = None                                     # 方位角
         self.mpos = None                                        # 鼠标位置
         
+        self.rotate_timer = wx.Timer()                          # 旋转定时器
+        self.rotate_mode = 'h+'                                 # 旋转模式
+        self.rotate_step = 1/180                                # 旋转步长
+        
         self.size = self.GetClientSize()                        # OpenGL窗口的大小
         self.context = glcanvas.GLContext(self)                 # OpenGL上下文
         
@@ -120,8 +125,11 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
+        self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)
         self.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
+        
+        self.rotate_timer.Bind(wx.EVT_TIMER, self.on_rotate_timer)
         
         if self.mode == '3D' and (elevation != None or azimuth != None):
             self.set_posture(elevation=elevation, azimuth=azimuth, save=True)
@@ -131,6 +139,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是"black", "white", "gray", "blue"其中之一'
         
+        self.style = style
         if style == 'white':
             self.bg = [1.0, 1.0, 1.0, 1.0]
             self.tc = [0.1, 0.1, 0.1]
@@ -144,9 +153,26 @@ class WxGLScene(glcanvas.GLCanvas):
             self.bg = [0.0, 0.0, 0.0, 1.0]
             self.tc = [0.9, 0.9, 0.9]
     
+    def on_rotate_timer(self, evt):
+        """场景旋转定时器函数"""
+        
+        if self.rotate_mode == 'h+':
+            a = self.azimuth + self.rotate_step
+            self.set_posture(azimuth=np.degrees(a), save=False)
+        elif self.rotate_mode == 'h-':
+            a = self.azimuth - self.rotate_step
+            self.set_posture(azimuth=np.degrees(a), save=False)
+        elif self.rotate_mode == 'v+':
+            e = self.elevation + self.rotate_step
+            self.set_posture(elevation=np.degrees(e), save=False)
+        else:
+            e = self.elevation - self.rotate_step
+            self.set_posture(elevation=np.degrees(e), save=False)
+    
     def on_destroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
+        self.rotate_timer.Stop()
         for rid in self.regions:
             for buf_id in self.regions[rid].buffers:
                 self.regions[rid].buffers[buf_id].delete()
@@ -194,6 +220,12 @@ class WxGLScene(glcanvas.GLCanvas):
             self.ReleaseMouse()
         except:
             pass
+        
+    def on_right_up(self, evt):
+        """响应鼠标右键弹起事件"""
+        
+        self.stop_rotate()
+        evt.Skip()
         
     def on_mouse_motion(self, evt):
         """响应鼠标移动事件"""
@@ -592,6 +624,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.zoom = self.store['zoom']
         self.set_camera(cam=self.store['cam'], aim=self.store['aim'], head=self.store['head'])
         self.set_posture()
+        self.stop_rotate()
         self.Refresh(False)
         
     def save_scene(self, fn, alpha=True, buffer='FRONT'):
@@ -623,7 +656,7 @@ class WxGLScene(glcanvas.GLCanvas):
         """添加视区
         
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
-        fixed       - 是否允许旋转缩放
+        fixed       - 是否锁定旋转缩放
         """
         
         rid = uuid.uuid1().hex
@@ -640,4 +673,42 @@ class WxGLScene(glcanvas.GLCanvas):
         """
         
         return axes.WxAxes(self, pos, padding=padding)
+    
+    def auto_rotate(self, rotation='h+', **kwds):
+        """自动旋转
+        
+        rotation    - 旋转模式
+                        'h+'        - 水平顺时针旋转（默认方式）
+                        'h-'        - 水平逆时针旋转
+                        'v+'        - 垂直前翻旋转
+                        'v-'        - 垂直后翻旋转
+        kwds        - 关键字参数
+                        elevation   - 初始仰角，以度（°）为单位，默认值为0
+                        azimuth     - 初始方位角以度（°）为单位，默认值为0
+                        step        - 帧增量，以度（°）为单位，默认值为5
+                        interval    - 帧间隔，以ms为单位，默认值为20
+        """
+        
+        assert rotation in ['h+', 'h-', 'v+', 'v-'], '期望参数rotation是"h+"/"h-"/"v+"/"v-"中的一项'
+        
+        for key in kwds:
+            if key not in ['elevation', 'azimuth', 'step', 'interval']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        elevation = kwds.get('elevation', 0)
+        azimuth = kwds.get('azimuth', 0)
+        step = kwds.get('step', 1)
+        interval = kwds.get('interval', 10)
+        
+        self.rotate_mode = rotation
+        self.rotate_step = step/180
+        
+        self.set_posture(elevation=elevation, azimuth=azimuth, save=False)
+        self.rotate_timer.Start(interval)
+    
+    def stop_rotate(self):
+        """停止旋转"""
+        
+        self.rotate_timer.Stop()
+
         

@@ -44,7 +44,7 @@ class WxGLRegion:
         scene       - 所属场景对象
         rid         - 唯一标识
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
-        fixed       - 是否允许旋转缩放
+        fixed       - 是否锁定旋转缩放
         """
         
         self.scene = scene
@@ -68,13 +68,35 @@ class WxGLRegion:
         self.scale = 1.0                                        # 模型缩放比例
         self.translate = np.array([0,0,0], dtype=np.float)      # 模型位移量
       
-    def reset_box(self, box):
-        """重置视区大小"""
+    def reset_box(self, box, clear=False):
+        """重置视区大小
+        
+        box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
+        clear       - 是否清空所有模型
+        """
         
         self.box = box
+        
+        if clear:
+            for name in list(self.models.keys()):
+                self.delete_model(name)
+            
+            self.r_x = [1e10, -1e10]
+            self.r_y = [1e10, -1e10]
+            self.r_z = [1e10, -1e10]
+            self.scale = 1.0
+            self.translate = np.array([0,0,0], dtype=np.float)
+            
+            self.grid_tick = None
+            self.grid_tick_kwds = dict()
     
     def set_data_range(self, r_x=None, r_y=None, r_z=None):
-        """设置数据动态范围"""
+        """设置坐标轴范围
+        
+        r_x         - 二元组，x坐标轴范围
+        r_y         - 二元组，y坐标轴范围
+        r_z         - 二元组，z坐标轴范围
+        """
         
         if r_x and r_x[0] < self.r_x[0]:
             self.r_x[0] = r_x[0]
@@ -110,7 +132,10 @@ class WxGLRegion:
         wx.CallAfter(self.scene.Refresh, False)
     
     def delete_model(self, name):
-        """删除模型"""
+        """删除模型
+        
+        name        - 模型名
+        """
         
         if name in self.models:
             for item in self.models[name]['component']:
@@ -190,7 +215,10 @@ class WxGLRegion:
         wx.CallAfter(self.scene.Refresh, False)
     
     def show_model(self, name):
-        """显示模型"""
+        """显示模型
+        
+        name        - 模型名
+        """
         
         if name in self.assembly:
             self.assembly[name]['display'] = True
@@ -198,7 +226,10 @@ class WxGLRegion:
             self.models[name]['display'] = True
     
     def hide_model(self, name):
-        """隐藏模型"""
+        """隐藏模型
+        
+        name        - 模型名
+        """
         
         if name in self.assembly:
             self.assembly[name]['display'] = False
@@ -291,7 +322,7 @@ class WxGLRegion:
     def _wxglLineStipple(self, args):
         """glLineStipple"""
         
-        glLineStipple(*args)
+        glLineStipple(*args[0])
     
     def _wxglDrawTexture(self, args):
         """glDrawElements us texture"""
@@ -729,21 +760,22 @@ class WxGLRegion:
                 result.append(round(v, 6))
             v += step
         
-        if endpoint:
-            if result[0] > v_min:
-                result.insert(0, v_min)
-            if result[-1] < v_max:
-                result.append(v_max)
-            
-            if result[1]-result[0] < (result[2]-result[1])*0.25:
-                result.remove(result[1])
-            if result[-1]-result[-2] < (result[-2]-result[-3])*0.25:
-                result.remove(result[-2])
-        else:
-            if result[0] == v_min or result[0]-v_min < (result[1]-result[0])*0.25:
-                result.remove(result[0])
-            if result[-1] == v_max or v_max-result[-1] < (result[-1]-result[-2])*0.25:
-                result.remove(result[-1])
+        if len(result) > 3:
+            if endpoint:
+                if result[0] > v_min:
+                    result.insert(0, v_min)
+                if result[-1] < v_max:
+                    result.append(v_max)
+                
+                if result[1]-result[0] < (result[2]-result[1])*0.25:
+                    result.remove(result[1])
+                if result[-1]-result[-2] < (result[-2]-result[-3])*0.25:
+                    result.remove(result[-2])
+            else:
+                if result[0] == v_min or result[0]-v_min < (result[1]-result[0])*0.25:
+                    result.remove(result[0])
+                if result[-1] == v_max or v_max-result[-1] < (result[-1]-result[-2])*0.25:
+                    result.remove(result[-1])
         
         return result
     
@@ -764,7 +796,7 @@ class WxGLRegion:
                         family      - （系统支持的）字体
                         weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -813,7 +845,7 @@ class WxGLRegion:
                         family      - （系统支持的）字体
                         weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -908,7 +940,7 @@ class WxGLRegion:
         size        - 点的大小，整数，None表示使用当前设置
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
         """
@@ -953,7 +985,7 @@ class WxGLRegion:
         stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None表示使用当前设置
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
         """
@@ -1021,7 +1053,7 @@ class WxGLRegion:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
                         light       - 材质灯光颜色，None表示关闭材质灯光
@@ -1076,7 +1108,7 @@ class WxGLRegion:
                         blc         - 边框的颜色，None表示无边框
                         blw         - 边框宽度
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
                         light       - 材质灯光颜色，None表示关闭材质灯光
@@ -1126,7 +1158,7 @@ class WxGLRegion:
             
             self.line(v, blc, method='LOOP', width=blw, name=name, inside=inside, visible=visible)
         
-    def sphere(self, center, radius, color, mode='FLBL', slices=90, **kwds):
+    def sphere(self, center, radius, color, mode='FLBL', slices=60, **kwds):
         """绘制球体
         
         center      - 球心坐标，元组、列表或numpy数组
@@ -1141,7 +1173,7 @@ class WxGLRegion:
         slices      - 锥面分片数（数值越大越精细）
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         light       - 材质灯光开关
         """
@@ -1184,7 +1216,7 @@ class WxGLRegion:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         light       - 材质灯光开关
         """
@@ -1206,11 +1238,11 @@ class WxGLRegion:
             raise ValueError("期望参数side是整型、浮点型，或长度为3的元组、列表、numpy数组")
         
         vs_front = np.array(((x/2,-y/2,-z/2),(x/2,-y/2,z/2),(x/2,y/2,z/2),(x/2,y/2,-z/2))) + center
-        vs_back = np.array(((-x/2,-y/2,-z/2),(-x/2,-y/2,z/2),(-x/2,y/2,z/2),(-x/2,y/2,-z/2))) + center
+        vs_back = np.array(((-x/2,y/2,-z/2),(-x/2,y/2,z/2),(-x/2,-y/2,z/2),(-x/2,-y/2,-z/2))) + center
         vs_top = np.array(((-x/2,y/2,z/2),(x/2,y/2,z/2),(x/2,-y/2,z/2),(-x/2,-y/2,z/2))) + center
-        vs_bottom = np.array(((-x/2,y/2,-z/2),(x/2,y/2,-z/2),(x/2,-y/2,-z/2),(-x/2,-y/2,-z/2))) + center
+        vs_bottom = np.array(((-x/2,-y/2,-z/2),(x/2,-y/2,-z/2),(x/2,y/2,-z/2),(-x/2,y/2,-z/2))) + center
         vs_left = np.array(((x/2,-y/2,z/2),(x/2,-y/2,-z/2),(-x/2,-y/2,-z/2),(-x/2,-y/2,z/2))) + center
-        vs_right = np.array(((x/2,y/2,z/2),(x/2,y/2,-z/2),(-x/2,y/2,-z/2),(-x/2,y/2,z/2))) + center
+        vs_right = np.array(((-x/2,y/2,z/2),(-x/2,y/2,-z/2),(x/2,y/2,-z/2),(x/2,y/2,z/2))) + center
         
         if light:
             light = self.cm.color2c(color)
@@ -1243,7 +1275,7 @@ class WxGLRegion:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         light       - 材质灯光开关
         """
@@ -1303,7 +1335,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         headface    - 是否显示圆柱端面
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -1358,7 +1390,7 @@ class WxGLRegion:
             self.surface(hf1, color[1], method='F', mode=mode, name=name, inside=inside, visible=visible, light=light)
     
     def pipe(self, vs, radius, color, slices=36, mode='FCBC', **kwds):
-        """绘制圆管
+        """绘制圆管线
         
         vs          - 圆管中心点坐标集，numpy.ndarray类型，shape=(n,3)
         radius      - 圆管半径，浮点型
@@ -1375,7 +1407,7 @@ class WxGLRegion:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -1419,7 +1451,7 @@ class WxGLRegion:
             self.surface(vv, cc, method='Q+', mode=mode, name=name, inside=inside, visible=visible, light=light)
     
     def capsule(self, data, threshold, color, r_x=None, r_y=None, r_z=None, mode='FLBL', **kwds):
-        """绘制囊性结构
+        """绘制囊（三维等值面）
         
         data        - 数据集，numpy.ndarray类型，shape=(layers,rows,cols)
         threshold   - 阈值，浮点型
@@ -1435,7 +1467,7 @@ class WxGLRegion:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         light       - 材质灯光开关
         """
@@ -1493,7 +1525,7 @@ class WxGLRegion:
                         'T'         - 三角形
         kwds        - 关键字参数
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -1547,7 +1579,7 @@ class WxGLRegion:
     def coordinate(self, length=1.0, xlabel=None, ylabel=None, zlabel=None, **kwds):
         """绘制坐标轴
         
-        length      - 坐标轴半轴长度，从-k到k
+        length      - 坐标轴半轴长度，从-length到length
         xlabel      - x轴标注
         ylabel      - y轴标注
         zlabel      - z轴标注
@@ -1556,7 +1588,7 @@ class WxGLRegion:
                         slices      - 锥面分片数（数值越大越精细）
                         label_size  - 标注文本的字号
                         name        - 模型名
-                        inside      - 是否数据动态范围
+                        inside      - 是否更新数据动态范围
                         visible     - 是否显示
         """
         
@@ -1605,26 +1637,27 @@ class WxGLRegion:
                         subject_size    - 标题字号
                         label_size      - 标注字号
                         label_format    - 标注格式化所用lambda函数
-                        label_precision - 标注精度，形如'%.2f'或'%d'
                         tick_line       - 刻度线长度
-                        name        - 模型名
-                        inside      - 是否数据动态范围
-                        visible     - 是否显示
+                        endpoint        - 刻度是否包含值域范围的两个端点值
+                        name            - 模型名
+                        inside          - 是否更新数据动态范围
+                        visible         - 是否显示
         """
         
         assert isinstance(drange, (tuple, list)) and len(drange) == 2, '期望参数drange是长度为2的元组或列表'
         assert loc in ('top','bottom','left','right'), '期望参数loc为top|bottom|left|right其中之一'
         
         for key in kwds:
-            if key not in ('length','subject','subject_size','label_size','label_format','tick_line','name','inside', 'visible'):
+            if key not in ('length','subject','subject_size','label_size','label_format','tick_line','endpoint','name','inside', 'visible'):
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         length = kwds.get('length', 2)
         subject = kwds.get('subject', None)
-        subject_size = kwds.get('subject_size', 40)
-        label_size = kwds.get('label_size', 24)
+        subject_size = kwds.get('subject_size', 48)
+        label_size = kwds.get('label_size', 32)
         label_format = kwds.get('label_format', str)
         tick_line = kwds.get('tick_line', 0.1)
+        endpoint = kwds.get('endpoint', False)
         name = kwds.get('name', uuid.uuid1().hex)
         inside = kwds.get('inside', True)
         visible = kwds.get('visible', True)
@@ -1660,7 +1693,7 @@ class WxGLRegion:
         
         v_min, v_max = drange
         xs, ys, zs, cs = list(), list(), list(), list()
-        tick_label = self._get_tick_label(v_min, v_max)
+        tick_label = self._get_tick_label(v_min, v_max, endpoint=endpoint)
         
         for k, rgb in self.cm.cms[cmap]:
             if loc == 'left' or loc == 'right':
@@ -1731,11 +1764,12 @@ class WxGLRegion:
         segment_min = kwds.get('segment_min', 5)
         segment_max = kwds.get('segment_max', 8)
         label_2D3D = kwds.get('label_2D3D', '3D')
-        label_size = kwds.get('label_size', 24/self.scale)
+        label_size = kwds.get('label_size', 16)
         label_precision = kwds.get('label_precision', '%.2f')
         xlabel_format = kwds.get('xlabel_format', str)
         ylabel_format = kwds.get('ylabel_format', str)
         zlabel_format = kwds.get('zlabel_format', str)
+        t_size = label_size/self.scale
         
         self.grid_tick_kwds = kwds
         if self.grid_tick:
@@ -1791,26 +1825,26 @@ class WxGLRegion:
             self.grid_tick['tick']['x']['y1z1'].append(y1z1)
             
             if head == 'z+':
-                p0, align0, valign0 = (x, self.r_y[0], self.r_z[0]-0.2*self.scale), 'right', 'top'
-                p1, align1, valign1 = (x, self.r_y[0], self.r_z[1]+0.2*self.scale), 'right', 'bottom'
-                p2, align2, valign2 = (x, self.r_y[1], self.r_z[0]-0.2*self.scale), 'left', 'top'
-                p3, align3, valign3 = (x, self.r_y[1], self.r_z[1]+0.2*self.scale), 'left', 'bottom'
+                p0, align0, valign0 = (x, self.r_y[0], self.r_z[0]-0.05/self.scale), 'right', 'top'
+                p1, align1, valign1 = (x, self.r_y[0], self.r_z[1]+0.05/self.scale), 'right', 'bottom'
+                p2, align2, valign2 = (x, self.r_y[1], self.r_z[0]-0.05/self.scale), 'left', 'top'
+                p3, align3, valign3 = (x, self.r_y[1], self.r_z[1]+0.05/self.scale), 'left', 'bottom'
             elif head == 'y+':
-                p0, align0, valign0 = (x, self.r_y[0]-0.2*self.scale, self.r_z[0]), 'center', 'top'
-                p1, align1, valign1 = (x, self.r_y[0]-0.2*self.scale, self.r_z[1]), 'center', 'top'
-                p2, align2, valign2 = (x, self.r_y[1]+0.2*self.scale, self.r_z[0]), 'center', 'bottom'
-                p3, align3, valign3 = (x, self.r_y[1]+0.2*self.scale, self.r_z[1]), 'center', 'bottom'
+                p0, align0, valign0 = (x, self.r_y[0]-0.05/self.scale, self.r_z[0]), 'center', 'top'
+                p1, align1, valign1 = (x, self.r_y[0]-0.05/self.scale, self.r_z[1]), 'center', 'top'
+                p2, align2, valign2 = (x, self.r_y[1]+0.05/self.scale, self.r_z[0]), 'center', 'bottom'
+                p3, align3, valign3 = (x, self.r_y[1]+0.05/self.scale, self.r_z[1]), 'center', 'bottom'
             else:
-                p0, align0, valign0 = (x, self.r_y[0], self.r_z[0]-0.2*self.scale), 'right', 'middle'
-                p1, align1, valign1 = (x, self.r_y[0], self.r_z[1]+0.2*self.scale), 'left', 'middle'
-                p2, align2, valign2 = (x, self.r_y[1], self.r_z[0]-0.2*self.scale), 'right', 'middle'
-                p3, align3, valign3 = (x, self.r_y[1], self.r_z[1]+0.2*self.scale), 'left', 'middle'
+                p0, align0, valign0 = (x, self.r_y[0], self.r_z[0]-0.05/self.scale), 'right', 'middle'
+                p1, align1, valign1 = (x, self.r_y[0], self.r_z[1]+0.05/self.scale), 'left', 'middle'
+                p2, align2, valign2 = (x, self.r_y[1], self.r_z[0]-0.05/self.scale), 'right', 'middle'
+                p3, align3, valign3 = (x, self.r_y[1], self.r_z[1]+0.05/self.scale), 'left', 'middle'
             
             tick = xlabel_format(x)
-            draw_text(tick, pos=p0, size=label_size, align=align0, valign=valign0, name=y0z0, inside=False)
-            draw_text(tick, pos=p1, size=label_size, align=align1, valign=valign1, name=y0z1, inside=False)
-            draw_text(tick, pos=p2, size=label_size, align=align2, valign=valign2, name=y1z0, inside=False)
-            draw_text(tick, pos=p3, size=label_size, align=align3, valign=valign3, name=y1z1, inside=False)
+            draw_text(tick, pos=p0, size=t_size, align=align0, valign=valign0, name=y0z0, inside=False)
+            draw_text(tick, pos=p1, size=t_size, align=align1, valign=valign1, name=y0z1, inside=False)
+            draw_text(tick, pos=p2, size=t_size, align=align2, valign=valign2, name=y1z0, inside=False)
+            draw_text(tick, pos=p3, size=t_size, align=align3, valign=valign3, name=y1z1, inside=False)
         
         for y in y_values:
             z0x0, z0x1, z1x0, z1x1 = uuid.uuid1().hex, uuid.uuid1().hex, uuid.uuid1().hex, uuid.uuid1().hex
@@ -1820,26 +1854,26 @@ class WxGLRegion:
             self.grid_tick['tick']['y']['z1x1'].append(z1x1)
             
             if head == 'z+':
-                p0, align0, valign0 = (self.r_x[0], y, self.r_z[0]-0.2*self.scale), 'center', 'top'
-                p1, align1, valign1 = (self.r_x[1], y, self.r_z[0]-0.2*self.scale), 'center', 'top'
-                p2, align2, valign2 = (self.r_x[0], y, self.r_z[1]+0.2*self.scale), 'center', 'bottom'
-                p3, align3, valign3 = (self.r_x[1], y, self.r_z[1]+0.2*self.scale), 'center', 'bottom'
+                p0, align0, valign0 = (self.r_x[0], y, self.r_z[0]-0.05/self.scale), 'center', 'top'
+                p1, align1, valign1 = (self.r_x[1], y, self.r_z[0]-0.05/self.scale), 'center', 'top'
+                p2, align2, valign2 = (self.r_x[0], y, self.r_z[1]+0.05/self.scale), 'center', 'bottom'
+                p3, align3, valign3 = (self.r_x[1], y, self.r_z[1]+0.05/self.scale), 'center', 'bottom'
             elif head == 'y+':
-                p0, align0, valign0 = (self.r_x[0]-0.2*self.scale, y, self.r_z[0]), 'right', 'middle'
-                p1, align1, valign1 = (self.r_x[1]+0.2*self.scale, y, self.r_z[0]), 'left', 'middle'
-                p2, align2, valign2 = (self.r_x[0]-0.2*self.scale, y, self.r_z[1]), 'right', 'middle'
-                p3, align3, valign3 = (self.r_x[1]+0.2*self.scale, y, self.r_z[1]), 'left', 'middle'
+                p0, align0, valign0 = (self.r_x[0]-0.05/self.scale, y, self.r_z[0]), 'right', 'middle'
+                p1, align1, valign1 = (self.r_x[1]+0.05/self.scale, y, self.r_z[0]), 'left', 'middle'
+                p2, align2, valign2 = (self.r_x[0]-0.05/self.scale, y, self.r_z[1]), 'right', 'middle'
+                p3, align3, valign3 = (self.r_x[1]+0.05/self.scale, y, self.r_z[1]), 'left', 'middle'
             else:
-                p0, align0, valign0 = (self.r_x[0]-0.2*self.scale, y, self.r_z[0]), 'right', 'top'
-                p1, align1, valign1 = (self.r_x[1]+0.2*self.scale, y, self.r_z[0]), 'right', 'bottom'
-                p2, align2, valign2 = (self.r_x[0]-0.2*self.scale, y, self.r_z[1]), 'left', 'top'
-                p3, align3, valign3 = (self.r_x[1]+0.2*self.scale, y, self.r_z[1]), 'left', 'bottom'
+                p0, align0, valign0 = (self.r_x[0]-0.05/self.scale, y, self.r_z[0]), 'right', 'top'
+                p1, align1, valign1 = (self.r_x[1]+0.05/self.scale, y, self.r_z[0]), 'right', 'bottom'
+                p2, align2, valign2 = (self.r_x[0]-0.05/self.scale, y, self.r_z[1]), 'left', 'top'
+                p3, align3, valign3 = (self.r_x[1]+0.05/self.scale, y, self.r_z[1]), 'left', 'bottom'
             
             tick = ylabel_format(y)
-            draw_text(tick, pos=p0, size=label_size, align=align0, valign=valign0, name=z0x0, inside=False)
-            draw_text(tick, pos=p1, size=label_size, align=align1, valign=valign1, name=z0x1, inside=False)
-            draw_text(tick, pos=p2, size=label_size, align=align2, valign=valign2, name=z1x0, inside=False)
-            draw_text(tick, pos=p3, size=label_size, align=align3, valign=valign3, name=z1x1, inside=False)
+            draw_text(tick, pos=p0, size=t_size, align=align0, valign=valign0, name=z0x0, inside=False)
+            draw_text(tick, pos=p1, size=t_size, align=align1, valign=valign1, name=z0x1, inside=False)
+            draw_text(tick, pos=p2, size=t_size, align=align2, valign=valign2, name=z1x0, inside=False)
+            draw_text(tick, pos=p3, size=t_size, align=align3, valign=valign3, name=z1x1, inside=False)
         
         for z in z_values:
             x0y0, x0y1, x1y0, x1y1 = uuid.uuid1().hex, uuid.uuid1().hex, uuid.uuid1().hex, uuid.uuid1().hex
@@ -1849,26 +1883,26 @@ class WxGLRegion:
             self.grid_tick['tick']['z']['x1y1'].append(x1y1)
             
             if head == 'z+':
-                p0, align0, valign0 = (self.r_x[0], self.r_y[0]-0.2*self.scale, z), 'right', 'middle'
-                p1, align1, valign1 = (self.r_x[0], self.r_y[1]+0.2*self.scale, z), 'left', 'middle'
-                p2, align2, valign2 = (self.r_x[1], self.r_y[0]-0.2*self.scale, z), 'right', 'middle'
-                p3, align3, valign3 = (self.r_x[1], self.r_y[1]+0.2*self.scale, z), 'left', 'middle'
+                p0, align0, valign0 = (self.r_x[0], self.r_y[0]-0.05/self.scale, z), 'right', 'middle'
+                p1, align1, valign1 = (self.r_x[0], self.r_y[1]+0.05/self.scale, z), 'left', 'middle'
+                p2, align2, valign2 = (self.r_x[1], self.r_y[0]-0.05/self.scale, z), 'right', 'middle'
+                p3, align3, valign3 = (self.r_x[1], self.r_y[1]+0.05/self.scale, z), 'left', 'middle'
             elif head == 'y+':
-                p0, align0, valign0 = (self.r_x[0], self.r_y[0]-0.2*self.scale, z), 'right', 'top'
-                p1, align1, valign1 = (self.r_x[0], self.r_y[1]+0.2*self.scale, z), 'right', 'bottom'
-                p2, align2, valign2 = (self.r_x[1], self.r_y[0]-0.2*self.scale, z), 'left', 'top'
-                p3, align3, valign3 = (self.r_x[1], self.r_y[1]+0.2*self.scale, z), 'left', 'bottom'
+                p0, align0, valign0 = (self.r_x[0], self.r_y[0]-0.05/self.scale, z), 'right', 'top'
+                p1, align1, valign1 = (self.r_x[0], self.r_y[1]+0.05/self.scale, z), 'right', 'bottom'
+                p2, align2, valign2 = (self.r_x[1], self.r_y[0]-0.05/self.scale, z), 'left', 'top'
+                p3, align3, valign3 = (self.r_x[1], self.r_y[1]+0.05/self.scale, z), 'left', 'bottom'
             else:
-                p0, align0, valign0 = (self.r_x[0]-0.2*self.scale, self.r_y[0], z), 'center', 'top'
-                p1, align1, valign1 = (self.r_x[0]-0.2*self.scale, self.r_y[1], z), 'center', 'top'
-                p2, align2, valign2 = (self.r_x[1]+0.2*self.scale, self.r_y[0], z), 'center', 'bottom'
-                p3, align3, valign3 = (self.r_x[1]+0.2*self.scale, self.r_y[1], z), 'center', 'bottom'
+                p0, align0, valign0 = (self.r_x[0]-0.05/self.scale, self.r_y[0], z), 'center', 'top'
+                p1, align1, valign1 = (self.r_x[0]-0.05/self.scale, self.r_y[1], z), 'center', 'top'
+                p2, align2, valign2 = (self.r_x[1]+0.05/self.scale, self.r_y[0], z), 'center', 'bottom'
+                p3, align3, valign3 = (self.r_x[1]+0.05/self.scale, self.r_y[1], z), 'center', 'bottom'
             
             tick = zlabel_format(z)
-            draw_text(tick, pos=p0, size=label_size, align=align0, valign=valign0, name=x0y0, inside=False)
-            draw_text(tick, pos=p1, size=label_size, align=align1, valign=valign1, name=x0y1, inside=False)
-            draw_text(tick, pos=p3, size=label_size, align=align3, valign=valign3, name=x1y1, inside=False)
-            draw_text(tick, pos=p2, size=label_size, align=align2, valign=valign2, name=x1y0, inside=False)
+            draw_text(tick, pos=p0, size=t_size, align=align0, valign=valign0, name=x0y0, inside=False)
+            draw_text(tick, pos=p1, size=t_size, align=align1, valign=valign1, name=x0y1, inside=False)
+            draw_text(tick, pos=p3, size=t_size, align=align3, valign=valign3, name=x1y1, inside=False)
+            draw_text(tick, pos=p2, size=t_size, align=align2, valign=valign2, name=x1y0, inside=False)
         
         self.refresh()
         self.scene.set_posture()
@@ -1895,10 +1929,11 @@ class WxGLRegion:
         segment_min = kwds.get('segment_min', 5)
         segment_max = kwds.get('segment_max', 8)
         label_2D3D = kwds.get('label_2D3D', '3D')
-        label_size = kwds.get('label_size', 32)
+        label_size = kwds.get('label_size', 16)
         label_precision = kwds.get('label_precision', '%.2f')
         xlabel_format = kwds.get('xlabel_format', str)
         ylabel_format = kwds.get('ylabel_format', str)
+        t_size = label_size/self.scale
         
         dx, dy = (self.r_x[1]-self.r_x[0])/30, (self.r_y[1]-self.r_y[0])/30
         d = max(dx, dy)
@@ -1924,13 +1959,13 @@ class WxGLRegion:
         for x in x_values:
             tick = xlabel_format(x)
             vs_xtick += [(x, self.r_y[0], 0), (x, self.r_y[0]-0.4*d, 0)]
-            draw_text(tick, pos=(x,self.r_y[0]-0.5*d,0), size=label_size, align='center', valign='top', inside=False)
+            draw_text(tick, pos=(x,self.r_y[0]-0.5*d,0), size=t_size, align='center', valign='top', inside=False)
         
         vs_ytick = list()
         for y in y_values:
             tick = ylabel_format(y)
             vs_ytick += [(self.r_x[0], y, 0), (self.r_x[0]-0.4*d, y, 0)]
-            draw_text(tick, pos=(self.r_x[0]-0.5*d,y,0), size=label_size, align='right', valign='middle', inside=False)
+            draw_text(tick, pos=(self.r_x[0]-0.5*d,y,0), size=t_size, align='right', valign='middle', inside=False)
         
         self.line(np.array(vs_xtick), self.scene.tc, method='MULTI', width=1, inside=False)
         self.line(np.array(vs_ytick), self.scene.tc, method='MULTI', width=1, inside=False)
@@ -1943,7 +1978,8 @@ class WxGLRegion:
         vs          - 顶点v分量集，numpy.ndarray类型，shape=(n,)
         ws          - 顶点w分量集，numpy.ndarray类型，shape=(n,)
         kwds        - 关键字参数
-                        actor       - 顶点模型类型，point|line两个选项
+                        color       - 轨迹线颜色，None表示使用速度映射颜色
+                        actor       - 顶点模型类型，'point'|'line'两个选项
                         size        - point大小
                         width       - line宽度
                         length      - 轨迹线长度，以速度矢量的模为单位
@@ -1955,9 +1991,10 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['actor', 'size', 'width', 'length', 'duty', 'frames', 'interval', 'threshold', 'name']:
+            if key not in ['color', 'actor', 'size', 'width', 'length', 'duty', 'frames', 'interval', 'threshold', 'name']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
+        color = kwds.get('color', None)
         actor = kwds.get('actor', 'line')
         size = kwds.get('size', 1.0)
         width = kwds.get('width', 1.0)
@@ -2008,7 +2045,11 @@ class WxGLRegion:
         
         rand = np.random.randint(0, frames, ps.shape[0])
         rand = np.stack((np.ones(ps.shape[0])*frames, rand), axis=1)
-        colors = self.scene.cm.cmap(fs, 'wind')
+        
+        if color is None:
+            colors = self.scene.cm.cmap(fs, 'wind')
+        else:
+            colors = self.scene.cm.color2c(color, shape=fs.shape)
         
         if actor == 'point':
             uvw = np.stack((us,vs,ws), axis=1)*length/frames
