@@ -214,12 +214,15 @@ class mainFrame(wx.Frame):
     def DrawScene(self):
         """重绘场景"""
         
-        thread_task = threading.Thread(target=self._DrawScene)
-        thread_task.setDaemon(True)
-        thread_task.start()
-        
-        self.waiting = wx.ProgressDialog('请稍候...', '', 1000, parent=self.scene, style=wx.PD_ELAPSED_TIME)
-        self.draw_timer.Start(100)
+        if self.model_curr == '地球':
+            thread_task = threading.Thread(target=self._DrawScene)
+            thread_task.setDaemon(True)
+            thread_task.start()
+            
+            self.waiting = wx.ProgressDialog('请稍候...', '', 1000, parent=self.scene, style=wx.PD_ELAPSED_TIME)
+            self.draw_timer.Start(100)
+        else:
+            self._DrawScene()
         
     def _DrawScene(self):
         """重绘场景的线程函数"""
@@ -316,10 +319,10 @@ class mainFrame(wx.Frame):
             self.rb_render_2.Enable(False)
             self.rb_render_3.Enable(False)
         
-        self.draw_timer.Stop()
-        if self.waiting:
-            self.waiting.Destroy()
-            self.waiting = None
+            self.draw_timer.Stop()
+            if self.waiting:
+                self.waiting.Destroy()
+                self.waiting = None
             
 class mainApp(wx.App):
     def OnInit(self):
