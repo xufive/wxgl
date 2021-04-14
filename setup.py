@@ -7,13 +7,13 @@ with open("README.md", "r", encoding="utf8") as fh:
 
 setuptools.setup(
     name="wxgl",
-    version="0.6.3",
+    version="0.6.4",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/xufie/wxgl",
+    url="https://github.com/xufive/wxgl",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

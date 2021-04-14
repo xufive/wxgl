@@ -107,7 +107,9 @@ venv.bak/
 wxgl.egg-info/
 build/
 data/
+res/
 capture/
 demo.py
+kite.py
 
 

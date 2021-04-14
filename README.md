@@ -12,6 +12,7 @@ pip install wxgl
 WxGL依赖以下模块，如果当前运行环境没有安装这些模块，安装程序将会自动安装它们。如果安装过程出现问题，或者安装完成后无法正常使用，请手动安装WxGL的依赖模块。
 * numpy（推荐版本：1.18.2或更高） 
 * scipy（推荐版本：1.4.1或更高） 
+* freetype（推荐版本：2.1.0.post1或更高）
 * matplotlib（推荐版本：3.1.2或更高） 
 * wxpython（推荐版本：4.0.7.post2或更高） 
 * pyopengl（推荐版本：3.1.3b2或更高） 
@@ -89,8 +90,12 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
                     head        - 定义方向：'x+'|'y+'|'z+'
                     zoom        - 视口缩放因子
                     mode        - 2D/3D模式
-                    elevation   - 仰角
+                    aim         - 观察焦点
+                    dist        - 相机位置与目标点位之间的距离
+                    view        - 视景体
+					elevation   - 仰角
                     azimuth     - 方位角
+					interval    - 模型动画帧间隔时间（单位：ms）
                     style       - 配色方案，'black'|'white'|'gray'|'blue'
 ```
 
@@ -155,7 +160,7 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
 ```python
 >>> print(plt.plot.__doc__)
     绘制点和线
-    Useage: plot(xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z')
+    Useage: plot(xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z', **kwds)
     ----------------------------------------------------
     xs/ys/zs    - 顶点的x/y/z坐标集，元组、列表或一维数组类型，长度相等。若zs为None，则自动补为全0的数组
     color       - 全部或每一个顶点的颜色。None表示使用cmap参数映射颜色
@@ -168,6 +173,9 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
                     'dash-dot'  - 虚点线
     cmap        - 颜色映射表，color为None时有效
     caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
+	kwds        - 关键字参数
+                    slide       - 是否作为动画播放的帧
+                    name        - 模型名
 ```
 
 ## 3.7 绘制散点图：scatter()函数
@@ -187,7 +195,7 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
 ```python
 >>> print(plt.mesh.__doc__)
     绘制mesh
-    Useage: mesh(xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', light=None)
+    Useage: mesh(xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', **kwds)
     ----------------------------------------------------
     xs/ys/zs    - 顶点的x/y/z坐标集，二维数组
     color       - 顶点颜色或颜色集，None表示使用cmap参数映射颜色
@@ -198,14 +206,17 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
                     'FLBC'      - 前面显示线条，后面填充颜色FLBC
     cmap        - 颜色映射表，color为None时有效。使用zs映射颜色
     caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
-    light       - 材质灯光颜色，None表示关闭材质灯光
+    kwds        - 关键字参数
+					light       - 材质灯光颜色，None表示关闭材质灯光
+					slide       - 是否作为动画播放的帧
+					name        - 模型名
 ```
 
 ## 3.9 绘制surface：surface()
 ```python
 >>> print(plt.surface.__doc__)
     绘制surface
-    Useage: surface(vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, light=None)
+    Useage: surface(vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, **kwds)
     ----------------------------------------------------
     vs          - 顶点坐标集，二维数组类型，shape=(n,3)
     color       - 顶点颜色或颜色集，可以混合使用纹理。None表示仅使用纹理
@@ -233,9 +244,11 @@ wxplot函数自带完备的文档说明，只需要使用__doc__查看即可。
                     'FLBL'      - 前后面显示线条FLBL
                     'FCBL'      - 前面填充颜色，后面显示线条FCBL
                     'FLBC'      - 前面显示线条，后面填充颜色FLBC
-    texture     - 用于纹理的图像文件，仅当method为Q时有效
-    alpha       - 纹理是否使用透明通道，仅当texture存在时有效
-    light       - 材质灯光颜色，None表示关闭材质灯光
+    texture     - 用于纹理的图像文件或数组对象，仅当method为Q时有效
+    kwds        - 关键字参数
+                    light       - 材质灯光颜色，None表示关闭材质灯光
+                    slide       - 是否作为动画播放的帧
+                    name        - 模型名
 ```
 
 ## 3.10 绘制圆管：pipe()
@@ -454,26 +467,31 @@ WxGL的容器名为WxGLScene，称为场景。WxGLScene是wx.glcanvas.GLCanvas�
 
 ## 4.1 WxGLScene API
 ### 4.1.1 构造函数
-<b>WxGLScene.\_\_init\_\_(parent, head='z+', zoom=1.0, proj='cone', mode='3D', style='black', **kwds)</b>
+<b>WxGLScene.\_\_init\_\_(parent, **kwds)</b>
 ```
 parent      - 父级窗口对象
-head        - 观察者头部的指向，字符串
-				'x+'        - 头部指向x轴正方向
-				'y+'        - 头部指向y轴正方向
-				'z+'        - 头部指向z轴正方向
-zoom        - 视口缩放因子
-proj        - 投影模式，字符串
-				'ortho'     - 平行投影
-				'cone'      - 透视投影
-mode        - 2D/3D模式，字符串
-style       - 场景风格
-				'black'     - 背景黑色，文本白色
-				'white'     - 背景白色，文本黑色
-				'gray'      - 背景浅灰色，文本深蓝色
-				'blue'      - 背景深蓝色，文本淡青色
 kwds        - 关键字参数
+				head        - 观察者头部的指向，字符串
+					'x+'        - 头部指向x轴正方向
+					'y+'        - 头部指向y轴正方向
+					'z+'        - 头部指向z轴正方向
+				
+				zoom        - 视口缩放因子
+				proj        - 投影模式，字符串
+					'ortho'     - 平行投影
+					'cone'      - 透视投影
+				mode        - 2D/3D模式，字符串
+				aim         - 观察焦点
+				dist        - 相机距离观察焦点的距离
+				view        - 视景体
 				elevation   - 仰角
 				azimuth     - 方位角
+				interval    - 模型动画帧间隔时间（单位：ms）
+				style       - 场景风格
+					'black'     - 背景黑色，文本白色
+					'white'     - 背景白色，文本黑色
+					'gray'      - 背景浅灰色，文本深蓝色
+					'blue'      - 背景深蓝色，文本淡青色
 ```
 
 ### 4.1.2 设置眼睛与目标点之间的相对关系
