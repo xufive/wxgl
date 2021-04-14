@@ -25,15 +25,10 @@ class FigureFrame(wx.Frame):
         """构造函数"""
         
         for key in kwds:
-            if key not in ['head', 'zoom', 'mode', 'elevation', 'azimuth', 'style']:
+            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        head = kwds.get('head', 'z+')
-        zoom = kwds.get('zoom', 1.0)
         mode = kwds.get('mode', '3D')
-        elevation = kwds.get('elevation', 10)
-        azimuth = kwds.get('azimuth', 30)
-        style = kwds.get('style', 'black')
         
         wx.Frame.__init__(self, None, -1, u'wxPlot', style=wx.DEFAULT_FRAME_STYLE)
         self.parent = parent
@@ -61,7 +56,7 @@ class FigureFrame(wx.Frame):
         self.tb.AddSimpleTool(self.ID_SAVE, '保存', bmp_save, '保存为文件')
         self.tb.Realize()
         
-        self.scene = scene.WxGLScene(self, head=head, zoom=zoom, mode=mode, elevation=elevation, azimuth=azimuth, style=style)
+        self.scene = scene.WxGLScene(self, **kwds)
         
         self._mgr = aui.AuiManager()
         self._mgr.SetManagedWindow(self)
@@ -168,27 +163,23 @@ class Figure:
                         head        - 定义方向：'x+'|'y+'|'z+'
                         zoom        - 视口缩放因子
                         mode        - 2D/3D模式
+                        aim         - 观察焦点
+                        dist        - 相机位置与目标点位之间的距离
+                        view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
+                        interval    - 模型动画帧间隔时间（单位：ms）
                         style       - 场景风格，'black'|'white'|'gray'
         """
         
         for key in kwds:
-            if key not in ['head', 'zoom', 'mode', 'elevation', 'azimuth', 'style']:
+            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        if 'head' not in kwds:
-            kwds.update({'head':'z+'})
-        if 'zoom' not in kwds:
-            kwds.update({'zoom':1.0})
-        if 'mode' not in kwds:
-            kwds.update({'mode':'3D'})
         if 'elevation' not in kwds:
             kwds.update({'elevation':10})
         if 'azimuth' not in kwds:
             kwds.update({'azimuth':30})
-        if 'style' not in kwds:
-            kwds.update({'style':'black'})
         
         self.size = size
         self.kwds = kwds
@@ -253,6 +244,7 @@ class Figure:
         try:
             self.draw()
             self.ff.Show()
+            self.ff.scene.start_slide()
             if rotation:
                 self.ff.scene.auto_rotate(rotation=rotation, **kwds)
         except Exception as e:

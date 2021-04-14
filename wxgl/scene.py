@@ -48,35 +48,49 @@ from . import fontmanager
 class WxGLScene(glcanvas.GLCanvas):
     """GL场景类"""
     
-    def __init__(self, parent, head='z+', zoom=1.0, proj='cone', mode='3D', style='black', **kwds):
+    def __init__(self, parent, **kwds):
         """构造函数
         
         parent      - 父级窗口对象
-        head        - 观察者头部的指向，字符串
-                        'x+'        - 头部指向x轴正方向
-                        'y+'        - 头部指向y轴正方向
-                        'z+'        - 头部指向z轴正方向
-        zoom        - 视口缩放因子
-        proj        - 投影模式，字符串
-                        'ortho'     - 平行投影
-                        'cone'      - 透视投影
-        mode        - 2D/3D模式，字符串
-        style       - 场景风格
-                        'black'     - 背景黑色，文本白色
-                        'white'     - 背景白色，文本黑色
-                        'gray'      - 背景浅灰色，文本深蓝色
-                        'blue'      - 背景深蓝色，文本淡青色
         kwds        - 关键字参数
+                        head        - 观察者头部的指向，字符串
+                            'x+'        - 头部指向x轴正方向
+                            'y+'        - 头部指向y轴正方向
+                            'z+'        - 头部指向z轴正方向
+                        
+                        zoom        - 视口缩放因子
+                        proj        - 投影模式，字符串
+                            'ortho'     - 平行投影
+                            'cone'      - 透视投影
+                        mode        - 2D/3D模式，字符串
+                        aim         - 观察焦点
+                        dist        - 相机距离观察焦点的距离
+                        view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
+                        interval    - 模型动画帧间隔时间（单位：ms）
+                        style       - 场景风格
+                            'black'     - 背景黑色，文本白色
+                            'white'     - 背景白色，文本黑色
+                            'gray'      - 背景浅灰色，文本深蓝色
+                            'blue'      - 背景深蓝色，文本淡青色
         """
         
         for key in kwds:
-            if key not in ['elevation', 'azimuth']:
+            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
+        head = kwds.get('head', 'z+')
+        zoom = kwds.get('zoom', 1.0)
+        proj = kwds.get('proj', 'cone')
+        mode = kwds.get('mode', '3D')
+        aim = kwds.get('aim', [0,0,0])
+        dist = kwds.get('dist', 5)
+        view = kwds.get('view', [-1,1,-1,1,3.2,7])
         elevation = kwds.get('elevation', None)
         azimuth = kwds.get('azimuth', None)
+        interval = kwds.get('interval', 100)
+        style = kwds.get('style', 'black')
         
         glcanvas.GLCanvas.__init__(self, parent, -1, style=glcanvas.WX_GL_RGBA|glcanvas.WX_GL_DOUBLEBUFFER|glcanvas.WX_GL_DEPTH_SIZE)
         
@@ -92,16 +106,13 @@ class WxGLScene(glcanvas.GLCanvas):
             head = 'y+'
         
         if head == 'x+':
-            cam = [0, 5, 0]
+            cam = [0, 1, 0]
         elif head == 'y+':
-            cam = [0, 0, 5]
+            cam = [0, 0, 1]
         else:
-            cam = [5, 0, 0]
+            cam = [1, 0, 0]
         
-        aim = [0, 0, 0]
-        view = [-1, 1, -1, 1, 3.2, 7]
-        
-        self.cam = np.array(cam, dtype=np.float)                # 相机位置
+        self.cam = np.array(cam, dtype=np.float) * dist         # 相机位置
         self.aim = np.array(aim, dtype=np.float)                # 目标点位
         self.head = head                                        # 观察者头部的指向
         self.view = np.array(view, dtype=np.float)              # 视景体
@@ -115,6 +126,11 @@ class WxGLScene(glcanvas.GLCanvas):
         self.rotate_timer = wx.Timer()                          # 旋转定时器
         self.rotate_mode = 'h+'                                 # 旋转模式
         self.rotate_step = 1/180                                # 旋转步长
+        
+        self.slide_timer = wx.Timer()                           # 模型动画定时器
+        self.interval = interval                                # 模型动画帧间隔时间（单位：ms）
+        self.pages = list()                                     # 动画帧模型
+        self.curr_page = 0                                      # 当前动画帧
         
         self.size = self.GetClientSize()                        # OpenGL窗口的大小
         self.context = glcanvas.GLContext(self)                 # OpenGL上下文
@@ -138,6 +154,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
         
         self.rotate_timer.Bind(wx.EVT_TIMER, self.on_rotate_timer)
+        self.slide_timer.Bind(wx.EVT_TIMER, self.on_slide_timer)
         
         if self.mode == '3D' and (elevation != None or azimuth != None):
             self.set_posture(elevation=elevation, azimuth=azimuth, save=True)
@@ -177,10 +194,25 @@ class WxGLScene(glcanvas.GLCanvas):
             e = self.elevation - self.rotate_step
             self.set_posture(elevation=np.degrees(e), save=False)
     
+    def on_slide_timer(self, evt):
+        """模型动画定时器函数"""
+        
+        reg, name = self.pages[self.curr_page]
+        reg.hide_model(name)
+        
+        self.curr_page += 1
+        self.curr_page %= len(self.pages)
+        reg, name = self.pages[self.curr_page]
+        reg.show_model(name)
+        
+        self.Refresh(False)
+        
+    
     def on_destroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
         self.rotate_timer.Stop()
+        self.slide_timer.Stop()
         for rid in self.regions:
             for buf_id in self.regions[rid].buffers:
                 self.regions[rid].buffers[buf_id].delete()
@@ -718,5 +750,17 @@ class WxGLScene(glcanvas.GLCanvas):
         """停止旋转"""
         
         self.rotate_timer.Stop()
+    
+    def add_slide_page(self, reg, page):
+        """增加动画帧"""
+        
+        if page not in self.pages:
+            self.pages.append((reg, page))
+    
+    def start_slide(self):
+        """开始动画"""
+        
+        if len(self.pages):
+            self.slide_timer.Start(self.interval)
 
         

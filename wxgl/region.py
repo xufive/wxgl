@@ -220,7 +220,7 @@ class WxGLRegion:
         if not light is None:
             self._disable_env(name, GL_LIGHTING)
         
-        wx.CallAfter(self.scene.Refresh, False)
+        self.refresh()
     
     def show_model(self, name):
         """显示模型
@@ -278,12 +278,12 @@ class WxGLRegion:
         
         assert isinstance(img, (np.ndarray, str)), u'参数类型错误'
         
+        mode = 'RGBA' if alpha else 'RGB'
         if isinstance(img, np.ndarray):
-            im = Image.fromarray(np.uint8(img))
+            im = Image.fromarray(np.uint8(img), mode=mode)
         else:
             im = Image.open(img)
         
-        mode = 'RGBA' if alpha else 'RGB'
         ix, iy, image = im.size[0], im.size[1], im.tobytes('raw', mode, 0, -1)
         
         mode = GL_RGBA if alpha else GL_RGB
@@ -951,16 +951,18 @@ class WxGLRegion:
                         inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
+                        slide       - 是否作为动画播放的帧
         """
         
         for key in kwds:
-            if key not in ['name', 'inside', 'visible', 'program']:
+            if key not in ['name', 'inside', 'visible', 'program', 'slide']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         inside = kwds.get('inside', True)
         visible = kwds.get('visible', True)
         program = kwds.get('program', None)
+        slide = kwds.get('slide', False)
         
         if inside:
             r_x = (np.nanmin(vs[:,0]),np.nanmax(vs[:,0]))
@@ -972,6 +974,10 @@ class WxGLRegion:
             uvw, rand = self.timers[program[2]]['uvw'], self.timers[program[2]]['rand']
         else:
             uvw, rand = None, None
+        
+        if slide:
+            self.scene.add_slide_page(self, name)
+            visible = False
         
         color = self.cm.color2c(color, shape=vs.shape[:-1])
         vertices_id, indices_id, v_type = self._create_point_or_lLine(vs, color, uvw, rand)
@@ -996,16 +1002,18 @@ class WxGLRegion:
                         inside      - 是否更新数据动态范围
                         visible     - 是否显示
                         program     - 着色器程序
+                        slide       - 是否作为动画播放的帧
         """
         
         for key in kwds:
-            if key not in ['name', 'inside', 'visible', 'program']:
+            if key not in ['name', 'inside', 'visible', 'program', 'slide']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         inside = kwds.get('inside', True)
         visible = kwds.get('visible', True)
         program = kwds.get('program', None)
+        slide = kwds.get('slide', False)
         
         if inside:
             r_x = (np.nanmin(vs[:,0]),np.nanmax(vs[:,0]))
@@ -1017,6 +1025,10 @@ class WxGLRegion:
             uvw, rand = self.timers[program[2]]['uvw'], self.timers[program[2]]['rand']
         else:
             uvw, rand = None, None
+        
+        if slide:
+            self.scene.add_slide_page(self, name)
+            visible = False
         
         color = self.cm.color2c(color, shape=vs.shape[:-1])
         gl_type = {'MULTI':GL_LINES, 'SINGLE':GL_LINE_STRIP, 'LOOP':GL_LINE_LOOP}[method]
@@ -1065,10 +1077,11 @@ class WxGLRegion:
                         visible     - 是否显示
                         program     - 着色器程序
                         light       - 材质灯光颜色，None表示关闭材质灯光
+                        slide       - 是否作为动画播放的帧
         """
         
         for key in kwds:
-            if key not in ['name', 'inside', 'visible', 'program', 'light']:
+            if key not in ['name', 'inside', 'visible', 'program', 'light', 'slide']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
@@ -1076,6 +1089,7 @@ class WxGLRegion:
         visible = kwds.get('visible', True)
         program = kwds.get('program', None)
         light = kwds.get('light', None)
+        slide = kwds.get('slide', False)
         
         if inside:
             r_x = (np.nanmin(vs[:,0]),np.nanmax(vs[:,0]))
@@ -1088,6 +1102,10 @@ class WxGLRegion:
         
         if color is None and (texcoord is None or texture is None):
             color = self.cm.color2c(self.scene.tc, shape=vs.shape[:-1])
+        
+        if slide:
+            self.scene.add_slide_page(self, name)
+            visible = False
         
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES, 'Q+':GL_QUAD_STRIP, 'T+':GL_TRIANGLE_STRIP, 'F':GL_TRIANGLE_FAN, 'P':GL_POLYGON}[method]
         vertices_id, indices_id, v_type = self._create_surface(vs, color, texcoord, gl_type)
@@ -1120,10 +1138,12 @@ class WxGLRegion:
                         visible     - 是否显示
                         program     - 着色器程序
                         light       - 材质灯光颜色，None表示关闭材质灯光
+                        slide       - 是否作为动画播放的帧
+                        name        - 模型名
         """
         
         for key in kwds:
-            if key not in ['blc', 'blw', 'name', 'inside', 'visible', 'program', 'light']:
+            if key not in ['blc', 'blw', 'name', 'inside', 'visible', 'program', 'light', 'slide']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         blc = kwds.get('inside', None)
@@ -1133,9 +1153,14 @@ class WxGLRegion:
         visible = kwds.get('visible', True)
         program = kwds.get('program', None)
         light = kwds.get('light', None)
+        slide = kwds.get('slide', False)
         
         if inside:
             self.set_data_range((np.nanmin(xs),np.nanmax(xs)), (np.nanmin(ys),np.nanmax(ys)), (np.nanmin(zs),np.nanmax(zs)))
+        
+        if slide:
+            self.scene.add_slide_page(self, name)
+            visible = False
         
         color = self.cm.color2c(color, shape=zs.shape)
         gl_type = {'Q':GL_QUADS, 'T':GL_TRIANGLES}[method]

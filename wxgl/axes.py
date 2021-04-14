@@ -23,7 +23,8 @@ class WxAxes:
         assert isinstance(padding, (list,tuple)) and len(padding) == 4, '期望参数padding是长度为4的元组或列表'
         
         self.scene = scene
-        self.figure = self.scene.parent.parent
+        self.ff = self.scene.parent
+        self.fig = self.scene.parent.parent
         self.cm = self.scene.cm
         
         pos = str(pos)
@@ -84,7 +85,7 @@ class WxAxes:
             self.reg_main.reset_box((b0, b1, b2, b3*0.85))
             reg_cb = self.scene.add_region(box, fixed=True)
         
-        self.figure.add_widget(reg_cb, 'colorbar', drange, cmap, loc, **kwds)
+        self.fig.add_widget(reg_cb, 'colorbar', drange, cmap, loc, **kwds)
     
     def title(self, text, size=48, color=None, pos=(0,0,0), **kwds):
         """绘制标题
@@ -115,7 +116,7 @@ class WxAxes:
             self.reg_main.reset_box((b0, b1, b2, b3*0.88))
             self.reg_title = self.scene.add_region(box, fixed=True)
         
-        self.figure.add_widget(self.reg_title, 'text3d', text, size=size*4, color=color, pos=pos, **kwds)
+        self.fig.add_widget(self.reg_title, 'text3d', text, size=size*4, color=color, pos=pos, **kwds)
     
     def text(self, text, size=32, color=None, pos=(0,0,0), **kwds):
         """绘制文本
@@ -140,9 +141,9 @@ class WxAxes:
         weight = kwds.get('weight', 'bold')
         family = kwds.get('family', None)
         
-        self.figure.add_widget(self.reg_main, 'text3d', text, size=size, color=color, pos=pos, **kwds)
+        self.fig.add_widget(self.reg_main, 'text3d', text, size=size, color=color, pos=pos, **kwds)
     
-    def plot(self, xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z'):
+    def plot(self, xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z', **kwds):
         """绘制点和线
         
         xs/ys/zs    - 顶点的x/y/z坐标集，元组、列表或一维数组类型，长度相等。若zs为None，则自动补为全0的数组
@@ -156,6 +157,9 @@ class WxAxes:
                         'dash-dot'  - 虚点线
         cmap        - 颜色映射表，color为None时有效
         caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
+        kwds        - 关键字参数
+                        slide       - 是否作为动画播放的帧
+                        name        - 模型名
         """
         
         if isinstance(xs, (tuple,list)):
@@ -191,9 +195,9 @@ class WxAxes:
         style = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
         
         if width > 0:
-            self.figure.add_widget(self.reg_main, 'line', vs, color, method='SINGLE', width=width, stipple=style)
+            self.fig.add_widget(self.reg_main, 'line', vs, color, method='SINGLE', width=width, stipple=style, **kwds)
         if size > 0:
-            self.figure.add_widget(self.reg_main, 'point', vs, color, size=size)
+            self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
     
     def scatter(self, vs, color=None, size=1.0, cmap='hsv', caxis='z'):
         """绘制散点图
@@ -220,9 +224,9 @@ class WxAxes:
             else:
                 color = self.cm.cmap(vs[:,2], cmap)
         
-        self.figure.add_widget(self.reg_main, 'point', vs, color, size=size)
+        self.fig.add_widget(self.reg_main, 'point', vs, color, size=size)
     
-    def mesh(self, xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', light=None):
+    def mesh(self, xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', **kwds):
         """绘制mesh
         
         xs/ys/zs    - 顶点的x/y/z坐标集，二维数组
@@ -234,8 +238,15 @@ class WxAxes:
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
         cmap        - 颜色映射表，color为None时有效。使用zs映射颜色
         caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
-        light       - 材质灯光颜色，None表示关闭材质灯光
+        kwds        - 关键字参数
+                        light       - 材质灯光颜色，None表示关闭材质灯光
+                        slide       - 是否作为动画播放的帧
+                        name        - 模型名
         """
+        
+        for key in kwds:
+            if key not in ['light', 'slide', 'name']:
+                raise KeyError('不支持的关键字参数：%s'%key)
         
         assert isinstance(xs, np.ndarray) and xs.ndim == 2, '期望参数vs是二维数组'
         assert isinstance(ys, np.ndarray) and ys.ndim == 2, '期望参数ys是二维数组'
@@ -254,9 +265,9 @@ class WxAxes:
             else:
                 color = self.cm.cmap(zs, cmap)
         
-        self.figure.add_widget(self.reg_main, 'mesh', xs, ys, zs, color, mode=mode, light=light)
+        self.fig.add_widget(self.reg_main, 'mesh', xs, ys, zs, color, mode=mode, **kwds)
     
-    def surface(self, vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, light=None):
+    def surface(self, vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, **kwds):
         """绘制surface
         
         vs          - 顶点坐标集，二维数组类型，shape=(n,3)
@@ -285,20 +296,27 @@ class WxAxes:
                         'FLBL'      - 前后面显示线条FLBL
                         'FCBL'      - 前面填充颜色，后面显示线条FCBL
                         'FLBC'      - 前面显示线条，后面填充颜色FLBC
-        texture     - 用于纹理的图像文件，仅当method为Q时有效
+        texture     - 用于纹理的图像文件或数组对象，仅当method为Q时有效
         alpha       - 纹理是否使用透明通道，仅当texture存在时有效
-        light       - 材质灯光颜色，None表示关闭材质灯光
+        kwds        - 关键字参数
+                        light       - 材质灯光颜色，None表示关闭材质灯光
+                        slide       - 是否作为动画播放的帧
+                        name        - 模型名
         """
+        
+        for key in kwds:
+            if key not in ['light', 'slide', 'name']:
+                raise KeyError('不支持的关键字参数：%s'%key)
         
         assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维数组'
         
-        if texture and method == 'Q':
+        if isinstance(texture, (str, np.ndarray)) and method == 'Q':
             texture = self.reg_main.create_texture(texture, alpha=alpha)
             texcoord = np.tile(np.array([[0,1],[0,0],[1,0],[1,1]]), (vs.shape[0]//4,1))
         else:
             texture, texcoord = None, None
         
-        self.figure.add_widget(self.reg_main, 'surface', vs, color=color, texcoord=texcoord, texture=texture, method=method, mode=mode, light=light)
+        self.fig.add_widget(self.reg_main, 'surface', vs, color=color, method=method, mode=mode, texcoord=texcoord, texture=texture, **kwds)
     
     def pipe(self, vs, radius, color=None, slices=36, mode='FCBC', cmap='hsv', caxis='z'):
         """绘制圆管
@@ -330,7 +348,7 @@ class WxAxes:
             else:
                 color = self.cm.cmap(vs[:,2], cmap)
         
-        self.figure.add_widget(self.reg_main, 'pipe', vs, radius, color, slices=slices, mode=mode)
+        self.fig.add_widget(self.reg_main, 'pipe', vs, radius, color, slices=slices, mode=mode)
     
     def sphere(self, center, radius, color, slices=90, mode='FLBL'):
         """绘制球体
@@ -348,7 +366,7 @@ class WxAxes:
         
         assert isinstance(center, (tuple, list, np.ndarray)), '期望参数center是元组、列表或数组'
         
-        self.figure.add_widget(self.reg_main, 'sphere', center, radius, color, slices=slices, mode=mode)
+        self.fig.add_widget(self.reg_main, 'sphere', center, radius, color, slices=slices, mode=mode)
     
     def cube(self, center, side, color, mode='FLBL'):
         """绘制六面体
@@ -365,7 +383,7 @@ class WxAxes:
         
         assert isinstance(center, (tuple, list, np.ndarray)), '期望参数center是元组、列表或数组'
         
-        self.figure.add_widget(self.reg_main, 'cube', center, side, color, mode=mode)
+        self.fig.add_widget(self.reg_main, 'cube', center, side, color, mode=mode)
     
     def cylinder(self, v_top, v_bottom, radius, color, slices=60, mode='FCBC'):
         """绘制圆柱体
@@ -385,7 +403,7 @@ class WxAxes:
         assert isinstance(v_top, (tuple, list, np.ndarray)), '期望参数v_top是元组、列表或数组'
         assert isinstance(v_bottom, (tuple, list, np.ndarray)), '期望参数v_bottom是元组、列表或数组'
         
-        self.figure.add_widget(self.reg_main, 'cylinder', v_top, v_bottom, radius, color, slices=slices, mode=mode)
+        self.fig.add_widget(self.reg_main, 'cylinder', v_top, v_bottom, radius, color, slices=slices, mode=mode)
     
     def cone(self, center, spire, radius, color, slices=60, mode='FCBC'):
         """绘制圆锥体
@@ -404,7 +422,7 @@ class WxAxes:
         
         assert isinstance(center, (tuple, list, np.ndarray)), '期望参数center是元组、列表或数组'
         
-        self.figure.add_widget(self.reg_main, 'cone', center, spire, radius, color, slices=slices, mode=mode)
+        self.fig.add_widget(self.reg_main, 'cone', center, spire, radius, color, slices=slices, mode=mode)
     
     def capsule(self, data, threshold, color, r_x=None, r_y=None, r_z=None, mode='FCBC', **kwds):
         """绘制囊（三维等值面）
@@ -427,7 +445,7 @@ class WxAxes:
                         light       - 材质灯光开关
         """
         
-        self.figure.add_widget(self.reg_main, 'capsule', data, threshold, color, r_x=r_x, r_y=r_y, r_z=r_z, mode=mode, **kwds)
+        self.fig.add_widget(self.reg_main, 'capsule', data, threshold, color, r_x=r_x, r_y=r_y, r_z=r_z, mode=mode, **kwds)
     
     def flow(self, ps, us, vs, ws, **kwds):
         """绘制流体
@@ -449,7 +467,7 @@ class WxAxes:
                         name        - 模型名
         """
         
-        self.figure.add_widget(self.reg_main, 'flow', ps, us, vs, ws, **kwds)
+        self.fig.add_widget(self.reg_main, 'flow', ps, us, vs, ws, **kwds)
         
     def ticks(self, **kwds):
         """显示网格和刻度
@@ -465,5 +483,5 @@ class WxAxes:
                         
         """
         
-        self.figure.add_widget(self.reg_main, 'ticks', **kwds)
+        self.fig.add_widget(self.reg_main, 'ticks', **kwds)
     

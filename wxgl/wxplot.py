@@ -46,15 +46,17 @@ def figure(*args, **kwds):
                     head        - 定义方向：'x+'|'y+'|'z+'
                     zoom        - 视口缩放因子
                     mode        - 2D/3D模式
+                    aim         - 观察焦点
+                    dist        - 相机位置与目标点位之间的距离
+                    view        - 视景体
                     elevation   - 仰角
                     azimuth     - 方位角
+                    interval    - 模型动画帧间隔时间（单位：ms）
                     style       - 配色方案，'black'|'white'|'gray'|'blue'
         """
     
     global fig
     fig = wxfigure.Figure(*args, **kwds)
-    
-    return fig
 
 def show(*args, **kwds):
     """显示画布
@@ -188,7 +190,7 @@ def text(*args, **kwds):
 def plot(*args, **kwds):
     """绘制点和线
         
-    Useage: plot(xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z')
+    Useage: plot(xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z', **kwds)
     ----------------------------------------------------
     xs/ys/zs    - 顶点的x/y/z坐标集，元组、列表或一维数组类型，长度相等。若zs为None，则自动补为全0的数组
     color       - 全部或每一个顶点的颜色。None表示使用cmap参数映射颜色
@@ -201,6 +203,9 @@ def plot(*args, **kwds):
                     'dash-dot'  - 虚点线
     cmap        - 颜色映射表，color为None时有效
     caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
+    kwds        - 关键字参数
+                    slide       - 是否作为动画播放的帧
+                    name        - 模型名
     """
     
     fig.create_frame()
@@ -228,7 +233,7 @@ def scatter(*args, **kwds):
 def mesh(*args, **kwds):
     """绘制mesh
         
-    Useage: mesh(xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', light=None)
+    Useage: mesh(xs, ys, zs, color=None, mode='FCBC', cmap='hsv', caxis='z', **kwds)
     ----------------------------------------------------
     xs/ys/zs    - 顶点的x/y/z坐标集，二维数组
     color       - 顶点颜色或颜色集，None表示使用cmap参数映射颜色
@@ -239,7 +244,10 @@ def mesh(*args, **kwds):
                     'FLBC'      - 前面显示线条，后面填充颜色FLBC
     cmap        - 颜色映射表，color为None时有效。使用zs映射颜色
     caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
-    light       - 材质灯光颜色，None表示关闭材质灯光
+    kwds        - 关键字参数
+                    light       - 材质灯光颜色，None表示关闭材质灯光
+                    slide       - 是否作为动画播放的帧
+                    name        - 模型名
     """
     
     fig.create_frame()
@@ -250,7 +258,7 @@ def mesh(*args, **kwds):
 def surface(*args, **kwds):
     """绘制surface
     
-    Useage: surface(vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, light=None)
+    Useage: surface(vs, color=None, method='Q', mode='FCBC', texture=None, alpha=True, **kwds)
     ----------------------------------------------------
     vs          - 顶点坐标集，二维数组类型，shape=(n,3)
     color       - 顶点颜色或颜色集，可以混合使用纹理。None表示仅使用纹理
@@ -278,9 +286,12 @@ def surface(*args, **kwds):
                     'FLBL'      - 前后面显示线条FLBL
                     'FCBL'      - 前面填充颜色，后面显示线条FCBL
                     'FLBC'      - 前面显示线条，后面填充颜色FLBC
-    texture     - 用于纹理的图像文件，仅当method为Q时有效
+    texture     - 用于纹理的图像文件或数组对象，仅当method为Q时有效
     alpha       - 纹理是否使用透明通道，仅当texture存在时有效
-    light       - 材质灯光颜色，None表示关闭材质灯光
+    kwds        - 关键字参数
+                    light       - 材质灯光颜色，None表示关闭材质灯光
+                    slide       - 是否作为动画播放的帧
+                    name        - 模型名
     """
     
     fig.create_frame()
