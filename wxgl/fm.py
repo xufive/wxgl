@@ -17,12 +17,12 @@ class FontManager:
                 self.fonts.update({item.name: [item]})
         
         # 设置默认字体
-        if 'FangSong' in self.fonts:
-            self.default_font = 'FangSong' # 仿宋
-        elif 'Microsoft YaHei' in self.fonts:
+        if 'Microsoft YaHei' in self.fonts:
             self.default_font = 'Microsoft YaHei' # 微软雅黑
         elif 'STSong' in self.fonts:
             self.default_font = 'STSong' # 宋体
+        elif 'FangSong' in self.fonts:
+            self.default_font = 'FangSong' # 仿宋
         else:
             self.default_font = mfm.ttfFontProperty(mfm.get_font(mfm.findfont(''))).name # matplotlib默认字体
     
@@ -111,3 +111,25 @@ class FontManager:
                 under = max(under, bottom)
         
         return pixels
+    
+    def text2img(self, text, size, color, family=None, weight='normal'):
+        """文本转图像，返回图像数据和size元组
+        
+        text        - 文本字符串
+        size        - 文字大小，整型
+        color       - 文本颜色，numpy数组
+        family      - （系统支持的）字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        """
+        
+        font_file = self.get_font_file(family=family, weight=weight)
+        pixels = self.get_text_pixels(text, size, font_file)
+        rows, cols = pixels.shape
+        
+        x = np.ones(pixels.shape)*color[0]*255
+        y = np.ones(pixels.shape)*color[1]*255
+        z = np.ones(pixels.shape)*color[2]*255
+        im = np.dstack((x,y,z,pixels)).astype(np.uint8)
+        
+        return im
+    

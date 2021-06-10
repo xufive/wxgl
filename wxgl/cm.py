@@ -60,55 +60,42 @@ class ColorManager:
         }
     
     def hex2color(self, str_hex):
-        """以#为前缀的十六进制颜色转数组颜色"""
+        """以#为前缀的十六进制颜色转numpy数组颜色"""
         
-        return np.array((int(str_hex[1:3],base=16)/255, int(str_hex[3:5],base=16)/255, int(str_hex[5:],base=16)/255))
+        return np.array((int(str_hex[1:3],base=16)/255, int(str_hex[3:5],base=16)/255, int(str_hex[5:],base=16)/255), dtype=np.float64)
 
     def str2color(self, color):
-        """字符串表示的颜色转数组颜色"""
+        """字符串表示的颜色转numpy数组颜色"""
         
         if color in self._colors:
             return self.hex2color(self._colors[color])
         elif re.compile(r'#[\da-fA-F]{6}').match(color):
             return self.hex2color(color)
         else:
-            raise ValueError("未定义的或不符合规则的颜色字符串：%s"%color)
+            raise ValueError('未定义的或不符合规则的颜色：%s'%color)
     
-    def color2c(self, color, size=None):
-        """颜色参数处理
-        
-        color       - 描述颜色参数，可能的类型：字符串、元组、列表、数组
-        size        - 约定返回的颜色数据结构，整型或二元组
-        """
+    def color2c(self, color):
+        """字符串、元组、列表等类型的颜色转numpy数组颜色"""
         
         if isinstance(color, str):
-            c = self.str2color(color)
+            color = self.str2color(color)
         elif isinstance(color, (list, tuple)):
-            c = np.array(color)
-        elif isinstance(color, np.ndarray) and color.ndim < 4:
-            c = color
-        else:
-             raise ValueError("不符合规则的颜色：%s"%str(color))
+            color = np.array(color, dtype=np.float64)
         
-        if not size is None and c.ndim == 1:
-            if isinstance(size, int):
-                c = np.tile(c, (size,1))
-            elif isinstance(size, (tuple,list)) and len(size) == 2:
-                c = np.tile(c, (*size,1))
-            else:
-                raise ValueError("如果参数size不为None，则期望是整型或二元组"%str(color))
+        if not isinstance(color, np.ndarray) or color.ndim > 2 or color.shape[-1] not in (3,4):
+             raise ValueError('未定义的或不符合规则的颜色')
         
-        return np.float64(c)
-        
-    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], dmax=None, dmin=None, alpha=None):
+        return color
+    
+    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], dmin=None, dmax=None, alpha=None):
         """数值映射到颜色
         
         data        - 数据
         cm          - 调色板
         invalid     - 无效数据的标识
         invalid_c   - 无效数据的颜色
-        dmax        - 数据最大值，默认为None
         dmin        - 数据最小值，默认为None
+        dmax        - 数据最大值，默认为None
         alpha       - 透明度，None表示返回RGB格式
         """
         
@@ -120,22 +107,28 @@ class ColorManager:
         
         if not np.isnan(invalid):
             data[data==invalid] = np.nan
-        invalid_pos = data[data==np.nan] # 记录无效数据位置
+        invalid_pos = np.where(data==np.nan) # 记录无效数据位置
         
         if dmin is None:
             dmin = np.nanmin(data)
         if dmax is None:
             dmax = np.nanmax(data)
         if dmin > dmax:
-            raise ValueError("数据最小值%f大于数据最大值%f"%(dmax, dmin))
+            raise ValueError('数据最小值%f大于数据最大值%f'%(dmax, dmin))
+        
         
         data[data<dmin] = dmin
         data[data>dmax] = dmax
-        data = np.uint8(255*(data-dmin)/(dmax-dmin))
         
-        cm = mcm.get_cmap(cm)
-        cmap = np.array([cm(i) for i in range(256)])
-        print(cmap.shape, data.shape, (np.nanmin(data),np.nanmax(data)))
+        cmo = mcm.get_cmap(cm)
+        cmap, k = list(), 256/cmo.N
+        for i in range(cmo.N):
+            c = cmo(i)
+            for j in range(int(i*k), int((i+1)*k)):
+                cmap.append(c)
+        cmap = np.array(cmap)
+        
+        data = np.uint8(255*(data-dmin)/(dmax-dmin))
         color = cmap[data]
         color[invalid_pos] = invalid_c
         
