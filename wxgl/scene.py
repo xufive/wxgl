@@ -40,6 +40,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from . import region
+from . import axes
 from . import cm
 from . import fm
 
@@ -175,7 +176,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         if save:
             self.store.update({
-                'oecs': self.oecs,
+                'oecs': (*self.oecs,),
                 'zoom': self.zoom,
                 'dist': self.dist,
                 'azimuth': self.azimuth,
@@ -522,9 +523,11 @@ class WxGLScene(glcanvas.GLCanvas):
     def _draw_gl(self):
         """绘制模型"""
         
+        #print(self.eye, self.oecs, self.up, self.dist, self.zoom)
+        
         for reg in self.regions:
             x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
-            w_reg, h_reg = int(reg.box[2]*self.size[0]), int(reg.box[3]*self.size[1])
+            w_reg, h_reg = int(reg.box[2]*self.size[0])+1, int(reg.box[3]*self.size[1])
             k = w_reg/h_reg
             
             glViewport(x0, y0, w_reg, h_reg)
@@ -640,7 +643,7 @@ class WxGLScene(glcanvas.GLCanvas):
         """
         
         if not oecs is None:
-            self.oecs = oecs
+            self.oecs = np.array(oecs)
         if not zoom is None:
             self.zoom = zoom
         if not dist is None:
@@ -698,25 +701,6 @@ class WxGLScene(glcanvas.GLCanvas):
         else:
             self.sys_timer.Start(self.interval)
     
-    def add_region(self, box, fixed=False, proj=None):
-        """添加视区
-        
-        box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
-        fixed       - 布尔型，是否锁定旋转缩放
-        proj        - 投影模式
-                        None        - 使用场景对象的投影模式
-                        'ortho'     - 平行投影
-                        'cone'      - 透视投影
-        """
-        
-        if proj is None:
-            proj = self.proj
-        
-        reg = region.WxGLRegion(self, box, fixed, proj)
-        self.regions.append(reg)
-        
-        return reg
-    
     def get_font_list(self):
         """返回当前系统可用字体列表"""
         
@@ -746,6 +730,34 @@ class WxGLScene(glcanvas.GLCanvas):
         """返回预设的调色板分类列表"""
         
         return self.cm.cmap_help()
+    
+    def add_region(self, box, fixed=False, proj=None):
+        """添加视区
+        
+        box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
+        fixed       - 布尔型，是否锁定旋转缩放
+        proj        - 投影模式
+                        None        - 使用场景对象的投影模式
+                        'ortho'     - 平行投影
+                        'cone'      - 透视投影
+        """
+        
+        if proj is None:
+            proj = self.proj
+        
+        reg = region.WxGLRegion(self, box, fixed, proj)
+        self.regions.append(reg)
+        
+        return reg
+    
+    def add_axes(self, pos, padding=(20,20,20,20)):
+        """添加子图
+        
+        pos         - 三个数字组成的整数或字符串或四元组，表示子图在场景中的位置和大小
+        padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
+        """
+        
+        return axes.WxAxes(self, pos, padding=padding)
     
     
         

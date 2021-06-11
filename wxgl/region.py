@@ -522,7 +522,7 @@ class WxGLRegion:
         
         self._add_model(name,  visible, 'text', [pid, rows, cols, pos])
     
-    def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, k=8, **kwds):
+    def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, **kwds):
         """绘制3D文字
         
         text        - 文本字符串
@@ -542,7 +542,6 @@ class WxGLRegion:
                         'center-top'    - 水平居中对齐，垂直上对齐
                         'center-middle' - 水平居中对齐，垂直居中对齐
                         'center-bottom' - 水平居中对齐，垂直下对齐
-        k           - 文本大小的调节因子，取值范围[1,15]，默认8
         kwds        - 关键字参数
                         name        - 模型名
                         inside      - 是否更新数据动态范围
@@ -589,7 +588,13 @@ class WxGLRegion:
         texture = self.fm.text2img(text, size, color, family, weight)
         texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
         
-        w, h = k*size*(texture.shape[1]/texture.shape[0])/2000, k*size/2000
+        cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
+        iw, ih = texture.shape[1], texture.shape[0]
+        if cw > ch:
+            w, h = iw/ch, ih/ch
+        else:
+            w, h = iw/cw, ih/cw
+        
         vhl, vhr = box[1]-box[0], box[2]-box[3]
         vwt, vwb = box[3]-box[0], box[2]-box[1]
         vhli, vhri = h*(vhl)/np.linalg.norm(vhl), h*(vhr)/np.linalg.norm(vhr)
@@ -1231,9 +1236,9 @@ class WxGLRegion:
         cm          - 调色板名称
         mode        - 水平或垂直模式，可选项：'H'|'VR'|'VL'
         kwds        - 关键字参数
-                        size            - 显示区域长短边之比，'H'模式默认8，'VR'和'VL'模式默认5
+                        side            - 显示区域长短边之比，'H'模式默认8，'VR'和'VL'模式默认5
                         subject         - 标题
-                        subject_size    - 标题字号，默认56
+                        subject_size    - 标题字号，默认48
                         tick_size       - 刻度字号，默认40
                         tick_format     - 刻度标注格式化函数，默认str
                         density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
@@ -1247,17 +1252,16 @@ class WxGLRegion:
             mode = 'VR'
         
         for key in kwds:
-            if key not in ['size', 'subject', 'subject_size', 'tick_size', 'tick_format', 'density', 'endpoint']:
+            if key not in ['side', 'subject', 'subject_size', 'tick_size', 'tick_format', 'density', 'endpoint']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         subject = kwds.get('subject', None)
-        subject_size = kwds.get('subject_size', 32) * 3
-        size = kwds.get('size', 8 if mode == 'H' else 5)
-        tick_size = kwds.get('tick_size', 24) * 3
+        subject_size = kwds.get('subject_size', 48)
+        side = kwds.get('side', 8 if mode == 'H' else 5)
+        tick_size = kwds.get('tick_size', 40)
         tick_format = kwds.get('tick_format', str)
         s_min, s_max = kwds.get('density', (3,6))
         endpoint = kwds.get('endpoint', True)
-        kv, kh = 3, 5
         
         dmin, dmax = drange[0], drange[-1]
         if len(drange) > 2:
@@ -1273,9 +1277,9 @@ class WxGLRegion:
             texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,3))
         
         if mode == 'H':
-            w, h = size, 1
+            w, h = side, 1
         else:
-            w, h = 1, size
+            w, h = 1, side
         
         if mode.upper() == 'VR':
             if subject is None:
@@ -1283,7 +1287,7 @@ class WxGLRegion:
             else:
                 vs = np.array([[-0.5*w,0,0.42*h],[-0.5*w,0,-0.5*h],[-0.2*w,0,-0.5*h],[-0.2*w,0,0.42*h]])
                 box = np.array([[-0.5*w,0,0.5*h],[-0.5*w,0,0.42*h],[-0.2*w,0,0.42*h],[-0.2*w,0,0.5*h]])
-                self.text3d(subject, box, size=subject_size, k=kv, align='center-middle', light=0, inside=False)
+                self.text3d(subject, box, size=subject_size, align='center-middle', light=0, inside=False)
             
             tk = (np.max(vs[:,2])-np.min(vs[:,2]))/(dmax-dmin)
             if not endpoint:
@@ -1292,7 +1296,7 @@ class WxGLRegion:
             for t in ticks:
                 z = (t-dmin)*tk - 0.5*h
                 box = np.array([[-0.08*w,0,z+0.1],[-0.08*w,0,z-0.1],[0.5*w,0,z-0.1],[0.5*w,0,z+0.1]])
-                self.text3d(tick_format(t), box, size=tick_size, k=kv, align='left-middle', light=0, inside=False)
+                self.text3d(tick_format(t), box, size=tick_size, align='left-middle', light=0, inside=False)
                 self.line(np.array([[-0.2*w,0,z],[-0.13*w,0,z]]), self.scene.style[1], width=0.5, inside=False)
         elif mode.upper() == 'VL':
             if subject is None:
@@ -1300,7 +1304,7 @@ class WxGLRegion:
             else:
                 vs = np.array([[0.2*w,0,0.42*h],[0.2*w,0,-0.5*h],[0.5*w,0,-0.5*h],[0.5*w,0,0.42*h]])
                 box = np.array([[0.2*w,0,0.5*h],[0.2*w,0,0.42*h],[0.5*w,0,0.42*h],[0.5*w,0,0.5*h]])
-                self.text3d(subject, box, size=subject_size, k=kv, align='center-middle', light=0, inside=False)
+                self.text3d(subject, box, size=subject_size, align='center-middle', light=0, inside=False)
             
             tk = (np.max(vs[:,2])-np.min(vs[:,2]))/(dmax-dmin)
             if not endpoint:
@@ -1309,7 +1313,7 @@ class WxGLRegion:
             for t in ticks:
                 z = (t-dmin)*tk - 0.5*h
                 box = np.array([[-0.5*w,0,z+0.1],[-0.5*w,0,z-0.1],[0.08*w,0,z-0.1],[0.08*w,0,z+0.1]])
-                self.text3d(tick_format(t), box, size=tick_size, k=kv, align='right-middle', light=0, inside=False)
+                self.text3d(tick_format(t), box, size=tick_size, align='right-middle', light=0, inside=False)
                 self.line(np.array([[0.13*w,0,z],[0.2*w,0,z]]), self.scene.style[1], width=0.5, inside=False)
         else:
             if subject is None:
@@ -1317,7 +1321,7 @@ class WxGLRegion:
             else:
                 vs = np.array([[-0.5*w,0,0.2*h],[-0.5*w,0,-0.1*h],[0.5*w,0,-0.1*h],[0.5*w,0,0.2*h]])
                 box = np.array([[-0.5*w,0,0.5*h],[-0.5*w,0,0.3*h],[0.5*w,0,0.3*h],[0.5*w,0,0.5*h]])
-                self.text3d(subject, box, size=subject_size, k=kh, align='center-bottom', light=0, inside=False)
+                self.text3d(subject, box, size=subject_size, align='center-bottom', light=0, inside=False)
             
             tk = (np.max(vs[:,0])-np.min(vs[:,0]))/(dmax-dmin)
             if not endpoint:
@@ -1326,13 +1330,13 @@ class WxGLRegion:
             for t in ticks:
                 x = (t-dmin)*tk - 0.5*w
                 box = np.array([[x-0.1,0,-0.25*h],[x-0.1,0,-0.5*h],[x+0.1,0,-0.5*h],[x+0.1,0,-0.25*h]])
-                self.text3d(tick_format(t), box, size=tick_size, k=kh, align='center-top', light=0, inside=False)
+                self.text3d(tick_format(t), box, size=tick_size, align='center-top', light=0, inside=False)
                 self.line(np.array([[x,0,-0.1*h],[x,0,-0.18*h]]), self.scene.style[1], width=0.5, inside=False)
         
         self._surface(vs, texture=texture, texcoord=texcoord, method='Q', light=0, inside=False)
         
-    def ticks(self, **kwds):
-        """绘制网格和刻度
+    def ticks3d(self, **kwds):
+        """绘制3D网格和刻度
         
         kwds        - 关键字参数
                         xlabel          - x轴名称，默认'X'
@@ -1521,4 +1525,57 @@ class WxGLRegion:
             self.text(zf(z), pos=(x_min-gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmin_ymin)
             self.text(zf(z), pos=(x_max+gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmax_ymin)
         
+    def ticks2d(self, **kwds):
+        """绘制2D网格和刻度
+        
+        kwds        - 关键字参数
+                        xlabel          - x轴名称，默认'X'
+                        ylabel          - y轴名称，默认'Y'
+                        xrange          - x轴范围，元组，默None，表示使用数据的动态范围
+                        yrange          - y轴范围，元组，默None，表示使用数据的动态范围
+                        xf              - x轴刻度标注格式化函数，默认str
+                        yf              - y轴刻度标注格式化函数，默认str
+                        font            - 字体，默None，表示使用默认字体
+                        labelsize       - 坐标轴标注字号，默认40
+                        ticksize        - 刻度标注字号，默认32
+                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+                        lc              - 网格线颜色，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+                        lw              - 网格线宽度，默认0.5
+                        bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
+                        
+        """
+        
+        if self.r_x[0] >= self.r_x[1] and self.r_y[0] >= self.r_y[1] and self.r_z[0] >= self.r_z[1]: # '当前没有模型，无法显示网格和刻度'
+            return
+        
+        for key in kwds:
+            if key not in ['xlabel', 'ylabel', 'xrange', 'yrange', 'xf', 'yf', 'font', 'labelsize', 'ticksize', 'density', 'lc', 'lw', 'bg']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        xlabel = kwds.get('xlabel', 'X')
+        ylabel = kwds.get('ylabel', 'Y')
+        xrange = kwds.get('xrange', None)
+        yrange = kwds.get('yrange', None)
+        xf = kwds.get('xf', str)
+        yf = kwds.get('yf', str)
+        font = kwds.get('font', None)
+        labelsize = kwds.get('labelsize', 40)
+        ticksize = kwds.get('ticksize', 32)
+        s_min, s_max = kwds.get('density', (3,6))
+        lc = kwds.get('lc', np.array(self.scene.style[1]))
+        lw = kwds.get('lw', 0.5)
+        bg = kwds.get('bg', False)
+        
+        dx, dy = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1
+        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xrange is None else xrange
+        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yrange is None else yrange
+        
+        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max, endpoint=True)
+        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max, endpoint=True)
+        
+        vsx = np.array([[x_min,y_min,0],[x_max,y_min,0]])
+        vsy = np.array([[x_min,y_min,0],[x_min,y_max,0]])
+        
+        self.line(vsx, lc, width=lw, inside=False)
+        self.line(vsy, lc, width=lw, inside=False)
         
