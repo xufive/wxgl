@@ -83,7 +83,7 @@ class ColorManager:
             color = np.array(color, dtype=np.float64)
         
         if not isinstance(color, np.ndarray) or color.ndim > 2 or color.shape[-1] not in (3,4):
-             raise ValueError('未定义的或不符合规则的颜色')
+             raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
         
         return color
     

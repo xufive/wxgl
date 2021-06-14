@@ -26,18 +26,34 @@ class WxGLRegion:
         self.box = box                                          # 视区四元组
         self.fixed = fixed                                      # 是否锁定旋转缩放
         self.proj = proj                                        # 投影模式
-        self.zoom = 1.0 if proj=='cone' else 1.0                # 视口缩放因子，仅当fixed有效时有效
-        
         self.fm = self.scene.fm                                 # 字体管理对象
         self.cm = self.scene.cm                                 # 颜色管理对象
-        self.models = dict()                                    # 模型指令集
-        self.buffers = dict()                                   # 缓冲区字典
         
+        self.buffers = dict()                                   # 缓冲区字典
+        self.models = dict()                                    # 模型指令集
+        self.grid = dict()                                      # 网格模型
+        self.zoom = 1.0                                         # 视口缩放因子，仅当fixed有效时有效
         self.r_x = [1e10, -1e10]                                # 数据在x轴上的动态范围
         self.r_y = [1e10, -1e10]                                # 数据在y轴上的动态范围
         self.r_z = [1e10, -1e10]                                # 数据在z轴上的动态范围
         self.scale = 1.0                                        # 模型缩放比例
-        self.translate = np.array([0,0,0], dtype=np.float)      # 模型位移量
+        self.translate = np.array([0.0,0.0,0.0])                # 模型位移量
+    
+    def reset(self):
+        """视区复位"""
+        
+        for id in self.buffers:
+            self.buffers[id].delete()
+        
+        self.buffers.clear()
+        self.models.clear()
+        self.grid.clear()
+        self.zoom = 1.0
+        self.r_x = [1e10, -1e10]
+        self.r_y = [1e10, -1e10]
+        self.r_z = [1e10, -1e10]
+        self.scale = 1.0
+        self.translate = np.array([0.0,0.0,0.0])
     
     def _create_vbo(self, vertices):
         """创建顶点缓冲区对象"""
@@ -154,11 +170,14 @@ class WxGLRegion:
         if r_z and r_z[1] > self.r_z[1]:
             self.r_z[1] = r_z[1]
     
-    def _add_model(self, name, visible, genre, vars, **kwds):
+    def _add_model(self, name, visible, slide, genre, vars, **kwds):
         """增加模型"""
         
         if name not in self.models:
-            self.models.update({name:{'display':visible, 'component':list()}})
+            self.models.update({name:{'display':visible, 'slide':slide, 'component':list()}})
+        else:
+            self.models[name]['display'] = visible
+            self.models[name]['slide'] = slide
         
         self.models[name]['component'].append({
             'genre': genre,
@@ -173,12 +192,14 @@ class WxGLRegion:
             self.models[name]['component'][-1].update({'order':kwds['order']})
             self.models[name]['component'][-1].update({'rotate':kwds['rotate']})
             self.models[name]['component'][-1].update({'translate':kwds['translate']})
-            self.scene.start_sys_timer()
         
         dist_max = max(self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0])
         if dist_max > 0:
             self.scale = 2/dist_max
         self.translate = (-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2)
+        
+        if not self.models[name]['slide'] is None or 'order' in kwds and kwds['order']:
+            self.scene.start_sys_timer()
         
         self.refresh()
     
@@ -202,6 +223,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -223,11 +245,12 @@ class WxGLRegion:
         assert method in ('Q','T','F','P'), '期望参数method是以下选项至一："Q"、"T"、"F"、"P"'
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'fill', 'light', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'fill', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         fill = kwds.get('fill', True)
         light = kwds.get('light', 3)
@@ -277,7 +300,7 @@ class WxGLRegion:
         texture = self._create_texture(texture)
         kwds = {'light':light, 'fill':fill, 'rotate':rotate, 'translate':translate, 'order':order}
         
-        self._add_model(name, visible, 'surface', [vid, eid, v_type, gl_type, texture], **kwds)
+        self._add_model(name, visible, slide, 'surface', [vid, eid, v_type, gl_type, texture], **kwds)
     
     def _mesh(self, xs, ys, zs, texture, **kwds):
         """绘制网格
@@ -289,6 +312,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -309,11 +333,12 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'fill', 'light', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'fill', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         fill = kwds.get('fill', True)
         light = kwds.get('light', 3)
@@ -358,7 +383,7 @@ class WxGLRegion:
         gl_type = GL_QUADS
         kwds = {'light':light, 'fill':fill, 'rotate':rotate, 'translate':translate, 'order':order}
         
-        self._add_model(name, visible, 'mesh', [vid, eid, v_type, gl_type, texture], **kwds)
+        self._add_model(name, visible, slide, 'mesh', [vid, eid, v_type, gl_type, texture], **kwds)
     
     def normalize2d(self, vs):
         """二维数组正则化（基于L2范数）
@@ -428,7 +453,7 @@ class WxGLRegion:
     def refresh(self):
         """更新视区显示"""
         
-        wx.CallAfter(self.scene.update_grid)
+        wx.CallAfter(self.scene._update_grid)
         wx.CallAfter(self.scene.Refresh, False)
     
     def show_model(self, name):
@@ -449,6 +474,12 @@ class WxGLRegion:
         if name in self.models:
             self.models[name]['display'] = False
     
+    def drop_model(self, name):
+        """删除模型"""
+        
+        if name in self.models:
+            del self.models[name]
+    
     def text(self, text, pos, size=32, color=None, family=None, weight='normal', align=None, **kwds):
         """绘制2D文字
         
@@ -465,6 +496,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
@@ -478,11 +510,12 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
@@ -520,7 +553,7 @@ class WxGLRegion:
         pixels = pixels[::-1].ravel()
         pid = self._create_pbo(pixels)
         
-        self._add_model(name,  visible, 'text', [pid, rows, cols, pos])
+        self._add_model(name, visible, slide, 'text', [pid, rows, cols, pos])
     
     def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, **kwds):
         """绘制3D文字
@@ -544,8 +577,9 @@ class WxGLRegion:
                         'center-bottom' - 水平居中对齐，垂直下对齐
         kwds        - 关键字参数
                         name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否更新数据动态范围
-                        visible     - 是否显示
                         light       - 光照效果
                             0           - 仅使用环境光
                             1           - 开启前光源
@@ -563,12 +597,13 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['name', 'inside', 'visible', 'light', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'inside', 'visible', 'slide', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         inside = kwds.get('inside', True)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         light = kwds.get('light', 0)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
@@ -678,6 +713,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
@@ -691,11 +727,12 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
@@ -725,7 +762,7 @@ class WxGLRegion:
         gl_type = GL_POINTS
         kwds = {'rotate':rotate, 'translate':translate, 'order':order}
         
-        self._add_model(name, visible, 'point', [vid, eid, v_type, gl_type, size], **kwds)
+        self._add_model(name, visible, slide, 'point', [vid, eid, v_type, gl_type, size], **kwds)
         
     def line(self, vs, color, method='SINGLE', width=None, stipple=None, **kwds):
         """绘制线段
@@ -741,6 +778,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
@@ -754,11 +792,12 @@ class WxGLRegion:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'regulate', 'rotate', 'translate', 'order']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
+        slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
@@ -788,7 +827,7 @@ class WxGLRegion:
         gl_type = {'MULTI':GL_LINES, 'SINGLE':GL_LINE_STRIP, 'LOOP':GL_LINE_LOOP}[method]
         kwds = {'rotate':rotate, 'translate':translate, 'order':order}
         
-        self._add_model(name, visible, 'line', [vid, eid, v_type, gl_type, width, stipple], **kwds)
+        self._add_model(name, visible, slide, 'line', [vid, eid, v_type, gl_type, width, stipple], **kwds)
     
     def quad(self, vs, color=None, texture=None, texcoord=None, **kwds):
         """绘制一个或多个四角面（每个四角面的四个顶点通常在一个平面上）
@@ -800,6 +839,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -839,6 +879,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -876,6 +917,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -911,6 +953,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -956,6 +999,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -997,6 +1041,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -1035,6 +1080,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -1078,6 +1124,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -1132,6 +1179,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -1182,6 +1230,7 @@ class WxGLRegion:
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
                         inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
                         fill        - 是否填充颜色，默认填充
                         light       - 光照效果
@@ -1365,6 +1414,10 @@ class WxGLRegion:
             if key not in ['xlabel', 'ylabel', 'zlabel', 'xrange', 'yrange', 'zrange', 'xf', 'yf', 'zf', 'font', 'labelsize', 'ticksize', 'density', 'lc', 'lw', 'bg']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
+        for key in self.grid:
+            self.drop_model(self.grid[key])
+        self.grid.clear()
+        
         xlabel = kwds.get('xlabel', 'X')
         ylabel = kwds.get('ylabel', 'Y')
         zlabel = kwds.get('zlabel', 'Z')
@@ -1377,10 +1430,10 @@ class WxGLRegion:
         font = kwds.get('font', None)
         labelsize = kwds.get('labelsize', 40)
         ticksize = kwds.get('ticksize', 32)
-        s_min, s_max = kwds.get('density', (3,6))
+        s_min, s_max = kwds.get('density', (4,5))
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 0.5)
-        bg = kwds.get('bg', False)
+        bg = kwds.get('bg', None)
         
         dx, dy, dz = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1, (self.r_z[1]-self.r_z[0])*0.1
         x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xrange is None else xrange
@@ -1411,25 +1464,25 @@ class WxGLRegion:
         z_xmax_ymin = uuid.uuid1().hex
         z_xmax_ymax = uuid.uuid1().hex
         
-        self.scene.grid['top'].append((self, grid_top))
-        self.scene.grid['bottom'].append((self, grid_bottom))
-        self.scene.grid['left'].append((self, grid_left))
-        self.scene.grid['right'].append((self, grid_right))
-        self.scene.grid['front'].append((self, grid_front))
-        self.scene.grid['back'].append((self, grid_back))
+        self.grid.update({'top': grid_top})
+        self.grid.update({'bottom': grid_bottom})
+        self.grid.update({'left': grid_left})
+        self.grid.update({'right': grid_right})
+        self.grid.update({'front': grid_front})
+        self.grid.update({'back': grid_back})
         
-        self.scene.grid['x_ymin_zmin'].append((self, x_ymin_zmin))
-        self.scene.grid['x_ymin_zmax'].append((self, x_ymin_zmax))
-        self.scene.grid['x_ymax_zmin'].append((self, x_ymax_zmin))
-        self.scene.grid['x_ymax_zmax'].append((self, x_ymax_zmax))
-        self.scene.grid['y_xmin_zmin'].append((self, y_xmin_zmin))
-        self.scene.grid['y_xmin_zmax'].append((self, y_xmin_zmax))
-        self.scene.grid['y_xmax_zmin'].append((self, y_xmax_zmin))
-        self.scene.grid['y_xmax_zmax'].append((self, y_xmax_zmax))
-        self.scene.grid['z_xmin_ymin'].append((self, z_xmin_ymin))
-        self.scene.grid['z_xmin_ymax'].append((self, z_xmin_ymax))
-        self.scene.grid['z_xmax_ymin'].append((self, z_xmax_ymin))
-        self.scene.grid['z_xmax_ymax'].append((self, z_xmax_ymax))
+        self.grid.update({'x_ymin_zmin': x_ymin_zmin})
+        self.grid.update({'x_ymin_zmax': x_ymin_zmax})
+        self.grid.update({'x_ymax_zmin': x_ymax_zmin})
+        self.grid.update({'x_ymax_zmax': x_ymax_zmax})
+        self.grid.update({'y_xmin_zmin': y_xmin_zmin})
+        self.grid.update({'y_xmin_zmax': y_xmin_zmax})
+        self.grid.update({'y_xmax_zmin': y_xmax_zmin})
+        self.grid.update({'y_xmax_zmax': y_xmax_zmax})
+        self.grid.update({'z_xmin_ymin': z_xmin_ymin})
+        self.grid.update({'z_xmin_ymax': z_xmin_ymax})
+        self.grid.update({'z_xmax_ymin': z_xmax_ymin})
+        self.grid.update({'z_xmax_ymax': z_xmax_ymax})
         
         vs_zmin, vs_zmax = list(), list()
         for x in xx:

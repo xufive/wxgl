@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import os, wx
+import os
 import uuid
+import wx
 import wx.lib.agw.aui as aui
 import numpy as np
 
@@ -12,25 +13,24 @@ from . import cm
 BASE_PATH = os.path.dirname(__file__)
 
 
-class FigureFrame(wx.Frame):
+class WxGLFrame(wx.Frame):
     """"""
     
-    ID_RESTORE = wx.NewIdRef()      # 回到初始状态
-    ID_AXES = wx.NewIdRef()         # 坐标轴
+    ID_RESTORE = wx.NewIdRef()      # 恢复初始姿态
+    ID_PAUSE = wx.NewIdRef()        # 坐标轴
     ID_GRID = wx.NewIdRef()         # 网格
-    ID_ARGS = wx.NewIdRef()         # 设置
+    ID_STYLE = wx.NewIdRef()        # 设置
     ID_SAVE = wx.NewIdRef()         # 保存
     
-    def __init__(self, parent, size=(800,600), **kwds):
+    id_white = wx.NewIdRef()
+    id_black = wx.NewIdRef()
+    id_gray = wx.NewIdRef()
+    id_blue = wx.NewIdRef()
+    
+    def __init__(self, parent, size, **kwds):
         """构造函数"""
         
-        for key in kwds:
-            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        mode = kwds.get('mode', '3D')
-        
-        wx.Frame.__init__(self, None, -1, u'wxPlot', style=wx.DEFAULT_FRAME_STYLE)
+        wx.Frame.__init__(self, None, -1, 'wxPlot', style=wx.DEFAULT_FRAME_STYLE)
         self.parent = parent
         self.SetSize(size)
         self.Center()
@@ -38,25 +38,27 @@ class FigureFrame(wx.Frame):
         icon = wx.Icon(os.path.join(BASE_PATH, 'res', 'wxgl.ico'))
         self.SetIcon(icon)
         
-        bmp_restore = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_restore.png'), wx.BITMAP_TYPE_ANY)
-        bmp_axes = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_axes.png'), wx.BITMAP_TYPE_ANY)
-        bmp_grid = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_grid.png'), wx.BITMAP_TYPE_ANY)
-        bmp_args = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_args.png'), wx.BITMAP_TYPE_ANY)
+        self.scene = scene.WxGLScene(self, **kwds)
+        
         bmp_save = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_save.png'), wx.BITMAP_TYPE_ANY)
+        bmp_style = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_style.png'), wx.BITMAP_TYPE_ANY)
+        bmp_grid = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_grid.png'), wx.BITMAP_TYPE_ANY)
+        bmp_pause = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_pause.png'), wx.BITMAP_TYPE_ANY)
+        bmp_restore = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_restore.png'), wx.BITMAP_TYPE_ANY)
         
         self.tb = aui.AuiToolBar(self, -1, wx.DefaultPosition, wx.DefaultSize)
         self.tb.SetToolBitmapSize(wx.Size(32, 32))
-        self.tb.AddSimpleTool(self.ID_RESTORE, '复位', bmp_restore, '回到初始状态')
-        self.tb.AddSeparator()
-        if mode == '3D':
-            self.tb.AddSimpleTool(self.ID_AXES, '坐标轴', bmp_axes, '显示/隐藏坐标轴')
-            self.tb.AddSimpleTool(self.ID_GRID, '网格', bmp_grid, '显示/隐藏网格')
-        self.tb.AddSimpleTool(self.ID_ARGS, '背景', bmp_args, '设置背景颜色')
-        self.tb.AddSeparator()
-        self.tb.AddSimpleTool(self.ID_SAVE, '保存', bmp_save, '保存为文件')
-        self.tb.Realize()
         
-        self.scene = scene.WxGLScene(self, **kwds)
+        self.tb.AddSimpleTool(self.ID_RESTORE, '复位', bmp_restore, '恢复初始姿态')
+        self.tb.AddSimpleTool(self.ID_SAVE, '保存', bmp_save, '保存为文件')
+        self.tb.AddSeparator()
+        self.tb.AddSimpleTool(self.ID_STYLE, '背景', bmp_style, '设置背景颜色')
+        self.tb.AddSeparator()
+        self.tb.AddSimpleTool(self.ID_GRID, '显示/隐藏', bmp_grid, '显示/隐藏网格')
+        self.tb.AddSimpleTool(self.ID_PAUSE, '暂停/启动', bmp_pause, '暂停/启动（动画、旋转等动态显示）')
+        
+        self.tb.SetToolDropDown(self.ID_STYLE, True)
+        self.tb.Realize()
         
         self._mgr = aui.AuiManager()
         self._mgr.SetManagedWindow(self)
@@ -64,95 +66,104 @@ class FigureFrame(wx.Frame):
         self._mgr.AddPane(self.tb, aui.AuiPaneInfo().Name('ToolBar').ToolbarPane().Bottom().Floatable(False))
         self._mgr.Update()
         
-        self.Bind(wx.EVT_MENU, self.on_restore, id=self.ID_RESTORE)
-        self.Bind(wx.EVT_MENU, self.on_args, id=self.ID_ARGS)
+        self.Bind(wx.EVT_SIZE, self.on_resize)
+        self.Bind(aui.EVT_AUITOOLBAR_TOOL_DROPDOWN, self.on_style, id=self.ID_STYLE)
+        
         self.Bind(wx.EVT_MENU, self.on_save, id=self.ID_SAVE)
+        self.Bind(wx.EVT_MENU, self.on_style, id=self.ID_STYLE)
+        self.Bind(wx.EVT_MENU, self.on_pause, id=self.ID_PAUSE)
+        self.Bind(wx.EVT_MENU, self.on_restore, id=self.ID_RESTORE)
+        self.Bind(wx.EVT_MENU, self.on_grid, id=self.ID_GRID)
         
-        if mode == '3D':
-            self.Bind(wx.EVT_MENU, self.on_axes, id=self.ID_AXES)
-            self.Bind(wx.EVT_MENU, self.on_grid, id=self.ID_GRID)
+        self.Bind(wx.EVT_MENU, self.on_color, id=self.id_white)
+        self.Bind(wx.EVT_MENU, self.on_color, id=self.id_black)
+        self.Bind(wx.EVT_MENU, self.on_color, id=self.id_gray)
+        self.Bind(wx.EVT_MENU, self.on_color, id=self.id_blue)
+    
+    def on_color(self, evt):
+        """选择风格"""
         
-        # 创建axes视区，并添加部件
-        #if mode == '3D':
-        #    self.xyz = self.scene.add_region((0,0,0.15,0.15))
-        #    self.xyz.coordinate(name='xyz')
+        idx = evt.GetId()
+        if idx == self.id_black.Id:
+            color = 'black'
+        elif idx == self.id_gray.Id:
+            color = 'gray'
+        elif idx == self.id_blue.Id:
+            color = 'blue'
+        else:
+            color = 'white'
         
-        self.xyz_visible = True
-        self.grid_visible = False
+        self.scene.set_style(color)
+        self.parent.redraw()
+        self.scene.Refresh(False)
+    
+    def on_style(self, evt):
+        """设置背景颜色"""
+        
+        tb = evt.GetEventObject()
+        tb.SetToolSticky(evt.GetId(), True)
+        
+        submenu = wx.Menu()
+        bmp = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'item_16.png'), wx.BITMAP_TYPE_ANY)
+
+        m1 =  wx.MenuItem(submenu, self.id_white, "白色背景")
+        m1.SetBitmap(bmp)
+        submenu.Append(m1)
+
+        m2 =  wx.MenuItem(submenu, self.id_black, "黑色背景")
+        m2.SetBitmap(bmp)
+        submenu.Append(m2)
+
+        m3 =  wx.MenuItem(submenu, self.id_gray, "浅灰色背景")
+        m3.SetBitmap(bmp)
+        submenu.Append(m3)
+
+        m4 =  wx.MenuItem(submenu, self.id_blue, "深蓝色背景")
+        m4.SetBitmap(bmp)
+        submenu.Append(m4)
+
+        self.PopupMenu(submenu)
+        tb.SetToolSticky(evt.GetId(), False)
+        
+    def on_resize(self, evt):
+        """响应窗口尺寸改变事件"""
+        
+        #self.parent.redraw()
+        #self.scene.Refresh(False)
+        
+        evt.Skip()
     
     def on_restore(self, evt):
         """回到初始状态"""
         
-        self.scene.reset_posture()
-    
-    def on_axes(self, evt):
-        """显示/隐藏坐标轴"""
-        
-        self.xyz_visible = not self.xyz_visible
-        self.xyz.set_model_visible('xyz', self.xyz_visible)
-        self.xyz.refresh()
+        self.scene.restore_posture()
     
     def on_grid(self, evt):
-        """显示/隐藏网格"""
+        """显示/隐藏坐网格"""
         
-        self.grid_visible = not self.grid_visible
-        for ax in self.parent.subgraphs:
-            if ax.reg_main.grid_tick:
-                ax.reg_main.hide_ticks()
-            else:
-                ax.reg_main.ticks(**ax.reg_main.grid_tick_kwds)
+        self.scene.set_grid_visible()
     
-    def on_args(self, evt):
-        """调整参数"""
+    def on_pause(self, evt):
+        """暂停/启动"""
         
-        choices = ['暗黑', '纯白', '浅灰', '幽蓝']
-        styles = ['black', 'white', 'gray', 'blue']
-        dlg = wx.SingleChoiceDialog(self, '请选择配色方案', '设置背景颜色', choices, wx.CHOICEDLG_STYLE)
-        dlg.SetSelection(styles.index(self.scene.style))
-        
-        if dlg.ShowModal() == wx.ID_OK:
-            style = styles[choices.index(dlg.GetStringSelection())]
-            if style != self.scene.style:
-                self.scene.set_style(style)
-                self.scene.init_gl()
-                
-                for rid in self.scene.regions:
-                    reg = self.scene.regions[rid]
-                    reg.assembly = dict()
-                    reg.models = dict()
-                
-                self.parent.draw()
-                
-                if self.scene.mode == '3D':
-                    self.xyz.coordinate(name='xyz')
-                    if not self.xyz_visible:
-                        self.xyz.set_model_visible('xyz', False)
-                        self.xyz.refresh()
-                    
-                    if self.grid_visible:
-                        for ax in self.parent.subgraphs:
-                            ax.reg_main.show_ticks()
-        dlg.Destroy()
+        self.scene.pause_sys_timer()
     
     def on_save(self, evt):
         """保存为文件"""
         
-        dlg = wx.FileDialog(self, 
-            message = "保存为文件...", 
-            defaultDir = os.getcwd(),
-            defaultFile = "", 
-            wildcard = 'PNG (*.png)|*.png|JPG (*.jpg)|*.jpg',
-            style = wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
-        )
+        wildcard = 'PNG files (*.png)|*.png|JPEG file (*.jpg)|*.jpg'
+        dlg = wx.FileDialog(self, message='保存为文件', defaultDir=os.getcwd(), defaultFile="", wildcard=wildcard, style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+        dlg.SetFilterIndex(0)
         
         if dlg.ShowModal() == wx.ID_OK:
-            fn = dlg.GetPaths()[0]
-            self.scene.save_scene(fn, alpha=True, buffer='FRONT')
+            fn = dlg.GetPath()
+            alpha = os.path.splitext(fn)[-1] == '.png'
+            self.scene.save_scene(fn, alpha=alpha)
         
         dlg.Destroy()
-        
 
-class Figure:
+
+class WxGLFigure:
     """wxplot的API"""
     
     def __init__(self, size=(800,600), **kwds):
@@ -160,50 +171,41 @@ class Figure:
         
         size        - 画布分辨率
         kwds        - 关键字参数
-                        head        - 定义方向：'x+'|'y+'|'z+'
-                        zoom        - 视口缩放因子
-                        mode        - 2D/3D模式
-                        aim         - 观察焦点
                         dist        - 相机位置与目标点位之间的距离
                         view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
-                        interval    - 模型动画帧间隔时间（单位：ms）
-                        style       - 场景风格，'black'|'white'|'gray'
         """
         
         for key in kwds:
-            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
+            if key not in ['dist', 'view', 'elevation', 'azimuth']:
                 raise KeyError('不支持的关键字参数：%s'%key)
-        
-        if 'elevation' not in kwds:
-            kwds.update({'elevation':10})
-        if 'azimuth' not in kwds:
-            kwds.update({'azimuth':30})
         
         self.size = size
         self.kwds = kwds
         
-        self.cm = cm.ColorManager()
         self.app = None
         self.ff = None
+        self.cm = cm.ColorManager()
         self.curr_ax = None
         self.assembly = list()
         self.subgraphs = list()
+        
+        self._create_frame()
     
-    def create_frame(self):
+    def _create_frame(self):
         """生成窗体"""
         
         if not self.app:
             self.app = wx.App()
         
         if not self.ff:
-            self.ff = FigureFrame(self, size=self.size, **self.kwds)
+            self.ff = WxGLFrame(self, size=self.size, **self.kwds)
             self.curr_ax = None
             self.assembly = list()
             self.subgraphs = list()
     
-    def destroy_frame(self):
+    def _destroy_frame(self):
         """销毁窗体"""
         
         self.app.Destroy()
@@ -214,15 +216,25 @@ class Figure:
         self.app = None
         self.ff = None
     
-    def draw(self):
+    def _draw(self):
         """绘制"""
         
         for item in self.assembly:
             getattr(item[0], item[1])(*item[2], **item[3])
         
-        if self.ff.scene.mode == '2D':
-            for ax in self.subgraphs:
+        for ax in self.subgraphs:
+            if self.ff.scene.mode == '2D':
                 ax.reg_main.ticks2d()
+            else:
+                ax.reg_main.ticks3d()
+    
+    def redraw(self):
+        """重新绘制"""
+        
+        for reg in self.ff.scene.regions:
+            reg.reset()
+        
+        self._draw()
     
     def show(self, rotation=None, **kwds):
         """显示画布
@@ -240,18 +252,15 @@ class Figure:
                         interval    - 帧间隔，以ms为单位，默认值为20
         """
         
-        self.create_frame()
+        self._create_frame()
         try:
-            self.draw()
+            self._draw()
             self.ff.Show()
-            self.ff.scene.start_slide()
-            if rotation:
-                self.ff.scene.auto_rotate(rotation=rotation, **kwds)
         except Exception as e:
             print(str(e))
         finally:
             self.app.MainLoop()
-            self.destroy_frame()
+            self._destroy_frame()
     
     def savefig(self, fn, alpha=False):
         """保存画布为文件
@@ -260,16 +269,16 @@ class Figure:
         alpha       - 透明通道开关
         """
         
-        self.create_frame()
+        self._create_frame()
         try:
-            self.draw()
+            self._draw()
             self.ff.Show()
             self.ff.scene.save_scene(fn, alpha=alpha)
         except Exception as e:
             print(str(e))
         finally:
             self.ff.Destroy()
-            self.destroy_frame()
+            self._destroy_frame()
     
     def add_axes(self, pos, padding=(20,20,20,20)):
         """添加子图
@@ -280,27 +289,9 @@ class Figure:
         padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
         """
         
-        self.create_frame()
-        ax = self.ff.scene.add_axes(pos, padding=padding)
-        self.subgraphs.append(ax)
-        self.curr_ax = ax
-        
-        return ax
-    
-    def cmap(self, *args, **kwds):
-        """数值颜色映射
-        
-        data        - 数据
-        cm          - 颜色映射表名
-        kwds        - 关键字参数
-                        invalid     - 无效数据的标识
-                        invalid_c   - 无效数据的颜色
-                        datamax     - 数据最大值，默认为None
-                        datamin     - 数据最小值，默认为None
-                        alpha       - 透明度，None表示返回RGB格式
-        """
-        
-        return self.cm.cmap(*args, **kwds)
+        self._create_frame()
+        self.curr_ax = self.ff.scene.add_axes(pos, padding=padding)
+        self.subgraphs.append(self.curr_ax)
     
     def add_widget(self, reg, func, *args, **kwds):
         """添加部件"""

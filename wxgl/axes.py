@@ -7,7 +7,7 @@ import numpy as np
 from . import region
 
 
-class WxAxes:
+class WxGLAxes:
     """子图类"""
     
     def __init__(self, scene, pos, padding=(20,20,20,20)):
@@ -43,6 +43,70 @@ class WxAxes:
         self.reg_main = self.scene.add_region(box)
         self.reg_title = None
         self.reg_cb = None
+    
+    def plot(self, x, y, z=None, color=None, cm=None, size=0.0, width=1.0, style='solid', method='SINGLE', **kwds):
+        """绘制点和线
+        
+        x/y/z       - 顶点的x/y/z坐标集，元组、列表或一维数组，长度相等。若zs为None，则自动补为全0数组
+        color       - 颜色，或每个顶点对应的数据（使用cm参数映射为每一个顶点的颜色）
+        cm          - 颜色映射表
+        size        - 顶点大小。若为0或None，则表示不绘制点，只绘制线
+        width       - 线宽，0.0~10.0之间的浮点数。若为0或None，则表示不绘制线，只绘制点
+        style       - 线型
+                        'solid'     - 实线
+                        'dashed'    - 虚线
+                        'dotted'    - 点线
+                        'dash-dot'  - 虚点线
+        method      - 绘制方法
+                        'MULTI'     - 线段
+                        'SINGLE'    - 连续线段
+                        'LOOP'      - 闭合线段
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        if isinstance(x, (tuple,list)):
+            x = np.array(x)
+        
+        if isinstance(y, (tuple,list)):
+            y = np.array(y)
+        
+        if z is None:
+            z = np.zeros(x.shape)
+            self.scene.set_mode('2D')
+            self.scene.set_style('white')
+        elif isinstance(z, (tuple,list)):
+            z = np.array(z)
+        
+        assert x.shape == y.shape == z.shape and x.ndim == 1, '参数xs/ys/zs长度不一致'
+        
+        if cm is None:
+            color = self.cm.color2c(color)
+        else:
+            if isinstance(color, (tuple,list)):
+                color = np.array(color)
+            assert isinstance(color, np.ndarray) and color.shape == x.shape and x.ndim == 1, '期望参数color是和xyz长度相同的元组、列表或numpy数组'
+            color = self.cm.cmap(color, cm)
+        
+        vs = np.stack((x, y, z), axis=1)
+        style = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
+        
+        if not width is None and width > 0:
+            self.fig.add_widget(self.reg_main, 'line', vs, color, method=method, width=width, stipple=style, **kwds)
+        if not size is None and size > 0:
+            self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
         
     def colorbar(self, drange, cmap, loc, **kwds):
         """绘制colorbar
@@ -142,62 +206,6 @@ class WxAxes:
         family = kwds.get('family', None)
         
         self.fig.add_widget(self.reg_main, 'text3d', text, size=size, color=color, pos=pos, **kwds)
-    
-    def plot(self, xs, ys, zs=None, color=None, size=0.0, width=1.0, style='solid', cmap='hsv', caxis='z', **kwds):
-        """绘制点和线
-        
-        xs/ys/zs    - 顶点的x/y/z坐标集，元组、列表或一维数组类型，长度相等。若zs为None，则自动补为全0的数组
-        color       - 全部或每一个顶点的颜色。None表示使用cmap参数映射颜色
-        size        - 顶点的大小，整型或浮点型。若为0，则表示不绘制点，只绘制线
-        width       - 线宽，0.0~10.0之间的浮点数。若为0，则表示不绘制线，只绘制点
-        style       - 线型
-                        'solid'     - 实线
-                        'dashed'    - 虚线
-                        'dotted'    - 点线
-                        'dash-dot'  - 虚点线
-        cmap        - 颜色映射表，color为None时有效
-        caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
-        kwds        - 关键字参数
-                        slide       - 是否作为动画播放的帧
-                        name        - 模型名
-        """
-        
-        if isinstance(xs, (tuple,list)):
-            xs = np.array(xs)
-        
-        if isinstance(ys, (tuple,list)):
-            ys = np.array(ys)
-        
-        assert isinstance(xs, np.ndarray) and isinstance(ys, np.ndarray), '期望参数xs或ys是元组、列表或数组类型'
-        assert xs.shape == ys.shape and xs.ndim == 1, '期望参数xs和ys是长度相等的一维数组'
-        
-        if zs is None:
-            zs = np.zeros(xs.shape)
-        elif isinstance(zs, (tuple,list)):
-            zs = np.array(zs)
-        
-        assert isinstance(zs, np.ndarray) and zs.shape == xs.shape, '期望参数zs是元组、列表或数组类型，且与xs和ys长度相等'
-        assert isinstance(size, (float, int)), '期望参数size是整型或浮点型'
-        assert cmap in self.cm.cms, '未知的颜色映射表名："%s"'%cmap
-        
-        if color is None:
-            if self.scene.mode == '2D':
-                caxis = 'y'
-            
-            if caxis == 'x':
-                color = self.cm.cmap(xs, cmap)
-            elif caxis == 'y':
-                color = self.cm.cmap(ys, cmap)
-            else:
-                color = self.cm.cmap(zs, cmap)
-        
-        vs = np.stack((xs, ys, zs), axis=1)
-        style = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
-        
-        if width > 0:
-            self.fig.add_widget(self.reg_main, 'line', vs, color, method='SINGLE', width=width, stipple=style, **kwds)
-        if size > 0:
-            self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
     
     def scatter(self, vs, color=None, size=1.0, cmap='hsv', caxis='z'):
         """绘制散点图
