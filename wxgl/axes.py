@@ -43,13 +43,138 @@ class WxGLAxes:
         self.reg_main = self.scene.add_region(box)
         self.reg_title = None
         self.reg_cb = None
+        
+        self.xlabel = 'X'
+        self.ylabel = 'Y'
+        self.zlabel = 'Z'
+        
+        self.colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        self.ci = 0
+    
+    def get_color(self):
+        """返回下一个可用的默认颜色"""
+        
+        color = self.colors[self.ci]
+        self.ci = (self.ci+1)%len(self.colors)
+        
+        return color
+    
+    def set_2d_mode(self):
+        """设置scene为2D模式"""
+        
+        self.scene.set_proj('ortho')
+        self.scene.set_mode('2D')
+        self.scene.set_style('white')
+        self.scene.set_posture(zoom=1.5, oecs=(-0.1,0,0), save=True)
+    
+    def set_xlabel(self, text):
+        """设置x轴名称，text为文本字符串"""
+        
+        self.xlabel = text
+    
+    def set_ylabel(self, text):
+        """设置y轴名称，text为文本字符串"""
+        
+        self.ylabel = text
+    
+    def set_zlabel(self, text):
+        """设置z轴名称，text为文本字符串"""
+        
+        self.zlabel = text
+    
+    def title(self, text, size=64, color=None, **kwds):
+        """绘制标题
+        
+        text        - 文本字符串
+        size        - 文字大小，整形，默认64
+        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        kwds        - 关键字参数
+                        family      - （系统支持的）字体，None表示当前默认的字体
+                        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        """
+        
+        for key in kwds:
+            if key not in ['align', 'valign', 'family', 'weight']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        family = kwds.get('family', None)
+        weight = kwds.get('weight', 'bold')
+        kwds = {'family':family, 'weight':'weight', 'align':'center-middle', 'inside':False}
+        
+        if self.reg_title is None:
+            a0, a1, a2, a3 = self.reg_main.box
+            w, h = a2, a3*0.15
+            self.reg_main.reset_box((a0, a1, a2, a3*0.85))
+            
+            if not self.reg_cb is None:
+                b0, b1, b2, b3 = self.reg_cb.box
+                w += b2
+                self.reg_cb.reset_box((b0, b1, b2, b3*0.85))
+            
+            box = (a0, a1+a3*0.85, w, h)
+            self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
+        
+        box = np.array([[-1,0,0],[-1,-0.3,0],[1,-0.3,0],[1,0,0]])
+        self.fig.add_widget(self.reg_title, 'text3d', text, size=size, color=color, box=box, **kwds)
+        
+    def colorbar(self, drange, cmap, **kwds):
+        """绘制colorbar
+        
+        drange      - 值域范围或标注序列，元组或列表
+        cmap        - 调色板名称
+        kwds        - 关键字参数
+                        subject         - 标题
+                        subject_size    - 标题字号，默认44
+                        tick_size       - 刻度字号，默认40
+                        tick_format     - 刻度标注格式化函数，默认str
+                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+                        endpoint        - 刻度是否包含值域范围的两个端点值
+        """
+        
+        if self.reg_cb is None:
+            a0, a1, a2, a3 = self.reg_main.box
+            self.reg_main.reset_box((a0, a1, a2*0.85, a3))
+            
+            box = (a0+a2*0.85, a1, a2*0.15, a3)
+            self.reg_cb = self.scene.add_region(box, fixed=True, proj='ortho')
+        
+        self.fig.add_widget(self.reg_cb, 'colorbar', drange, cmap, mode='VR', **kwds)
+    
+    def text(self, text, size=40, color=None, pos=(0,0,0), **kwds):
+        """绘制文本
+        
+        text        - 文本字符串
+        size        - 文字大小，整形，默认40
+        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        pos         - 文本位置，list或numpy.ndarray类型
+        kwds        - 关键字参数
+                        family      - （系统支持的）字体
+                        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
+        """
+        
+        for key in kwds:
+            if key not in ['family', 'weight']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        if isinstance(pos, (tuple,list)):
+            pos = np.array(pos)
+        
+        if len(pos) == 2:
+            self.set_2d_mode()
+            
+            x, y = pos
+            box = np.array([[x,y+0.1,0],[x,y,0],[x+0.1,y,0],[x+0.1,y+0.1,0]])
+            kwds.update({'align':'left-bottom', 'light':0})
+            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, **kwds)
+        else:
+            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, **kwds)
     
     def plot(self, x, y, z=None, color=None, cm=None, size=0.0, width=1.0, style='solid', method='SINGLE', **kwds):
         """绘制点和线
         
         x/y/z       - 顶点的x/y/z坐标集，元组、列表或一维数组，长度相等。若zs为None，则自动补为全0数组
-        color       - 颜色，或每个顶点对应的数据（使用cm参数映射为每一个顶点的颜色）
-        cm          - 颜色映射表
+        color       - 颜色，或每个顶点对应的颜色，或每个顶点对应的数据（此种情况下cm参数不能为None）
+        cm          - 颜色映射表，仅当参数color为每个顶点对应的数据时有效
         size        - 顶点大小。若为0或None，则表示不绘制点，只绘制线
         width       - 线宽，0.0~10.0之间的浮点数。若为0或None，则表示不绘制线，只绘制点
         style       - 线型
@@ -85,20 +210,24 @@ class WxGLAxes:
         
         if z is None:
             z = np.zeros(x.shape)
-            self.scene.set_mode('2D')
-            self.scene.set_style('white')
+            self.set_2d_mode()
         elif isinstance(z, (tuple,list)):
             z = np.array(z)
         
         assert x.shape == y.shape == z.shape and x.ndim == 1, '参数xs/ys/zs长度不一致'
         
-        if cm is None:
-            color = self.cm.color2c(color)
-        else:
+        if not cm is None:
             if isinstance(color, (tuple,list)):
                 color = np.array(color)
-            assert isinstance(color, np.ndarray) and color.shape == x.shape and x.ndim == 1, '期望参数color是和xyz长度相同的元组、列表或numpy数组'
+            
+            assert isinstance(color, np.ndarray) and color.shape == x.shape, 'cm参数有效时，期望color是和x或y等长的元组、列表或一维数组'
             color = self.cm.cmap(color, cm)
+        else:
+            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
+                color = self.get_color()
+            
+            if not isinstance(color, np.ndarray) or not color.shape in ((*x.shape,3), (*x.shape,4)):
+                color = self.cm.color2c(color)
         
         vs = np.stack((x, y, z), axis=1)
         style = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
@@ -107,112 +236,13 @@ class WxGLAxes:
             self.fig.add_widget(self.reg_main, 'line', vs, color, method=method, width=width, stipple=style, **kwds)
         if not size is None and size > 0:
             self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
-        
-    def colorbar(self, drange, cmap, loc, **kwds):
-        """绘制colorbar
-        
-        drange      - 值域范围，tuple类型
-        cmap        - 调色板名称
-        loc         - 位置，top|bottom|left|right
-        kwds        - 关键字参数
-                        length          - ColorBar所在视区的长边长度，默认短边长度为1
-                        subject         - 标题
-                        subject_size    - 标题字号
-                        label_size      - 标注字号
-                        label_format    - 标注格式化所用lambda函数
-                        label_precision - 标注精度，形如'%.2f'或'%d'
-                        tick_line       - 刻度线长度
-                        endpoint        - 刻度是否包含值域范围的两个端点值
-                        name            - 模型名
-                        inside          - 是否更新数据动态范围
-                        visible         - 是否显示
-        """
-        
-        if loc == 'left':
-            b0, b1, b2, b3 = self.reg_main.box
-            box = (b0, b1, b2*0.2, b3)
-            self.reg_main.reset_box((b0+b2*0.2, b1, b2*0.8, b3))
-            reg_cb = self.scene.add_region(box, fixed=True)
-        elif loc == 'right':
-            b0, b1, b2, b3 = self.reg_main.box
-            box = (b0+b2*0.8, b1, b2*0.2, b3)
-            self.reg_main.reset_box((b0, b1, b2*0.8, b3))
-            reg_cb = self.scene.add_region(box, fixed=True)
-        elif loc == 'bottom':
-            b0, b1, b2, b3 = self.reg_main.box
-            box = (b0, b1, b2, b3*0.15)
-            self.reg_main.reset_box((b0, b1+b3*0.15, b2, b3*0.85))
-            reg_cb = self.scene.add_region(box, fixed=True)
-        elif loc == 'top':
-            b0, b1, b2, b3 = self.reg_main.box
-            box = (b0, b1+b3*0.85, b2, b3*0.15)
-            self.reg_main.reset_box((b0, b1, b2, b3*0.85))
-            reg_cb = self.scene.add_region(box, fixed=True)
-        
-        self.fig.add_widget(reg_cb, 'colorbar', drange, cmap, loc, **kwds)
-    
-    def title(self, text, size=48, color=None, pos=(0,0,0), **kwds):
-        """绘制标题
-        
-        text        - 文本字符串
-        size        - 文字大小，整形
-        color       - 文本颜色，预定义的颜色，或长度为3的列表或元组
-        pos         - 文本位置，list或numpy.ndarray类型，shape=(3，)
-        kwds        - 关键字参数
-                        align       - left/right/center分别表示左对齐、右对齐、居中（默认）
-                        valign      - top/bottom/middle分别表示上对齐、下对齐、垂直居中（默认）
-                        family      - （系统支持的）字体
-                        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
-        """
-        
-        for key in kwds:
-            if key not in ['align', 'valign', 'family', 'weight']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        align = kwds.get('align', 'center')
-        valign = kwds.get('valign', 'middle')
-        weight = kwds.get('weight', 'bold')
-        family = kwds.get('family', None)
-        
-        if not self.reg_title:
-            b0, b1, b2, b3 = self.reg_main.box
-            box = (b0, b1+b3*0.88, b2, b3*0.12)
-            self.reg_main.reset_box((b0, b1, b2, b3*0.88))
-            self.reg_title = self.scene.add_region(box, fixed=True)
-        
-        self.fig.add_widget(self.reg_title, 'text3d', text, size=size*4, color=color, pos=pos, **kwds)
-    
-    def text(self, text, size=32, color=None, pos=(0,0,0), **kwds):
-        """绘制文本
-        
-        text        - 文本字符串
-        size        - 文字大小，整形
-        color       - 文本颜色，预定义的颜色，或长度为3的列表或元组
-        pos         - 文本位置，list或numpy.ndarray类型，shape=(3，)
-        kwds        - 关键字参数
-                        align       - left/right/center分别表示左对齐、右对齐、居中（默认）
-                        valign      - top/bottom/middle分别表示上对齐、下对齐、垂直居中（默认）
-                        family      - （系统支持的）字体
-                        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
-        """
-        
-        for key in kwds:
-            if key not in ['align', 'valign', 'family', 'weight']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        align = kwds.get('align', 'center')
-        valign = kwds.get('valign', 'middle')
-        weight = kwds.get('weight', 'bold')
-        family = kwds.get('family', None)
-        
-        self.fig.add_widget(self.reg_main, 'text3d', text, size=size, color=color, pos=pos, **kwds)
     
     def scatter(self, vs, color=None, size=1.0, cmap='hsv', caxis='z'):
         """绘制散点图
         
         vs          - 顶点坐标集，numpy.ndarray类型，shape=(n,3)
         color       - 顶点颜色或颜色集，None表示使用cmap参数映射颜色
-        size        - 顶点的大小，整型或浮点型
+        size        - 顶点的大小，浮点型
         cmap        - 颜色映射表，color为None时有效。使用vs的z坐标映射颜色
         caxis       - 用于颜色映射的坐标轴数据，2D模式下自动转为'y'
         """

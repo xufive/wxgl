@@ -67,10 +67,11 @@ class WxGLScene(glcanvas.GLCanvas):
                         zoom        - 视口缩放因子
                         interval    - 定时器间隔（毫秒）
                         style       - 场景风格
-                            'black'     - 背景黑色，文本灰色
-                            'white'     - 背景白色，文本黑色
-                            'gray'      - 背景灰色，文本黑色
-                            'blue'      - 背景蓝色，文本黄色
+                            'white'     - 皓月白
+                            'black'     - 石墨黑
+                            'gray'      - 国际灰
+                            'blue'      - 太空蓝
+                            'royal'     - 宝石蓝
         """
         
         for key in kwds:
@@ -87,7 +88,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.dist = kwds.get('dist', 5)                                     # 眼睛与ECS原点的距离，默认5个单位
         self.azimuth = kwds.get('azimuth', 0)                               # 方位角，默认0°
         self.elevation = kwds.get('elevation', 0)                           # 仰角，默认0°
-        self.view = np.array(kwds.get('view', [-1,1,-1,1,2.5,1000]))        # 视景体
+        self.view = np.array(kwds.get('view', [-1,1,-1,1,2.6,1000]))        # 视景体
         self.zoom = kwds.get('zoom', 1.0 if self.proj=='cone' else 1.5)     # 视口缩放因子，默认1
         self.interval = kwds.get('interval', 30)                            # 定时器间隔，默认30毫秒
         self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
@@ -95,6 +96,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.eye = None                                                     # 眼睛的位置
         self.up = None                                                      # 向上的方向
         self.store = dict()                                                 # 存储相机姿态、缩放比例等
+        self.rotate = None                                                  # 相机自动水平旋转角度
         self._set_eye_and_up(save=True)                                     # 根据方位角、仰角和距离设置眼睛位置和向上的方向
         
         self.fm = fm.FontManager()                                          # 字体管理对象
@@ -108,6 +110,9 @@ class WxGLScene(glcanvas.GLCanvas):
         self.regions = list()                                               # 存储视区信息
         self.mpos = None                                                    # 鼠标位置
         
+        self.osize = None                                                   # Scene窗口的初始分辨率
+        self.tscale = (1,1)                                                 # 和初始分辨率相比，Scene窗口的宽高变化率
+        
         self.sys_timer = wx.Timer()                                         # 模型几何变换定时器
         self.sys_n = 0                                                      # 模型几何变换计数器
         self.eye_timer = wx.Timer()                                         # 眼睛定时器
@@ -115,6 +120,8 @@ class WxGLScene(glcanvas.GLCanvas):
         self._init_gl()                                                     # 画布初始化
         
         self.parent.Bind(wx.EVT_CLOSE, self.on_close)
+        self.sys_timer.Bind(wx.EVT_TIMER, self.on_sys_timer)
+        
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
         self.Bind(wx.EVT_SIZE, self.on_resize)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase)
@@ -125,23 +132,22 @@ class WxGLScene(glcanvas.GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)
         self.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
-        
-        self.sys_timer.Bind(wx.EVT_TIMER, self.on_sys_timer)
-        self.eye_timer.Bind(wx.EVT_TIMER, self.on_eye_timer)
     
     def _set_style(self, style):
         """设置风格"""
         
-        assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是black/white/gray/blue其中之一'
+        assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是black/white/gray/blue/royal其中之一'
         
         if style == 'black':
             return (0.0, 0.0, 0.0, 1.0), (0.9, 0.9, 0.9)
         if style == 'white':
-            return (1.0, 1.0, 1.0, 1.0), (0.1, 0.1, 0.1)
+            return (1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
         if style == 'gray':
             return (0.9, 0.9, 0.9, 1.0), (0.0, 0.0, 0.3)
         if style == 'blue':
             return (0.0, 0.0, 0.2, 1.0), (0.9, 1.0, 1.0)
+        if style == 'royal':
+            return (0.133, 0.302, 0.361, 1.0), (1.0, 1.0, 0.9)
     
     def _set_eye_and_up(self, save=False):
         """设置眼睛的位置和向上的方向
@@ -200,6 +206,9 @@ class WxGLScene(glcanvas.GLCanvas):
             self.SetCurrent(self.context)
             self.size = self.GetClientSize()
             self.Refresh(False)
+        
+        if self.osize is None:
+            self.osize = self.GetSize()
         
         evt.Skip()
         
@@ -279,22 +288,22 @@ class WxGLScene(glcanvas.GLCanvas):
         """模型定时器函数"""
         
         self.sys_n += 1
-        self.Refresh(False)
-    
-    def on_eye_timer(self, evt):
-        """眼睛定时器函数"""
+        if not self.rotate is None:
+            azimuth = self.azimuth + self.rotate
+            self.set_posture(azimuth=azimuth)
         
-        pass
+        self._update_grid()
+        self.Refresh(False)
     
     def _update_grid(self):
         """刷新坐标轴网格"""
         
-        if not self.grid_is_show:
+        if self.mode == '2D' or not self.grid_is_show:
             return
         
         for reg in self.regions:
             if not reg.grid:
-                return
+                continue
             
             if self.elevation > 0:
                 reg.hide_model(reg.grid['top'])
@@ -410,8 +419,9 @@ class WxGLScene(glcanvas.GLCanvas):
     def _wxglDrawPixels(self, reg, vars):
         """绘制像素"""
         
+        k = 1/pow(self.zoom, 1/2)
         pid, rows, cols, pos = vars
-        glPixelZoom(1/self.zoom, 1/self.zoom)
+        glPixelZoom(k, k)
         glDepthMask(GL_FALSE)
         glRasterPos3fv(pos)
         reg.buffers[pid].bind()
@@ -454,8 +464,6 @@ class WxGLScene(glcanvas.GLCanvas):
     def _draw_gl(self):
         """绘制模型"""
         
-        #print(self.eye, self.oecs, self.up, self.dist, self.zoom)
-        
         for reg in self.regions:
             x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
             w_reg, h_reg = int(reg.box[2]*self.size[0])+1, int(reg.box[3]*self.size[1])
@@ -466,10 +474,11 @@ class WxGLScene(glcanvas.GLCanvas):
             glLoadIdentity()
             
             if reg.fixed:
-                if self.mode == '2D':
-                    zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
-                else:
-                    zoom, lookat = reg.zoom, (0,-5,0,0,0,0,0,0,1)
+                zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
+                #if self.mode == '2D':
+                #    zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
+                #else:
+                #    zoom, lookat = reg.zoom, (0,-5,0,0,0,0,0,0,1)
             else:
                 zoom, lookat = self.zoom, (*self.eye, *self.oecs, *self.up)
             
@@ -558,6 +567,13 @@ class WxGLScene(glcanvas.GLCanvas):
                         if 'order' in item:
                             glPopMatrix()
     
+    def set_proj(self, proj):
+        """设置投影模式"""
+        
+        self.proj = proj
+        for reg in self.regions:
+            reg.proj = proj
+    
     def set_mode(self, mode):
         """设置2D/3D模式"""
         
@@ -605,13 +621,23 @@ class WxGLScene(glcanvas.GLCanvas):
     def set_grid_visible(self):
         """显示或隐藏坐标轴网格"""
         
-        self.grid_is_show = not self.grid_is_show
-        if not self.grid_is_show:
+        if self.mode == '2D':
+            self.grid_is_show = not self.grid_is_show
             for reg in self.regions:
                 for key in reg.grid:
-                    reg.hide_model(reg.grid[key])
+                    if self.grid_is_show:
+                        reg.show_model(reg.grid[key])
+                    else:
+                        reg.hide_model(reg.grid[key])
+        else:
+            self.grid_is_show = not self.grid_is_show
+            if not self.grid_is_show:
+                for reg in self.regions:
+                    for key in reg.grid:
+                        reg.hide_model(reg.grid[key])
+            
+            self._update_grid()
         
-        self._update_grid()
         self.Refresh(False)
         
     def save_scene(self, fn, alpha=True, buffer='FRONT'):

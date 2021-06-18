@@ -39,6 +39,11 @@ class WxGLRegion:
         self.scale = 1.0                                        # 模型缩放比例
         self.translate = np.array([0.0,0.0,0.0])                # 模型位移量
     
+    def reset_box(self, box):
+        """重置视区大小"""
+        
+        self.box = box
+    
     def reset(self):
         """视区复位"""
         
@@ -110,7 +115,7 @@ class WxGLRegion:
         
         return texture
     
-    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, endpoint=True):
+    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8):
         """返回合适的Colorbar标注值
         
         v_min       - 数据最小值
@@ -118,7 +123,6 @@ class WxGLRegion:
         ks          - 分段选项
         s_min       - 分段数最小值
         s_max       - 分段数最大值
-        endpoint    - 是否包含v_min和v_max
         """
         
         r = v_max - v_min
@@ -134,16 +138,10 @@ class WxGLRegion:
                 result.append(round(v, 6))
             v += step
         
-        if endpoint:
-            if result[0] > v_min:
-                result.insert(0, v_min)
-            if result[-1] < v_max:
-                result.append(v_max)
-            
-            if result[1]-result[0] < (result[2]-result[1])*0.25:
-                result.remove(result[1])
-            if result[-1]-result[-2] < (result[-2]-result[-3])*0.25:
-                result.remove(result[-2])
+        if result[0] > v_min:
+            result.insert(0, v_min)
+        if result[-1] < v_max:
+            result.append(v_max)
         
         return result
     
@@ -170,6 +168,14 @@ class WxGLRegion:
         if r_z and r_z[1] > self.r_z[1]:
             self.r_z[1] = r_z[1]
     
+    def reset_scale_translate(self):
+        """重新计算scale和translate"""
+        
+        dist_max = max(self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0])
+        if dist_max > 0:
+            self.scale = 2/dist_max
+        self.translate = (-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2)
+    
     def _add_model(self, name, visible, slide, genre, vars, **kwds):
         """增加模型"""
         
@@ -193,10 +199,7 @@ class WxGLRegion:
             self.models[name]['component'][-1].update({'rotate':kwds['rotate']})
             self.models[name]['component'][-1].update({'translate':kwds['translate']})
         
-        dist_max = max(self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0])
-        if dist_max > 0:
-            self.scale = 2/dist_max
-        self.translate = (-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2)
+        self.reset_scale_translate()
         
         if not self.models[name]['slide'] is None or 'order' in kwds and kwds['order']:
             self.scene.start_sys_timer()
@@ -478,6 +481,12 @@ class WxGLRegion:
         """删除模型"""
         
         if name in self.models:
+            for item in self.models[name]['component']:
+                self.buffers[item['args'][0]].delete()
+                if item['genre'] in ['line', 'point', 'surface', 'mesh']:
+                    self.buffers[item['args'][1]].delete()
+                if item['genre'] == 'surface' or item['genre'] == 'mesh':
+                    self.delete_texture(item['args'][4])
             del self.models[name]
     
     def text(self, text, pos, size=32, color=None, family=None, weight='normal', align=None, **kwds):
@@ -486,7 +495,7 @@ class WxGLRegion:
         text        - 文本字符串
         pos         - 文本位置，元组、列表或numpy数组
         size        - 文字大小，整型
-        color       - 文本颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
         family      - （系统支持的）字体，None表示当前默认的字体
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         align       - 对齐方式
@@ -553,6 +562,7 @@ class WxGLRegion:
         pixels = pixels[::-1].ravel()
         pid = self._create_pbo(pixels)
         
+        kwds = {'rotate':rotate, 'translate':translate, 'order':order}
         self._add_model(name, visible, slide, 'text', [pid, rows, cols, pos])
     
     def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, **kwds):
@@ -561,7 +571,7 @@ class WxGLRegion:
         text        - 文本字符串
         box         - 文本显式区域的左上、左下、右下、右上4个点的坐标，浮点型元组、列表或numpy数组
         size        - 文字大小，整型
-        color       - 文本颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
         family      - （系统支持的）字体，None表示当前默认的字体
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         align       - 对齐方式
@@ -600,15 +610,7 @@ class WxGLRegion:
             if key not in ['name', 'inside', 'visible', 'slide', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        name = kwds.get('name', uuid.uuid1().hex)
-        inside = kwds.get('inside', True)
-        visible = kwds.get('visible', True)
-        slide = kwds.get('slide', None)
-        light = kwds.get('light', 0)
-        regulate = kwds.get('regulate', None)
-        rotate = kwds.get('rotate', None)
-        translate = kwds.get('translate', None)
-        order = kwds.get('order', None)
+        kwds.update({'light':0})
         
         if isinstance(box, (tuple, list)) and len(box) == 4:
             box = np.array(box, dtype=np.float64)
@@ -620,10 +622,20 @@ class WxGLRegion:
         else:
             color = self.cm.color2c(color)
         
+        cw0, ch0 = self.scene.osize[0]*self.box[2], self.scene.osize[1]*self.box[3]
+        cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
+        
+        if cw0 > ch0:
+            k = pow(self.scene.tscale[1], 1/2)
+        else:
+            k = pow(self.scene.tscale[0], 1/2)
+        
+        p = pow(max(self.box[2], self.box[3]), 1/3)
+        size = int(p*k*size/pow(self.scale, 1/2))
+        
         texture = self.fm.text2img(text, size, color, family, weight)
         texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
         
-        cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
         iw, ih = texture.shape[1], texture.shape[0]
         if cw > ch:
             w, h = iw/ch, ih/ch
@@ -693,22 +705,13 @@ class WxGLRegion:
             box[1] = box[0] + vhli
             box[2] = box[3] + vhri
         
-        if regulate:
-            box = self.transform(box, *regulate)
-        
-        if inside:
-            r_x = (np.nanmin(box[:,0]),np.nanmax(box[:,0]))
-            r_y = (np.nanmin(box[:,1]),np.nanmax(box[:,1]))
-            r_z = (np.nanmin(box[:,2]),np.nanmax(box[:,2]))
-            self.set_data_range(r_x, r_y, r_z)
-        
         self._surface(box, texture, texcoord, 'Q', **kwds)
         
     def point(self, vs, color, size=None, **kwds):
         """绘制点
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)
-        color       - 顶点或顶点集颜色，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 顶点或顶点集颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         size        - 点的大小，整数，None表示使用当前设置
         kwds        - 关键字参数
                         name        - 模型名
@@ -768,7 +771,7 @@ class WxGLRegion:
         """绘制线段
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)
-        color       - 顶点或顶点集颜色，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 顶点或顶点集颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         method      - 绘制方法
                         'MULTI'     - 线段
                         'SINGLE'    - 连续线段
@@ -833,7 +836,7 @@ class WxGLRegion:
         """绘制一个或多个四角面（每个四角面的四个顶点通常在一个平面上）
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)，n为4的整数倍。四角面的四个顶点按逆时针顺序排列
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -873,7 +876,7 @@ class WxGLRegion:
         """绘制一个或多个三角面
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)，n为3的整数倍。三角面的三个顶点按逆时针顺序排列
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -911,7 +914,7 @@ class WxGLRegion:
         """绘制扇面
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)，首元素为中心点，其余元素为圆弧上顺序排列的点
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -949,7 +952,7 @@ class WxGLRegion:
         """绘制多边形
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)，多边形顺序列出的顶点
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
@@ -982,7 +985,7 @@ class WxGLRegion:
         """绘制表面
         
         vs          - 顶点坐标集，numpy.ndarray类型，shape=(n,3)
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         method      - 绘制方法
@@ -1036,7 +1039,7 @@ class WxGLRegion:
         xs          - 顶点集的x坐标集，numpy.ndarray类型，shape=(rows,cols)
         ys          - 顶点集的y坐标集，numpy.ndarray类型，shape=(rows,cols)
         zs          - 顶点集的z坐标集，numpy.ndarray类型，shape=(rows,cols)
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
         kwds        - 关键字参数
                         name        - 模型名
@@ -1074,7 +1077,7 @@ class WxGLRegion:
         
         center      - 球心坐标，元组、列表或numpy数组
         radius      - 半径，浮点型
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
         slices      - 分片数，整型
         kwds        - 关键字参数
@@ -1119,7 +1122,7 @@ class WxGLRegion:
         center      - 锥底圆心坐标，元组、列表或numpy数组
         spire       - 锥尖坐标，元组、列表或numpy数组
         radius      - 锥底半径，浮点型
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         slices      - 分片数，整型
         kwds        - 关键字参数
                         name        - 模型名
@@ -1175,7 +1178,7 @@ class WxGLRegion:
         
         center      - 中心坐标，元组、列表或numpy数组
         side        - 棱长，整型、浮点型，或长度为3的元组、列表、numpy数组
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
@@ -1225,7 +1228,7 @@ class WxGLRegion:
         
         center      - 圆柱上下端面圆心坐标，元组、列表或numpy数组，每个元素表示一个端面的圆心坐标
         radius      - 圆柱半径，浮点型
-        color       - 颜色，支持形如'#FF0000'形式，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         slices      - 分片数，整型
         kwds        - 关键字参数
                         name        - 模型名
@@ -1285,9 +1288,8 @@ class WxGLRegion:
         cm          - 调色板名称
         mode        - 水平或垂直模式，可选项：'H'|'VR'|'VL'
         kwds        - 关键字参数
-                        side            - 显示区域长短边之比，'H'模式默认8，'VR'和'VL'模式默认5
                         subject         - 标题
-                        subject_size    - 标题字号，默认48
+                        subject_size    - 标题字号，默认44
                         tick_size       - 刻度字号，默认40
                         tick_format     - 刻度标注格式化函数，默认str
                         density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
@@ -1301,12 +1303,11 @@ class WxGLRegion:
             mode = 'VR'
         
         for key in kwds:
-            if key not in ['side', 'subject', 'subject_size', 'tick_size', 'tick_format', 'density', 'endpoint']:
+            if key not in ['subject', 'subject_size', 'tick_size', 'tick_format', 'density', 'endpoint']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         subject = kwds.get('subject', None)
-        subject_size = kwds.get('subject_size', 48)
-        side = kwds.get('side', 8 if mode == 'H' else 5)
+        subject_size = kwds.get('subject_size', 44)
         tick_size = kwds.get('tick_size', 40)
         tick_format = kwds.get('tick_format', str)
         s_min, s_max = kwds.get('density', (3,6))
@@ -1314,9 +1315,17 @@ class WxGLRegion:
         
         dmin, dmax = drange[0], drange[-1]
         if len(drange) > 2:
-            ticks = drange if endpoint else drange[1:-1]
+            ticks = drange
         else:
-            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max, endpoint=endpoint)
+            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
+        
+        if endpoint:
+            if (ticks[1]-ticks[0])/(ticks[2]-ticks[1]) < 0.2:
+                ticks.remove(ticks[1])
+            if (ticks[-1]-ticks[-2])/(ticks[-2]-ticks[-3]) < 0.2:
+                ticks.remove(ticks[-2])
+        else:
+            ticks = ticks[1:-1]
         
         texcoord = ((0,1),(0,0),(1,0),(1,1))
         colors = self.cm.cmap(np.linspace(dmin, dmax, 256), cm)
@@ -1325,62 +1334,56 @@ class WxGLRegion:
         else:
             texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,3))
         
+        cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
+        side = max(cw, ch)/min(cw, ch)
+        
         if mode == 'H':
-            w, h = side, 1
+            w, h = 1.0*side, 1.2
         else:
-            w, h = 1, side
+            w, h = 1, 1.4*side
         
         if mode.upper() == 'VR':
             if subject is None:
-                vs = np.array([[-0.5*w,0,0.5*h],[-0.5*w,0,-0.5*h],[-0.2*w,0,-0.5*h],[-0.2*w,0,0.5*h]])
+                vs = np.array([[-0.5*w,0.5*h,0],[-0.5*w,-0.5*h,0],[-0.2*w,-0.5*h,0],[-0.2*w,0.5*h,0]])
             else:
-                vs = np.array([[-0.5*w,0,0.42*h],[-0.5*w,0,-0.5*h],[-0.2*w,0,-0.5*h],[-0.2*w,0,0.42*h]])
-                box = np.array([[-0.5*w,0,0.5*h],[-0.5*w,0,0.42*h],[-0.2*w,0,0.42*h],[-0.2*w,0,0.5*h]])
+                vs = np.array([[-0.5*w,0.42*h,0],[-0.5*w,-0.5*h,0],[-0.2*w,-0.5*h,0],[-0.2*w,0.42*h,0]])
+                box = np.array([[-0.5*w,0.5*h,0],[-0.5*w,0.42*h,0],[-0.2*w,0.42*h,0],[-0.2*w,0.5*h,0]])
                 self.text3d(subject, box, size=subject_size, align='center-middle', light=0, inside=False)
             
-            tk = (np.max(vs[:,2])-np.min(vs[:,2]))/(dmax-dmin)
-            if not endpoint:
-                ticks = ticks[1:-1]
-            
+            tk = (np.max(vs[:,1])-np.min(vs[:,1]))/(dmax-dmin)
             for t in ticks:
-                z = (t-dmin)*tk - 0.5*h
-                box = np.array([[-0.08*w,0,z+0.1],[-0.08*w,0,z-0.1],[0.5*w,0,z-0.1],[0.5*w,0,z+0.1]])
+                y = (t-dmin)*tk - 0.5*h
+                box = np.array([[-0.08*w,y+0.1,0],[-0.08*w,y-0.1,0],[0.5*w,y-0.1,0],[0.5*w,y+0.1,0]])
                 self.text3d(tick_format(t), box, size=tick_size, align='left-middle', light=0, inside=False)
-                self.line(np.array([[-0.2*w,0,z],[-0.13*w,0,z]]), self.scene.style[1], width=0.5, inside=False)
+                self.line(np.array([[-0.2*w,y,0],[-0.13*w,y,0]]), self.scene.style[1], width=0.5, inside=False)
         elif mode.upper() == 'VL':
             if subject is None:
-                vs = np.array([[0.2*w,0,0.5*h],[0.2*w,0,-0.5*h],[0.5*w,0,-0.5*h],[0.5*w,0,0.5*h]])
+                vs = np.array([[0.2*w,0.5*h,0],[0.2*w,-0.5*h,0],[0.5*w,-0.5*h,0],[0.5*w,0.5*h,0]])
             else:
-                vs = np.array([[0.2*w,0,0.42*h],[0.2*w,0,-0.5*h],[0.5*w,0,-0.5*h],[0.5*w,0,0.42*h]])
-                box = np.array([[0.2*w,0,0.5*h],[0.2*w,0,0.42*h],[0.5*w,0,0.42*h],[0.5*w,0,0.5*h]])
+                vs = np.array([[0.2*w,0.42*h,0],[0.2*w,-0.5*h,0],[0.5*w,-0.5*h,0],[0.5*w,0.42*h,0]])
+                box = np.array([[0.2*w,0.5*h,0],[0.2*w,0.42*h,0],[0.5*w,0.42*h,0],[0.5*w,0.5*h,0]])
                 self.text3d(subject, box, size=subject_size, align='center-middle', light=0, inside=False)
             
-            tk = (np.max(vs[:,2])-np.min(vs[:,2]))/(dmax-dmin)
-            if not endpoint:
-                ticks = ticks[1:-1]
-            
+            tk = (np.max(vs[:,1])-np.min(vs[:,1]))/(dmax-dmin)
             for t in ticks:
-                z = (t-dmin)*tk - 0.5*h
-                box = np.array([[-0.5*w,0,z+0.1],[-0.5*w,0,z-0.1],[0.08*w,0,z-0.1],[0.08*w,0,z+0.1]])
+                y = (t-dmin)*tk - 0.5*h
+                box = np.array([[-0.5*w,y+0.1,0],[-0.5*w,y-0.1,0],[0.08*w,y-0.1,0],[0.08*w,y+0.1,0]])
                 self.text3d(tick_format(t), box, size=tick_size, align='right-middle', light=0, inside=False)
-                self.line(np.array([[0.13*w,0,z],[0.2*w,0,z]]), self.scene.style[1], width=0.5, inside=False)
+                self.line(np.array([[0.13*w,y,0],[0.2*w,y,0]]), self.scene.style[1], width=0.5, inside=False)
         else:
             if subject is None:
-                vs = np.array([[-0.5*w,0,0.2*h],[-0.5*w,0,-0.1*h],[0.5*w,0,-0.1*h],[0.5*w,0,0.2*h]])
+                vs = np.array([[-0.5*w,0.2*h,0],[-0.5*w,-0.1*h,0],[0.5*w,-0.1*h,0],[0.5*w,0.2*h,0]])
             else:
-                vs = np.array([[-0.5*w,0,0.2*h],[-0.5*w,0,-0.1*h],[0.5*w,0,-0.1*h],[0.5*w,0,0.2*h]])
-                box = np.array([[-0.5*w,0,0.5*h],[-0.5*w,0,0.3*h],[0.5*w,0,0.3*h],[0.5*w,0,0.5*h]])
+                vs = np.array([[-0.5*w,0.2*h,0],[-0.5*w,-0.1*h,0],[0.5*w,-0.1*h,0],[0.5*w,0.2*h,0]])
+                box = np.array([[-0.5*w,0.5*h,0],[-0.5*w,0.3*h,0],[0.5*w,0.3*h,0],[0.5*w,0.5*h,0]])
                 self.text3d(subject, box, size=subject_size, align='center-bottom', light=0, inside=False)
             
             tk = (np.max(vs[:,0])-np.min(vs[:,0]))/(dmax-dmin)
-            if not endpoint:
-                ticks = ticks[1:-1]
-            
             for t in ticks:
                 x = (t-dmin)*tk - 0.5*w
-                box = np.array([[x-0.1,0,-0.25*h],[x-0.1,0,-0.5*h],[x+0.1,0,-0.5*h],[x+0.1,0,-0.25*h]])
+                box = np.array([[x-0.1,-0.25*h,0],[x-0.1,-0.5*h,0],[x+0.1,-0.5*h,0],[x+0.1,-0.25*h,0]])
                 self.text3d(tick_format(t), box, size=tick_size, align='center-top', light=0, inside=False)
-                self.line(np.array([[x,0,-0.1*h],[x,0,-0.18*h]]), self.scene.style[1], width=0.5, inside=False)
+                self.line(np.array([[x,-0.1*h,0],[x,-0.18*h,0]]), self.scene.style[1], width=0.5, inside=False)
         
         self._surface(vs, texture=texture, texcoord=texcoord, method='Q', light=0, inside=False)
         
@@ -1398,10 +1401,10 @@ class WxGLRegion:
                         yf              - y轴刻度标注格式化函数，默认str
                         zf              - z轴刻度标注格式化函数，默认str
                         font            - 字体，默None，表示使用默认字体
-                        labelsize       - 坐标轴标注字号，默认40
+                        labelsize       - 坐标轴标注字号，默认36
                         ticksize        - 刻度标注字号，默认32
                         density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
-                        lc              - 网格线颜色，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+                        lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
                         
@@ -1428,7 +1431,7 @@ class WxGLRegion:
         yf = kwds.get('yf', str)
         zf = kwds.get('zf', str)
         font = kwds.get('font', None)
-        labelsize = kwds.get('labelsize', 40)
+        labelsize = kwds.get('labelsize', 36)
         ticksize = kwds.get('ticksize', 32)
         s_min, s_max = kwds.get('density', (4,5))
         lc = kwds.get('lc', np.array(self.scene.style[1]))
@@ -1440,9 +1443,9 @@ class WxGLRegion:
         y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yrange is None else yrange
         z_min, z_max = (self.r_z[0]-dz, self.r_z[1]+dz) if zrange is None else zrange
         
-        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max, endpoint=True)
-        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max, endpoint=True)
-        zz = self._get_tick_label(z_min, z_max, s_min=s_min, s_max=s_max, endpoint=True)
+        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max)
+        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max)
+        zz = self._get_tick_label(z_min, z_max, s_min=s_min, s_max=s_max)
         
         grid_top = uuid.uuid1().hex
         grid_bottom = uuid.uuid1().hex
@@ -1520,12 +1523,12 @@ class WxGLRegion:
             vs_ymax.append((xx[0], y_max, z))
             vs_ymax.append((xx[-1], y_max, z))
         
-        self.line(np.array(vs_zmax), lc, method='MULTI', width=lw, inside=False, name=grid_top)
-        self.line(np.array(vs_zmin), lc, method='MULTI', width=lw, inside=False, name=grid_bottom)
-        self.line(np.array(vs_xmax), lc, method='MULTI', width=lw, inside=False, name=grid_right)
-        self.line(np.array(vs_xmin), lc, method='MULTI', width=lw, inside=False, name=grid_left)
-        self.line(np.array(vs_ymax), lc, method='MULTI', width=lw, inside=False, name=grid_back)
-        self.line(np.array(vs_ymin), lc, method='MULTI', width=lw, inside=False, name=grid_front)
+        self.line(np.array(vs_zmax), lc, width=lw, method='MULTI', inside=False, name=grid_top)
+        self.line(np.array(vs_zmin), lc, width=lw, method='MULTI', inside=False, name=grid_bottom)
+        self.line(np.array(vs_xmax), lc, width=lw, method='MULTI', inside=False, name=grid_right)
+        self.line(np.array(vs_xmin), lc, width=lw, method='MULTI', inside=False, name=grid_left)
+        self.line(np.array(vs_ymax), lc, width=lw, method='MULTI', inside=False, name=grid_back)
+        self.line(np.array(vs_ymin), lc, width=lw, method='MULTI', inside=False, name=grid_front)
         
         if not bg is None:
             xy_x, xy_y = np.meshgrid(xx, yy)
@@ -1548,18 +1551,21 @@ class WxGLRegion:
             self.mesh(yz_xmax, yz_y, yz_z, color=bg, inside=False, light=0, name=grid_right)
         
         gap, down, i, j, k = 0.2*labelsize/(40*self.scale), 0.03*ticksize/32+0.12*labelsize/(40*self.scale), len(xx)%2, len(yy)%2, len(zz)%2
-        self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_max+gap), size=labelsize, inside=False, name=x_ymin_zmax)
-        self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_min-down), size=labelsize, inside=False, name=x_ymin_zmin)
-        self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_max+gap), size=labelsize, inside=False, name=x_ymax_zmax)
-        self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_min-down), size=labelsize, inside=False, name=x_ymax_zmin)
-        self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmin_zmax)
-        self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmin_zmin)
-        self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmax_zmax)
-        self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmax_zmin)
-        self.text(zlabel, pos=(x_max+gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymax)
-        self.text(zlabel, pos=(x_min-gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymax)
-        self.text(zlabel, pos=(x_min-gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymin)
-        self.text(zlabel, pos=(x_max+gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymin)
+        if xlabel:
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_max+gap), size=labelsize, inside=False, name=x_ymin_zmax)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_min-down), size=labelsize, inside=False, name=x_ymin_zmin)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_max+gap), size=labelsize, inside=False, name=x_ymax_zmax)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_min-down), size=labelsize, inside=False, name=x_ymax_zmin)
+        if ylabel:
+            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmin_zmax)
+            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmin_zmin)
+            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmax_zmax)
+            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmax_zmin)
+        if zlabel:
+            self.text(zlabel, pos=(x_max+gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymax)
+            self.text(zlabel, pos=(x_min-gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymax)
+            self.text(zlabel, pos=(x_min-gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymin)
+            self.text(zlabel, pos=(x_max+gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymin)
         
         gap, down = 0.05*ticksize/(32*self.scale), 0.1*ticksize/(32*self.scale)
         for x in xx[1:-1]:
@@ -1589,10 +1595,10 @@ class WxGLRegion:
                         xf              - x轴刻度标注格式化函数，默认str
                         yf              - y轴刻度标注格式化函数，默认str
                         font            - 字体，默None，表示使用默认字体
-                        labelsize       - 坐标轴标注字号，默认40
-                        ticksize        - 刻度标注字号，默认32
+                        labelsize       - 坐标轴标注字号，默认48
+                        ticksize        - 刻度标注字号，默认40
                         density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
-                        lc              - 网格线颜色，支持形如'#FF0000'形式，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+                        lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
                         
@@ -1612,23 +1618,58 @@ class WxGLRegion:
         xf = kwds.get('xf', str)
         yf = kwds.get('yf', str)
         font = kwds.get('font', None)
-        labelsize = kwds.get('labelsize', 40)
-        ticksize = kwds.get('ticksize', 32)
+        labelsize = kwds.get('labelsize', 48)
+        ticksize = kwds.get('ticksize', 40)
         s_min, s_max = kwds.get('density', (3,6))
         lc = kwds.get('lc', np.array(self.scene.style[1]))
-        lw = kwds.get('lw', 0.5)
+        lw = kwds.get('lw', 1)
         bg = kwds.get('bg', False)
         
-        dx, dy = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1
+        dx, dy = (self.r_x[1]-self.r_x[0])*0.03, (self.r_y[1]-self.r_y[0])*0.03
+        da = max(dx,dy)
+        
         x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xrange is None else xrange
         y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yrange is None else yrange
         
-        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max, endpoint=True)
-        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max, endpoint=True)
+        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max)
+        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max)
         
-        vsx = np.array([[x_min,y_min,0],[x_max,y_min,0]])
-        vsy = np.array([[x_min,y_min,0],[x_min,y_max,0]])
+        self.line(np.array([[x_min,y_min,0],[x_max,y_min,0]]), lc, width=lw, inside=False)
+        self.line(np.array([[x_min,y_min,0],[x_min,y_max,0]]), lc, width=lw, inside=False)
         
-        self.line(vsx, lc, width=lw, inside=False)
-        self.line(vsy, lc, width=lw, inside=False)
+        self.surface(np.array([[x_min,y_max+da,0],[x_min-da/4,y_max,0],[x_min+da/4,y_max,0]]), lc, method='T', inside=False, light=False)
+        self.surface(np.array([[x_max+da,y_min,0],[x_max,y_min+da/4,0],[x_max,y_min-da/4,0]]), lc, method='T', inside=False, light=False)
         
+        for x in xx[1:-1]:
+            self.line(np.array([[x,y_min,0],[x,y_min-da/2,0]]), lc, width=0.5, inside=False)
+            box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da,y_min-2*da,0],[x+da,y_min-da,0]])
+            self.text3d(xf(x), box, size=ticksize, align='center-top', inside=False, light=False)
+        
+        for y in yy[1:-1]:
+            self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5, inside=False)
+            box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
+            self.text3d(yf(y), box, size=ticksize, align='right-middle', inside=False, light=False)
+        
+        if xlabel:
+            box = np.array([[x_max,y_min-da,0],[x_max,y_min-2*da,0],[x_max+da,y_min-2*da,0],[x_max+da,y_min-da,0]])
+            self.text3d(xlabel, box, size=labelsize, align='left-top', inside=False, light=False)
+        if ylabel:
+            box = np.array([[x_min-2*da,y_max+da,0],[x_min-2*da,y_max,0],[x_min-da,y_max,0],[x_min-da,y_max+da,0]])
+            self.text3d(ylabel, box, size=labelsize, align='right-bottom', inside=False, light=False)
+        
+        for key in self.grid:
+            self.drop_model(self.grid[key])
+        
+        name = uuid.uuid1().hex
+        self.grid.clear()
+        self.grid.update({'grid':name})
+        
+        vs = list()
+        for x in xx[1:]:
+            vs.append((x, y_min, -0.1))
+            vs.append((x, y_max, -0.1))
+        for y in yy[1:]:
+            vs.append((x_min, y, -0.1))
+            vs.append((x_max, y, -0.1))
+        
+        self.line(np.array(vs), lc, width=0.5, method='MULTI', stipple=(1,0xF0F0), inside=False, name=name)

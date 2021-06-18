@@ -16,16 +16,16 @@ BASE_PATH = os.path.dirname(__file__)
 class WxGLFrame(wx.Frame):
     """"""
     
-    ID_RESTORE = wx.NewIdRef()      # 恢复初始姿态
-    ID_PAUSE = wx.NewIdRef()        # 坐标轴
-    ID_GRID = wx.NewIdRef()         # 网格
-    ID_STYLE = wx.NewIdRef()        # 设置
-    ID_SAVE = wx.NewIdRef()         # 保存
+    ID_STYLE = wx.NewIdRef()    # 风格
+    ID_RESTORE = wx.NewIdRef()  # 相机复位
+    ID_SAVE = wx.NewIdRef()     # 保存
+    ID_PAUSE = wx.NewIdRef()    # 动态显示
+    ID_GRID = wx.NewIdRef()     # 网格
     
-    id_white = wx.NewIdRef()
-    id_black = wx.NewIdRef()
-    id_gray = wx.NewIdRef()
-    id_blue = wx.NewIdRef()
+    id_white = wx.NewIdRef()    # 皓月白
+    id_black = wx.NewIdRef()    # 石墨黑
+    id_gray = wx.NewIdRef()     # 国际灰
+    id_blue = wx.NewIdRef()     # 太空蓝
     
     def __init__(self, parent, size, **kwds):
         """构造函数"""
@@ -34,28 +34,29 @@ class WxGLFrame(wx.Frame):
         self.parent = parent
         self.SetSize(size)
         self.Center()
-        
-        icon = wx.Icon(os.path.join(BASE_PATH, 'res', 'wxgl.ico'))
-        self.SetIcon(icon)
+        self.SetIcon(wx.Icon(os.path.join(BASE_PATH, 'res', 'wxgl.ico')))
         
         self.scene = scene.WxGLScene(self, **kwds)
+        self.csize = self.scene.GetClientSize()
         
-        bmp_save = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_save.png'), wx.BITMAP_TYPE_ANY)
-        bmp_style = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_style.png'), wx.BITMAP_TYPE_ANY)
-        bmp_grid = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_grid.png'), wx.BITMAP_TYPE_ANY)
-        bmp_pause = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_pause.png'), wx.BITMAP_TYPE_ANY)
-        bmp_restore = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_restore.png'), wx.BITMAP_TYPE_ANY)
+        bmp_style = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_style_32.png'), wx.BITMAP_TYPE_ANY)
+        bmp_restore = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_restore_32.png'), wx.BITMAP_TYPE_ANY)
+        bmp_save = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_save_32.png'), wx.BITMAP_TYPE_ANY)
+        self.bmp_play = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_play_32.png'), wx.BITMAP_TYPE_ANY)
+        self.bmp_stop = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_stop_32.png'), wx.BITMAP_TYPE_ANY)
+        self.bmp_show = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_show_32.png'), wx.BITMAP_TYPE_ANY)
+        self.bmp_hide = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_hide_32.png'), wx.BITMAP_TYPE_ANY)
         
         self.tb = aui.AuiToolBar(self, -1, wx.DefaultPosition, wx.DefaultSize)
         self.tb.SetToolBitmapSize(wx.Size(32, 32))
         
-        self.tb.AddSimpleTool(self.ID_RESTORE, '复位', bmp_restore, '恢复初始姿态')
+        self.tb.AddSimpleTool(self.ID_STYLE, '风格', bmp_style, '绘图风格')
+        self.tb.AddSeparator()
+        self.tb.AddSimpleTool(self.ID_RESTORE, '复位', bmp_restore, '位置还原')
         self.tb.AddSimpleTool(self.ID_SAVE, '保存', bmp_save, '保存为文件')
         self.tb.AddSeparator()
-        self.tb.AddSimpleTool(self.ID_STYLE, '背景', bmp_style, '设置背景颜色')
-        self.tb.AddSeparator()
-        self.tb.AddSimpleTool(self.ID_GRID, '显示/隐藏', bmp_grid, '显示/隐藏网格')
-        self.tb.AddSimpleTool(self.ID_PAUSE, '暂停/启动', bmp_pause, '暂停/启动（动画、旋转等动态显示）')
+        self.tb.AddSimpleTool(self.ID_GRID, '网格', self.bmp_hide, '显示/隐藏网格')
+        self.tb.AddSimpleTool(self.ID_PAUSE, '动态显示', self.bmp_play, '停止/开启动态显示）')
         
         self.tb.SetToolDropDown(self.ID_STYLE, True)
         self.tb.Realize()
@@ -66,7 +67,7 @@ class WxGLFrame(wx.Frame):
         self._mgr.AddPane(self.tb, aui.AuiPaneInfo().Name('ToolBar').ToolbarPane().Bottom().Floatable(False))
         self._mgr.Update()
         
-        self.Bind(wx.EVT_SIZE, self.on_resize)
+        self.scene.Bind(wx.EVT_SIZE, self.on_resize)
         self.Bind(aui.EVT_AUITOOLBAR_TOOL_DROPDOWN, self.on_style, id=self.ID_STYLE)
         
         self.Bind(wx.EVT_MENU, self.on_save, id=self.ID_SAVE)
@@ -104,32 +105,60 @@ class WxGLFrame(wx.Frame):
         tb.SetToolSticky(evt.GetId(), True)
         
         submenu = wx.Menu()
-        bmp = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'item_16.png'), wx.BITMAP_TYPE_ANY)
-
-        m1 =  wx.MenuItem(submenu, self.id_white, "白色背景")
-        m1.SetBitmap(bmp)
+        bmp_white = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'white_16.png'), wx.BITMAP_TYPE_ANY)
+        bmp_black = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'black_16.png'), wx.BITMAP_TYPE_ANY)
+        bmp_gray = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'gray_16.png'), wx.BITMAP_TYPE_ANY)
+        bmp_blue = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'blue_16.png'), wx.BITMAP_TYPE_ANY)
+        
+        m1 =  wx.MenuItem(submenu, self.id_white, "皓月白")
+        m1.SetBitmap(bmp_white)
         submenu.Append(m1)
 
-        m2 =  wx.MenuItem(submenu, self.id_black, "黑色背景")
-        m2.SetBitmap(bmp)
+        m2 =  wx.MenuItem(submenu, self.id_black, "石墨黑")
+        m2.SetBitmap(bmp_black)
         submenu.Append(m2)
 
-        m3 =  wx.MenuItem(submenu, self.id_gray, "浅灰色背景")
-        m3.SetBitmap(bmp)
+        m3 =  wx.MenuItem(submenu, self.id_gray, "国际灰")
+        m3.SetBitmap(bmp_gray)
         submenu.Append(m3)
 
-        m4 =  wx.MenuItem(submenu, self.id_blue, "深蓝色背景")
-        m4.SetBitmap(bmp)
+        m4 =  wx.MenuItem(submenu, self.id_blue, "太空蓝")
+        m4.SetBitmap(bmp_blue)
         submenu.Append(m4)
 
         self.PopupMenu(submenu)
         tb.SetToolSticky(evt.GetId(), False)
+    
+    def set_tb_status(self):
+        """设置工具按钮的图片"""
+        
+        if self.scene.sys_timer.IsRunning():
+            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_stop)
+            self.tb.SetToolShortHelp(self.ID_PAUSE, '停止动态显示')
+        else:
+            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
+            self.tb.SetToolShortHelp(self.ID_PAUSE, '开启动态显示')
+        
+        if self.scene.grid_is_show:
+            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_hide)
+            self.tb.SetToolShortHelp(self.ID_GRID, '隐藏网格')
+        else:
+            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_show)
+            self.tb.SetToolShortHelp(self.ID_GRID, '隐藏网格')
+        
+        self.tb.Realize()
         
     def on_resize(self, evt):
         """响应窗口尺寸改变事件"""
         
-        #self.parent.redraw()
-        #self.scene.Refresh(False)
+        self.csize = self.scene.GetClientSize()
+        if self.scene.osize is None:
+            self.scene.osize = self.csize
+        self.scene.size = self.csize
+        self.scene.tscale = (self.csize[0]/self.scene.osize[0], self.csize[1]/self.scene.osize[1])
+        
+        self.parent.redraw()
+        self.scene.Refresh(False)
         
         evt.Skip()
     
@@ -142,11 +171,13 @@ class WxGLFrame(wx.Frame):
         """显示/隐藏坐网格"""
         
         self.scene.set_grid_visible()
+        self.set_tb_status()
     
     def on_pause(self, evt):
         """暂停/启动"""
         
         self.scene.pause_sys_timer()
+        self.set_tb_status()
     
     def on_save(self, evt):
         """保存为文件"""
@@ -166,12 +197,12 @@ class WxGLFrame(wx.Frame):
 class WxGLFigure:
     """wxplot的API"""
     
-    def __init__(self, size=(800,600), **kwds):
+    def __init__(self, size=(1280,960), **kwds):
         """构造函数
         
-        size        - 画布分辨率
+        size        - 画布分辨率， 默认1280x960
         kwds        - 关键字参数
-                        dist        - 相机位置与目标点位之间的距离
+                        dist        - 眼睛与ECS原点的距离
                         view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
@@ -224,9 +255,24 @@ class WxGLFigure:
         
         for ax in self.subgraphs:
             if self.ff.scene.mode == '2D':
-                ax.reg_main.ticks2d()
+                ax.reg_main.ticks2d(xlabel=ax.xlabel, ylabel=ax.xlabel)
+                
+                cw, ch = self.ff.csize[0]*ax.reg_main.box[2], self.ff.csize[1]*ax.reg_main.box[3]
+                w, h = ax.reg_main.r_x[1]-ax.reg_main.r_x[0], ax.reg_main.r_y[1]-ax.reg_main.r_y[0]
+                cd, d = max(cw, ch), max(w, h)
+                cw, ch = cw/cd, ch/cd
+                w, h = w/d, h/d
+                
+                if ch < 1 and h < 1:
+                    self.ff.scene.set_posture(zoom=1.5*max(ch, h), save=True)
+                elif cw < 1 and w < 1:
+                    self.ff.scene.set_posture(zoom=1.5*max(ch, h), save=True)
             else:
-                ax.reg_main.ticks3d()
+                ax.reg_main.ticks3d(xlabel=ax.xlabel, ylabel=ax.ylabel, zlabel=ax.zlabel)
+        
+        self.ff.set_tb_status()
+        if not self.ff.scene.sys_timer.IsRunning():
+            self.ff.tb.EnableTool(self.ff.ID_PAUSE, False)
     
     def redraw(self):
         """重新绘制"""
@@ -236,44 +282,32 @@ class WxGLFigure:
         
         self._draw()
     
-    def show(self, rotation=None, **kwds):
-        """显示画布
+    def show(self, rotate=None):
+        """显示画布。rotate为每个定时周期内水平旋转的角度，浮点数，None表示无旋转"""
         
-        rotation    - 旋转模式
-                        None        - 无旋转
-                        'h+'        - 水平顺时针旋转（默认方式）
-                        'h-'        - 水平逆时针旋转
-                        'v+'        - 垂直前翻旋转
-                        'v-'        - 垂直后翻旋转
-        kwds        - 关键字参数
-                        elevation   - 初始仰角，以度（°）为单位，默认值为0
-                        azimuth     - 初始方位角以度（°）为单位，默认值为0
-                        step        - 帧增量，以度（°）为单位，默认值为5
-                        interval    - 帧间隔，以ms为单位，默认值为20
-        """
+        if not rotate is None:
+            self.ff.scene.rotate = rotate
+            self.ff.scene.start_sys_timer()
         
         self._create_frame()
         try:
             self._draw()
             self.ff.Show()
+            
         except Exception as e:
             print(str(e))
         finally:
             self.app.MainLoop()
             self._destroy_frame()
     
-    def savefig(self, fn, alpha=False):
-        """保存画布为文件
-        
-        fn          - 文件名
-        alpha       - 透明通道开关
-        """
+    def savefig(self, fn):
+        """保存画布为文件。fn为文件名，支持.png和.jpg格式"""
         
         self._create_frame()
         try:
             self._draw()
             self.ff.Show()
-            self.ff.scene.save_scene(fn, alpha=alpha)
+            self.ff.scene.save_scene(fn, alpha=os.path.splitext(fn)[-1]=='.png')
         except Exception as e:
             print(str(e))
         finally:
