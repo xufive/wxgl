@@ -40,7 +40,6 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from . import region
-from . import axes
 from . import cm
 from . import fm
 
@@ -115,7 +114,6 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.sys_timer = wx.Timer()                                         # 模型几何变换定时器
         self.sys_n = 0                                                      # 模型几何变换计数器
-        self.eye_timer = wx.Timer()                                         # 眼睛定时器
         
         self._init_gl()                                                     # 画布初始化
         
@@ -183,15 +181,12 @@ class WxGLScene(glcanvas.GLCanvas):
         """点击窗口关闭按钮时"""
         
         self.sys_timer.Stop()
-        self.eye_timer.Stop()
-        
         evt.Skip()
     
     def on_destroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
         self.sys_timer.Stop()
-        self.eye_timer.Stop()
         
         for reg in self.regions:
             for id in reg.buffers:
@@ -220,10 +215,7 @@ class WxGLScene(glcanvas.GLCanvas):
     def on_paint(self, evt):
         """响应重绘事件"""
         
-        self.SetCurrent(self.context)
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)    # 清除屏幕及深度缓存
-        self._draw_gl()                                     # 绘图
-        self.SwapBuffers()                                  # 切换缓冲区，以显示绘制内容
+        self.repaint()
         evt.Skip()
         
     def on_left_down(self, evt):
@@ -566,6 +558,14 @@ class WxGLScene(glcanvas.GLCanvas):
                         
                         if 'order' in item:
                             glPopMatrix()
+        
+    def repaint(self):
+        """重绘"""
+        
+        self.SetCurrent(self.context)
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)    # 清除屏幕及深度缓存
+        self._draw_gl()                                     # 绘图
+        self.SwapBuffers()                                  # 切换缓冲区，以显示绘制内容
     
     def set_proj(self, proj):
         """设置投影模式"""
@@ -618,11 +618,15 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.set_posture(**self.store)
     
-    def set_grid_visible(self):
+    def update_grid_visible(self, reverse=True, hide=False):
         """显示或隐藏坐标轴网格"""
         
         if self.mode == '2D':
-            self.grid_is_show = not self.grid_is_show
+            if hide:
+                self.grid_is_show = False
+            elif reverse:
+                self.grid_is_show = not self.grid_is_show
+            
             for reg in self.regions:
                 for key in reg.grid:
                     if self.grid_is_show:
@@ -630,7 +634,11 @@ class WxGLScene(glcanvas.GLCanvas):
                     else:
                         reg.hide_model(reg.grid[key])
         else:
-            self.grid_is_show = not self.grid_is_show
+            if hide:
+                self.grid_is_show = False
+            elif reverse:
+                self.grid_is_show = not self.grid_is_show
+            
             if not self.grid_is_show:
                 for reg in self.regions:
                     for key in reg.grid:
@@ -728,15 +736,5 @@ class WxGLScene(glcanvas.GLCanvas):
         self.regions.append(reg)
         
         return reg
-    
-    def add_axes(self, pos, padding=(20,20,20,20)):
-        """添加子图
-        
-        pos         - 三个数字组成的整数或字符串或四元组，表示子图在场景中的位置和大小
-        padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
-        """
-        
-        return axes.WxGLAxes(self, pos, padding=padding)
-    
     
         

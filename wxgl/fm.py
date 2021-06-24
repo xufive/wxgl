@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
+import re
+from io import BytesIO
 import freetype
+from PIL import Image
 import numpy as np
 import matplotlib.font_manager as mfm
-
+from matplotlib import mathtext
 
 class FontManager:
     """字体管理"""
@@ -112,6 +115,34 @@ class FontManager:
         
         return pixels
     
+    def text2alpha(self, text, size, family=None, weight='normal'):
+        """文本转透明通道
+        
+        text        - 文本字符串
+        size        - 文字大小，整型
+        family      - （系统支持的）字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        """
+        
+        p = re.compile(r'\$.+\$')
+        if p.search(text):
+            if family not in self.fonts:
+                family = self.default_font
+            
+            bfo = BytesIO()
+            prop = mfm.FontProperties(family=family, size=size, weight=weight)
+            mathtext.math_to_image(text, bfo, prop=prop, dpi=72)
+            
+            im = Image.open(bfo)
+            r, g, b, a = im.split()
+            r, g, b = 255-np.array(r), 255-np.array(g), 255-np.array(b)
+            pixels = np.uint8(r/3 + g/3 + b/3)
+        else:
+            font_file = self.get_font_file(family=family, weight=weight)
+            pixels = self.get_text_pixels(text, size, font_file)
+        
+        return pixels
+    
     def text2img(self, text, size, color, family=None, weight='normal'):
         """文本转图像，返回图像数据和size元组
         
@@ -122,14 +153,37 @@ class FontManager:
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         """
         
-        font_file = self.get_font_file(family=family, weight=weight)
-        pixels = self.get_text_pixels(text, size, font_file)
-        rows, cols = pixels.shape
-        
-        x = np.ones(pixels.shape)*color[0]*255
-        y = np.ones(pixels.shape)*color[1]*255
-        z = np.ones(pixels.shape)*color[2]*255
-        im = np.dstack((x,y,z,pixels)).astype(np.uint8)
+        p = re.compile(r'\$.+\$')
+        if p.search(text):
+            if family not in self.fonts:
+                family = self.default_font
+            
+            bfo = BytesIO()
+            prop = mfm.FontProperties(family=family, size=size, weight=weight)
+            mathtext.math_to_image(text, bfo, prop=prop, dpi=72)
+            
+            im = Image.open(bfo)
+            r, g, b, a = im.split()
+            r, g, b = 255-np.array(r), 255-np.array(g), 255-np.array(b)
+            a = r/3 + g/3 + b/3
+            r, g, b = r*color[0], g*color[1], b*color[2]
+            im = np.dstack((r,g,b,a)).astype(np.uint8)
+        else:
+            font_file = self.get_font_file(family=family, weight=weight)
+            pixels = self.get_text_pixels(text, size, font_file)
+            rows, cols = pixels.shape
+            
+            r = np.ones(pixels.shape)*color[0]*255
+            g = np.ones(pixels.shape)*color[1]*255
+            b = np.ones(pixels.shape)*color[2]*255
+            im = np.dstack((r,g,b,pixels)).astype(np.uint8)
         
         return im
-    
+
+if __name__  == '__main__':
+    fm = FontManager()
+    color = np.array([1,1,1])
+    for text in ('ABC', '文本字符串', 'ABC文本字符串'):
+        for size in (32, 40, 48, 82, 260, 450):
+            im = fm.text2img(text, size, color)
+            print('text="%s", size=%d, shape=(%d,%d)'%(text, size, *im.shape[:2]))

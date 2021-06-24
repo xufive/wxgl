@@ -74,16 +74,45 @@ class ColorManager:
         else:
             raise ValueError('未定义的或不符合规则的颜色：%s'%color)
     
-    def color2c(self, color):
-        """字符串、元组、列表等类型的颜色转numpy数组颜色"""
+    def color2c(self, color, size=None, drop=False):
+        """检查颜色参数，将字符串、元组、列表等类型的颜色转numpy数组颜色
+        
+        color       - 待处理的颜色
+        size        - 返回的颜色数量，有3种可能的类型：None、整型、长度为2的元组或列表
+        drop        - 舍弃alpha通道
+        """
         
         if isinstance(color, str):
             color = self.str2color(color)
         elif isinstance(color, (list, tuple)):
             color = np.array(color, dtype=np.float64)
         
-        if not isinstance(color, np.ndarray) or color.ndim > 2 or color.shape[-1] not in (3,4):
-             raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        if not isinstance(color, np.ndarray):
+            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        if color.shape[-1] not in (3,4) or np.nanmin(color) < 0 or np.nanmax(color) > 255:
+            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        
+        if isinstance(size, int):
+            if color.ndim == 1:
+                color = np.tile(color, (size,1))
+            elif color.ndim == 2:
+                if color.shape[0] != size:
+                    raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+            else:
+                raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        elif isinstance(size, (tuple, list)) and len(size) == 2:
+            if color.ndim == 1:
+                color = np.tile(color, (*size,1))
+            elif color.ndim == 3:
+                if color.shape[:-1] != size:
+                    raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+            else:
+                raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        elif not size is None:
+            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+        
+        if drop and color.shape[-1] == 4:
+            color = color[..., :-1]
         
         return color
     

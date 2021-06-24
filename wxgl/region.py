@@ -363,7 +363,10 @@ class WxGLRegion:
                 r_z = (np.nanmin(vs[:,2]),np.nanmax(vs[:,2]))
                 self.set_data_range(r_x, r_y, r_z)
         elif inside:
-            self.set_data_range((np.nanmin(xs),np.nanmax(xs)), (np.nanmin(ys),np.nanmax(ys)), (np.nanmin(zs),np.nanmax(zs)))
+            r_x = (np.nanmin(xs),np.nanmax(xs))
+            r_y = (np.nanmin(ys),np.nanmax(ys))
+            r_z = (np.nanmin(zs),np.nanmax(zs))
+            self.set_data_range(r_x, r_y, r_z)
         
         lat, lon = np.mgrid[1:0:complex(0,rows), 0:1:complex(0,cols)]
         texcoord = np.dstack((lon, lat)).reshape(-1,2)
@@ -373,7 +376,7 @@ class WxGLRegion:
         normal = np.hstack((normal, normal[:,-1:]))
         normal = np.vstack((normal, normal[-1:]))
         normal = self.normalize2d(normal.reshape(-1,3))
-            
+        
         vertices = np.hstack((texcoord, normal, vs.reshape(-1,3))).astype(np.float32)
         vid = self._create_vbo(vertices)
         
@@ -395,6 +398,7 @@ class WxGLRegion:
         """
         
         k = np.linalg.norm(vs, axis=1)
+        k[k==0] = 1e-300
         vs = vs.T/k
         
         return vs.T
@@ -547,8 +551,7 @@ class WxGLRegion:
         if inside:
             self.set_data_range((pos[0],pos[0]), (pos[1],pos[1]), (pos[2],pos[2]))
         
-        font_file = self.fm.get_font_file(family=family, weight=weight)
-        pixels = self.fm.get_text_pixels(text, size, font_file)
+        pixels = self.fm.text2alpha(text, size, family=family, weight=weight)
         
         if align == 'VL':
             pixels = np.fliplr(pixels).T
@@ -622,6 +625,9 @@ class WxGLRegion:
         else:
             color = self.cm.color2c(color)
         
+        texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
+        texture = self.fm.text2img(text, size, color, family, weight)
+        
         cw0, ch0 = self.scene.osize[0]*self.box[2], self.scene.osize[1]*self.box[3]
         cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
         
@@ -630,13 +636,11 @@ class WxGLRegion:
         else:
             k = pow(self.scene.tscale[0], 1/2)
         
-        p = pow(max(self.box[2], self.box[3]), 1/3)
-        size = int(p*k*size/pow(self.scale, 1/2))
+        k *= pow(max(self.box[2], self.box[3]), 1/3)
+        k *= size/pow(self.scale, 1/2)
+        k = 28*pow(k/40, 2)
         
-        texture = self.fm.text2img(text, size, color, family, weight)
-        texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
-        
-        iw, ih = texture.shape[1], texture.shape[0]
+        iw, ih = k*texture.shape[1]/texture.shape[0], k
         if cw > ch:
             w, h = iw/ch, ih/ch
         else:
@@ -751,13 +755,7 @@ class WxGLRegion:
             r_z = (np.nanmin(vs[:,2]),np.nanmax(vs[:,2]))
             self.set_data_range(r_x, r_y, r_z)
         
-        c = self.cm.color2c(color)
-        if c.ndim == 1:
-            c = np.tile(c, (vs.shape[0],1))
-        
-        if c.shape[-1] == 4:
-            c = c[:, :-1]
-        
+        c = self.cm.color2c(color, size=vs.shape[0], drop=True)
         vid = self._create_vbo(np.hstack((c,vs)).astype(np.float32))
         eid = self._create_ebo(np.array(list(range(vs.shape[0])), dtype=np.int32))
         
@@ -816,13 +814,7 @@ class WxGLRegion:
             r_z = (np.nanmin(vs[:,2]),np.nanmax(vs[:,2]))
             self.set_data_range(r_x, r_y, r_z)
         
-        c = self.cm.color2c(color)
-        if c.ndim == 1:
-            c = np.tile(c, (vs.shape[0],1))
-        
-        if c.shape[-1] == 4:
-            c = c[:, :-1]
-        
+        c = self.cm.color2c(color, size=vs.shape[0], drop=True)
         vid = self._create_vbo(np.hstack((c,vs)).astype(np.float32))
         eid = self._create_ebo(np.array(list(range(vs.shape[0])), dtype=np.int32))
         
@@ -864,7 +856,7 @@ class WxGLRegion:
         assert isinstance(vs, np.ndarray) and vs.ndim == 2 and vs.shape[-1] == 3, '期望参数vs是n个顶点坐标组成的numpy数组，n为4的整数倍'
         
         if not color is None:
-            c = np.tile(self.cm.color2c(color), (2,2,1))
+            c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
             texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         elif texture is None or texcoord is None:
@@ -902,7 +894,7 @@ class WxGLRegion:
         """
         
         if not color is None:
-            c = np.tile(self.cm.color2c(color), (2,2,1))
+            c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
             texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         elif texture is None or texcoord is None:
@@ -940,7 +932,7 @@ class WxGLRegion:
         """
         
         if not color is None:
-            c = np.tile(self.cm.color2c(color), (2,2,1))
+            c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
             texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         elif texture is None or texcoord is None:
@@ -975,7 +967,7 @@ class WxGLRegion:
                             'TR'        - 先位移后旋转
         """
         
-        c = np.tile(self.cm.color2c(color), (2,2,1))
+        c = self.cm.color2c(color, size=(2,2))
         texture = np.uint8(c*255)
         texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         
@@ -1025,7 +1017,7 @@ class WxGLRegion:
             assert not color is None, '绘制多边形必须要指定颜色'
         
         if not color is None:
-            c = np.tile(self.cm.color2c(color), (2,2,1))
+            c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
             texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         elif texture is None or texcoord is None:
@@ -1065,8 +1057,8 @@ class WxGLRegion:
         """
         
         if not color is None:
-            color = np.tile(self.cm.color2c(color), (2,2,1))
-            texture = np.uint8(color*255)
+            c = self.cm.color2c(color, size=(2,2))
+            texture = np.uint8(c*255)
         elif texture is None:
             raise ValueError('参数color和texture不能同时为None')
         
@@ -1104,8 +1096,8 @@ class WxGLRegion:
         """
         
         if not color is None:
-            color = np.tile(self.cm.color2c(color), (2,2,1))
-            texture = np.uint8(color*255)
+            c = self.cm.color2c(color, size=(2,2))
+            texture = np.uint8(c*255)
         elif texture is None:
             raise ValueError('参数color和texture不能同时为None')
         
@@ -1165,8 +1157,8 @@ class WxGLRegion:
         vs_cone = rotator.apply(np.vstack((np.array([[0,0,h]]), vs))) + center
         vs_ground = rotator.apply(vs[:-1]) + center
         
-        color = np.tile(self.cm.color2c(color), (2,2,1))
-        texture = np.uint8(color*255)
+        c = self.cm.color2c(color, size=(2,2))
+        texture = np.uint8(c*255)
         texcoord_cone = np.tile(np.zeros(2), (vs_cone.shape[0],1))
         texcoord_ground = np.tile(np.zeros(2), (vs_ground.shape[0],1))
         
@@ -1217,8 +1209,8 @@ class WxGLRegion:
         vs_right = np.array(((-x/2,y/2,z/2),(-x/2,y/2,-z/2),(x/2,y/2,-z/2),(x/2,y/2,z/2))) + center
         
         vs = np.vstack((vs_front, vs_back, vs_top, vs_bottom, vs_left, vs_right))
-        color = np.tile(self.cm.color2c(color), (2,2,1))
-        texture = np.uint8(color*255)
+        c = self.cm.color2c(color, size=(2,2))
+        texture = np.uint8(c*255)
         texcoord = np.tile(np.zeros(2), (24,1))
         
         self._surface(vs, texture, texcoord, 'Q', **kwds)
@@ -1255,8 +1247,8 @@ class WxGLRegion:
         if not isinstance(center, np.ndarray):
             center = np.array(center)
         
-        color = np.tile(self.cm.color2c(color), (2,2,1))
-        texture = np.uint8(color*255)
+        c = self.cm.color2c(color, size=(2,2))
+        texture = np.uint8(c*255)
         
         vh = center[1] - center[0]
         h = np.linalg.norm(vh)
@@ -1394,16 +1386,18 @@ class WxGLRegion:
                         xlabel          - x轴名称，默认'X'
                         ylabel          - y轴名称，默认'Y'
                         zlabel          - z轴名称，默认'Z'
-                        xrange          - x轴范围，元组，默None，表示使用数据的动态范围
-                        yrange          - y轴范围，元组，默None，表示使用数据的动态范围
-                        zrange          - z轴范围，元组，默None，表示使用数据的动态范围
+                        xr              - x轴范围，元组，默None，表示使用数据的动态范围
+                        yr              - y轴范围，元组，默None，表示使用数据的动态范围
+                        zr              - z轴范围，元组，默None，表示使用数据的动态范围
                         xf              - x轴刻度标注格式化函数，默认str
                         yf              - y轴刻度标注格式化函数，默认str
                         zf              - z轴刻度标注格式化函数，默认str
                         font            - 字体，默None，表示使用默认字体
                         labelsize       - 坐标轴标注字号，默认36
                         ticksize        - 刻度标注字号，默认32
-                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+                        xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
+                        yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
+                        zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
                         lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
@@ -1414,7 +1408,7 @@ class WxGLRegion:
             return
         
         for key in kwds:
-            if key not in ['xlabel', 'ylabel', 'zlabel', 'xrange', 'yrange', 'zrange', 'xf', 'yf', 'zf', 'font', 'labelsize', 'ticksize', 'density', 'lc', 'lw', 'bg']:
+            if key not in ['xlabel','ylabel','zlabel','xr','yr','zr','xf','yf','zf','font','labelsize','ticksize','xd','yd','zd','lc','lw','bg']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         for key in self.grid:
@@ -1424,28 +1418,39 @@ class WxGLRegion:
         xlabel = kwds.get('xlabel', 'X')
         ylabel = kwds.get('ylabel', 'Y')
         zlabel = kwds.get('zlabel', 'Z')
-        xrange = kwds.get('xrange', None)
-        yrange = kwds.get('yrange', None)
-        zrange = kwds.get('zrange', None)
+        xr = kwds.get('xr', None)
+        yr = kwds.get('yr', None)
+        zr = kwds.get('zr', None)
         xf = kwds.get('xf', str)
         yf = kwds.get('yf', str)
         zf = kwds.get('zf', str)
         font = kwds.get('font', None)
         labelsize = kwds.get('labelsize', 36)
         ticksize = kwds.get('ticksize', 32)
-        s_min, s_max = kwds.get('density', (4,5))
+        xd = kwds.get('xd', 0)
+        yd = kwds.get('yd', 0)
+        zd = kwds.get('zd', 0)
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 0.5)
         bg = kwds.get('bg', None)
         
-        dx, dy, dz = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1, (self.r_z[1]-self.r_z[0])*0.1
-        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xrange is None else xrange
-        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yrange is None else yrange
-        z_min, z_max = (self.r_z[0]-dz, self.r_z[1]+dz) if zrange is None else zrange
+        if xd < -2:
+            xd = -2
         
-        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max)
-        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max)
-        zz = self._get_tick_label(z_min, z_max, s_min=s_min, s_max=s_max)
+        if yd < -2:
+            yd = -2
+        
+        if zd < -2:
+            zd = -2
+        
+        dx, dy, dz = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1, (self.r_z[1]-self.r_z[0])*0.1
+        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
+        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
+        z_min, z_max = (self.r_z[0]-dz, self.r_z[1]+dz) if zr is None else zr
+        
+        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd)
+        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd)
+        zz = self._get_tick_label(z_min, z_max, s_min=3+zd, s_max=6+zd)
         
         grid_top = uuid.uuid1().hex
         grid_bottom = uuid.uuid1().hex
@@ -1590,14 +1595,17 @@ class WxGLRegion:
         kwds        - 关键字参数
                         xlabel          - x轴名称，默认'X'
                         ylabel          - y轴名称，默认'Y'
-                        xrange          - x轴范围，元组，默None，表示使用数据的动态范围
-                        yrange          - y轴范围，元组，默None，表示使用数据的动态范围
+                        xr              - x轴范围，元组，默None，表示使用数据的动态范围
+                        yr              - y轴范围，元组，默None，表示使用数据的动态范围
                         xf              - x轴刻度标注格式化函数，默认str
                         yf              - y轴刻度标注格式化函数，默认str
                         font            - 字体，默None，表示使用默认字体
                         labelsize       - 坐标轴标注字号，默认48
                         ticksize        - 刻度标注字号，默认40
-                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+                        xrotate         - 是否旋转x轴刻度，默认不旋转
+                        yreverse        - 是否反转y轴刻度，默认不反转
+                        xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
+                        yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
                         lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
@@ -1608,31 +1616,40 @@ class WxGLRegion:
             return
         
         for key in kwds:
-            if key not in ['xlabel', 'ylabel', 'xrange', 'yrange', 'xf', 'yf', 'font', 'labelsize', 'ticksize', 'density', 'lc', 'lw', 'bg']:
+            if key not in ['xlabel','ylabel','xr','yr','xf','yf','font','labelsize','ticksize','xrotate','yreverse','xd','yd','lc','lw','bg']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         xlabel = kwds.get('xlabel', 'X')
         ylabel = kwds.get('ylabel', 'Y')
-        xrange = kwds.get('xrange', None)
-        yrange = kwds.get('yrange', None)
+        xr = kwds.get('xr', None)
+        yr = kwds.get('yr', None)
         xf = kwds.get('xf', str)
         yf = kwds.get('yf', str)
         font = kwds.get('font', None)
         labelsize = kwds.get('labelsize', 48)
         ticksize = kwds.get('ticksize', 40)
-        s_min, s_max = kwds.get('density', (3,6))
+        xrotate = kwds.get('xrotate', False)
+        yreverse = kwds.get('yreverse', False)
+        xd = kwds.get('xd', 0)
+        yd = kwds.get('yd', 0)
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 1)
         bg = kwds.get('bg', False)
         
+        if xd < -2:
+            xd = -2
+        
+        if yd < -2:
+            yd = -2
+        
         dx, dy = (self.r_x[1]-self.r_x[0])*0.03, (self.r_y[1]-self.r_y[0])*0.03
         da = max(dx,dy)
         
-        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xrange is None else xrange
-        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yrange is None else yrange
+        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
+        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
         
-        xx = self._get_tick_label(x_min, x_max, s_min=s_min, s_max=s_max)
-        yy = self._get_tick_label(y_min, y_max, s_min=s_min, s_max=s_max)
+        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd)
+        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd)
         
         self.line(np.array([[x_min,y_min,0],[x_max,y_min,0]]), lc, width=lw, inside=False)
         self.line(np.array([[x_min,y_min,0],[x_min,y_max,0]]), lc, width=lw, inside=False)
@@ -1640,22 +1657,54 @@ class WxGLRegion:
         self.surface(np.array([[x_min,y_max+da,0],[x_min-da/4,y_max,0],[x_min+da/4,y_max,0]]), lc, method='T', inside=False, light=False)
         self.surface(np.array([[x_max+da,y_min,0],[x_max,y_min+da/4,0],[x_max,y_min-da/4,0]]), lc, method='T', inside=False, light=False)
         
-        for x in xx[1:-1]:
-            self.line(np.array([[x,y_min,0],[x,y_min-da/2,0]]), lc, width=0.5, inside=False)
-            box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da,y_min-2*da,0],[x+da,y_min-da,0]])
-            self.text3d(xf(x), box, size=ticksize, align='center-top', inside=False, light=False)
+        if xrotate:
+            rx = sstr.from_euler('xyz', [0, 0, 30], degrees=True)
         
-        for y in yy[1:-1]:
-            self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5, inside=False)
-            box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
-            self.text3d(yf(y), box, size=ticksize, align='right-middle', inside=False, light=False)
+        for x in xx[1:-1]:
+            self.line(np.array([[x,y_min,0],[x,y_min-da/2,0]]), lc, width=0.5*lw, inside=False)
+            if xrotate:
+                box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da/2,y_min-2*da,0],[x+da/2,y_min-da,0]])
+                ro = np.array([x+da/2,y_min-da,0])
+                box = rx.apply(box-ro) + ro
+                self.text3d(xf(x), box, size=ticksize, align='right-top', inside=False, light=False)
+            else:
+                box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da,y_min-2*da,0],[x+da,y_min-da,0]])
+                self.text3d(xf(x), box, size=ticksize, align='center-top', inside=False, light=False)
+        
+        if yreverse:
+            tt = yy[::-1]
+            dy = max(tt) + min(tt)
+            
+            for t in tt[1:-1]:
+                y = dy-t
+                self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5*lw, inside=False)
+                box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
+                self.text3d(yf(t), box, size=ticksize, align='right-middle', inside=False, light=False)
+        else:
+            for y in yy[1:-1]:
+                self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5*lw, inside=False)
+                box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
+                self.text3d(yf(y), box, size=ticksize, align='right-middle', inside=False, light=False)
         
         if xlabel:
-            box = np.array([[x_max,y_min-da,0],[x_max,y_min-2*da,0],[x_max+da,y_min-2*da,0],[x_max+da,y_min-da,0]])
-            self.text3d(xlabel, box, size=labelsize, align='left-top', inside=False, light=False)
+            if len(xlabel) > 3:
+                m = (x_min+x_max)/2
+                box = np.array([[m-da,y_min-2.5*da,0],[m-da,y_min-3*da,0],[m+da,y_min-3*da,0],[m+da,y_min-2.5*da,0]])
+                self.text3d(xlabel, box, size=labelsize, align='center-top', inside=False, light=False)
+            else:
+                box = np.array([[x_max,y_min-da,0],[x_max,y_min-2*da,0],[x_max+da,y_min-2*da,0],[x_max+da,y_min-da,0]])
+                self.text3d(xlabel, box, size=labelsize, align='left-top', inside=False, light=False)
+        
         if ylabel:
-            box = np.array([[x_min-2*da,y_max+da,0],[x_min-2*da,y_max,0],[x_min-da,y_max,0],[x_min-da,y_max+da,0]])
-            self.text3d(ylabel, box, size=labelsize, align='right-bottom', inside=False, light=False)
+            if len(ylabel) > 3:
+                m = (y_min+y_max)/2
+                k = max(map(len, map(yf, yy[1:-1])))//3
+                box = np.array([[x_min-(5+k)*da,m+da,0],[x_min-(5+k)*da,m-da,0],[x_min-(3+k)*da,m-da,0],[x_min-(3+k)*da,m+da,0]])
+                regulate = (((4+k)*da-x_min, -m, 0), (90, (0,0,1)), (x_min-(4+k)*da, m, 0))
+                self.text3d(ylabel, box, size=labelsize, align='center-middle', regulate=regulate, inside=False, light=False)
+            else:
+                box = np.array([[x_min-2*da,y_max+da,0],[x_min-2*da,y_max,0],[x_min-da,y_max,0],[x_min-da,y_max+da,0]])
+                self.text3d(ylabel, box, size=labelsize, align='right-top', inside=False, light=False)
         
         for key in self.grid:
             self.drop_model(self.grid[key])
@@ -1666,10 +1715,10 @@ class WxGLRegion:
         
         vs = list()
         for x in xx[1:]:
-            vs.append((x, y_min, -0.1))
-            vs.append((x, y_max, -0.1))
+            vs.append((x, y_min, 0))
+            vs.append((x, y_max, 0))
         for y in yy[1:]:
-            vs.append((x_min, y, -0.1))
-            vs.append((x_max, y, -0.1))
+            vs.append((x_min, y, 0))
+            vs.append((x_max, y, 0))
         
-        self.line(np.array(vs), lc, width=0.5, method='MULTI', stipple=(1,0xF0F0), inside=False, name=name)
+        self.line(np.array(vs), lc, width=0.3*lw, method='MULTI', stipple=(1,0xF0F0), inside=False, name=name)
