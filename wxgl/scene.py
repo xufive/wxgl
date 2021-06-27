@@ -65,6 +65,8 @@ class WxGLScene(glcanvas.GLCanvas):
                         view        - 视景体
                         zoom        - 视口缩放因子
                         interval    - 定时器间隔（毫秒）
+                        light0      - 光源0的位置
+                        light1      - 光源1的位置
                         style       - 场景风格
                             'white'     - 皓月白
                             'black'     - 石墨黑
@@ -74,7 +76,7 @@ class WxGLScene(glcanvas.GLCanvas):
         """
         
         for key in kwds:
-            if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'style']:
+            if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'light0', 'light1', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         self.parent = parent                                                # 父级窗口对象
@@ -90,6 +92,8 @@ class WxGLScene(glcanvas.GLCanvas):
         self.view = np.array(kwds.get('view', [-1,1,-1,1,2.6,1000]))        # 视景体
         self.zoom = kwds.get('zoom', 1.0 if self.proj=='cone' else 1.5)     # 视口缩放因子，默认1
         self.interval = kwds.get('interval', 30)                            # 定时器间隔，默认30毫秒
+        self.light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))               # 光源0的位置
+        self.light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))              # 光源1的位置
         self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
         
         self.eye = None                                                     # 眼睛的位置
@@ -444,12 +448,12 @@ class WxGLScene(glcanvas.GLCanvas):
         glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8,0.8,0.8,1.0))                 # 光源中的环境光
         glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8,0.8,0.8,1.0))                 # 光源中的散射光
         glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
-        glLightfv(GL_LIGHT0, GL_POSITION, (2.0,-20.0,3.0,1.0))              # 光源位置
+        glLightfv(GL_LIGHT0, GL_POSITION, self.light0)                      # 光源位置
         
         glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5,0.5,0.5,1.0))                 # 光源中的环境光
         glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3,0.3,0.3,1.0))                 # 光源中的散射光
         glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
-        glLightfv(GL_LIGHT1, GL_POSITION, (-2.0,20.0,-2.0,1.0))             # 光源位置
+        glLightfv(GL_LIGHT1, GL_POSITION, self.light1)                      # 光源位置
         
         glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)                     # 启用双面渲染
         

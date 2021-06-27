@@ -6,6 +6,7 @@ import numpy as np
 from scipy import ndimage
 
 from . import region
+from . import util
 
 
 class WxGLAxes:
@@ -40,8 +41,16 @@ class WxGLAxes:
         
         self.reg_main = self.scene.add_region(box)
         self.reg_title = None
-        self.reg_cb = None
+        self.reg_cb_r = None
+        self.reg_cb_l = None
+        self.reg_cb_b = None
+        self.reg_cb_br = None
+        self.reg_cb_bl = None
         
+        self.drange = None
+        self.cbcm = None
+        
+        self.axis = True
         self.xlabel = 'X'
         self.ylabel = 'Y'
         self.zlabel = 'Z'
@@ -71,7 +80,17 @@ class WxGLAxes:
         self.scene.set_proj('ortho')
         self.scene.set_mode('2D')
         self.scene.set_style(self.fig.style2d)
-        self.scene.set_posture(zoom=1.5, oecs=(-0.1,-0.1,0), dist=5, azimuth=0, elevation=0, save=True)
+        self.scene.set_posture(zoom=1.5, oecs=(-0.1,0,0), dist=5, azimuth=0, elevation=0, save=True)
+    
+    def set_axis(self, visible):
+        """设置坐标轴是否可见"""
+        
+        self.axis = visible
+        
+        if self.axis:
+            self.scene.set_posture(oecs=(-0.1,0,0), save=True)
+        else:
+            self.scene.set_posture(oecs=(0,0,0), save=True)
     
     def set_xlabel(self, xlabel):
         """设置x轴名称，text为文本字符串"""
@@ -143,26 +162,40 @@ class WxGLAxes:
         kwds = {'family':family, 'weight':weight, 'align':'center-middle', 'inside':False}
         
         if self.reg_title is None:
+            if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
+                k = 0.15
+            else:
+                k = 0.17647
+            
             a0, a1, a2, a3 = self.reg_main.box
-            w, h = a2, a3*0.15
-            self.reg_main.reset_box((a0, a1, a2, a3*0.85))
+            self.reg_main.reset_box((a0, a1, a2, a3*(1-k)))
             
-            if not self.reg_cb is None:
-                b0, b1, b2, b3 = self.reg_cb.box
-                w += b2
-                self.reg_cb.reset_box((b0, b1, b2, b3*0.85))
+            if not self.reg_cb_r is None:
+                b0, b1, b2, b3 = self.reg_cb_r.box
+                self.reg_cb_r.reset_box((b0, b1, b2, b3*(1-k)))
             
-            box = (a0, a1+a3*0.85, w, h)
+            if not self.reg_cb_l is None:
+                c0, c1, c2, c3 = self.reg_cb_l.box
+                self.reg_cb_l.reset_box((c0, c1, c2, c3*(1-k)))
+            
+            box = (0, a1+a3*(1-k), 1, a3*k)
             self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
         
         box = np.array([[-1,0,0],[-1,-0.3,0],[1,-0.3,0],[1,0,0]])
+        kwds.update({'light':0})
         self.fig.add_widget(self.reg_title, 'text3d', text, size=size, color=color, box=box, **kwds)
         
-    def colorbar(self, drange, cm, **kwds):
+    def colorbar(self, drange=None, cm=None, loc='right', **kwds):
         """绘制colorbar
         
-        drange      - 值域范围或标注序列，元组或列表
-        cm          - 调色板名称
+        drange      - 值域范围或标注序列，元组或列表，None表示使用当前设置
+        cm          - 调色板名称，None表示使用当前设置
+        loc         - 位置
+                        right           - 右侧
+                        left            - 左侧
+                        bottom          - 底部
+                        bottom-left     - 底部
+                        bottom-right    - 底部
         kwds        - 关键字参数
                         subject         - 标题
                         subject_size    - 标题字号，默认44
@@ -172,16 +205,69 @@ class WxGLAxes:
                         endpoint        - 刻度是否包含值域范围的两个端点值
         """
         
-        if self.reg_cb is None:
-            a0, a1, a2, a3 = self.reg_main.box
-            self.reg_main.reset_box((a0, a1, a2*0.85, a3))
-            
-            box = (a0+a2*0.85, a1, a2*0.15, a3)
-            self.reg_cb = self.scene.add_region(box, fixed=True, proj='ortho')
+        if drange is None:
+            drange = self.drange
+        if cm is None:
+            cm = self.cbcm
+        if drange is None or cm is None:
+            return
         
-        self.fig.add_widget(self.reg_cb, 'colorbar', drange, cm, mode='VR', **kwds)
+        assert loc in ('right','left','bottom','bottom-left','bottom-right'), '参数loc的值不是合法选项'
+        
+        if loc == 'right':
+            if self.reg_cb_r is None:
+                k = 0.15 if self.reg_cb_l is None else 0.17647
+                a0, a1, a2, a3 = self.reg_main.box
+                self.reg_main.reset_box((a0, a1, a2*(1-k), a3))
+                
+                box = (a0+a2*(1-k), a1, a2*k, a3)
+                self.reg_cb_r = self.scene.add_region(box, fixed=True, proj='ortho')
+            
+            self.fig.add_widget(self.reg_cb_r, 'colorbar', drange, cm, mode='VR', **kwds)
+        elif loc == 'left':
+            if self.reg_cb_l is None:
+                k = 0.15 if self.reg_cb_r is None else 0.17647
+                a0, a1, a2, a3 = self.reg_main.box
+                self.reg_main.reset_box((a0+a2*k, a1, a2*(1-k), a3))
+                
+                box = (a0, a1, a2*k, a3)
+                self.reg_cb_l = self.scene.add_region(box, fixed=True, proj='ortho')
+            
+            self.fig.add_widget(self.reg_cb_l, 'colorbar', drange, cm, mode='VL', **kwds)
+        else:
+            if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
+                k = 0.15 if self.reg_title is None else 0.17647
+                h = self.reg_main.box[-1]*k
+                
+                a0, a1, a2, a3 = self.reg_main.box
+                self.reg_main.reset_box((a0, a1+a3*k, a2, a3*(1-k)))
+                
+                if not self.reg_cb_r is None:
+                    b0, b1, b2, b3 = self.reg_cb_r.box
+                    self.reg_cb_r.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
+                
+                if not self.reg_cb_l is None:
+                    c0, c1, c2, c3 = self.reg_cb_l.box
+                    self.reg_cb_l.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
+            elif self.reg_title is None:
+                h = 0.17647*self.reg_main.box[-1]
+            else:
+                h = self.reg_title.box[-1]
+            
+            if loc == 'bottom-left':
+                box = (0, 0.02, 0.6, h)
+                self.reg_cb_bl = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_bl, 'colorbar', drange, cm, mode='H', **kwds)
+            elif loc == 'bottom-right':
+                box = (0.4, 0.02, 0.6, h)
+                self.reg_cb_br = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_br, 'colorbar', drange, cm, mode='H', **kwds)
+            else:
+                box = (0, 0.02, 1, h)
+                self.reg_cb_b = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_b, 'colorbar', drange, cm, mode='H', **kwds)
     
-    def text(self, text, size=40, color=None, pos=(0,0,0), align='left-bottom', **kwds):
+    def text(self, text, size=40, color=None, pos=(0,0,0), align=None, family=None, weight='normal', **kwds):
         """绘制文本
         
         text        - 文本字符串
@@ -189,23 +275,35 @@ class WxGLAxes:
         color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
         pos         - 文本位置，list或numpy.ndarray类型
         align       - 对齐方式
-                        'left-top'      - 以pos为左上角
-                        'left-middle'   - 以pos为左侧中
-                        'left-bottom'   - 以pos为左下角
-                        'right-top'     - 以pos为右上角
-                        'right-middle'  - 以pos为右侧中
-                        'right-bottom'  - 以pos为右下角
-                        'center-top'    - 以pos为中间上
-                        'center-middle' - 以pos为中
-                        'center-bottom' - 以pos为中间下
+                        None            - 2D模式默认'left-bottom'，3D模式默认横排文字
+                        'left-top'      - 以pos为左上角（仅2D模式有效）
+                        'left-middle'   - 以pos为左侧中（仅2D模式有效）
+                        'left-bottom'   - 以pos为左下角（仅2D模式有效）
+                        'right-top'     - 以pos为右上角（仅2D模式有效）
+                        'right-middle'  - 以pos为右侧中（仅2D模式有效）
+                        'right-bottom'  - 以pos为右下角（仅2D模式有效）
+                        'center-top'    - 以pos为中间上（仅2D模式有效）
+                        'center-middle' - 以pos为中心点（仅2D模式有效）
+                        'center-bottom' - 以pos为中间下（仅2D模式有效）
+                        'VR'            - 竖排文字，自上而下（仅3D模式有效）
+                        'VL'            - 竖排文字，自下而上（仅3D模式有效）
+        family      - （系统支持的）字体
+        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
         kwds        - 关键字参数
-                        family      - （系统支持的）字体
-                        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
         """
-        
-        for key in kwds:
-            if key not in ['family', 'weight']:
-                raise KeyError('不支持的关键字参数：%s'%key)
         
         if isinstance(pos, (tuple,list)):
             pos = np.array(pos)
@@ -234,10 +332,12 @@ class WxGLAxes:
                 box = np.array([[x,y+0.1,0],[x,y,0],[x+0.1,y,0],[x+0.1,y+0.1,0]])
                 align = 'left-bottom'
             
-            kwds.update({'align':align, 'light':0})
-            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, **kwds)
+            kwds.update({'light':0})
+            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, align=align, **kwds)
         else:
-            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, **kwds)
+            if align not in ('VR', 'VL'):
+                align = None
+            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, align=align, **kwds)
     
     def plot(self, xs, ys, zs=None, color=None, cm=None, size=None, width=1.0, style='solid', **kwds):
         """绘制点和线
@@ -370,11 +470,67 @@ class WxGLAxes:
             for i in range(len(size)):
                 self.fig.add_widget(self.reg_main, 'point', vs[i:i+1], color[i], size=size[i], **kwds)
     
-    def hot(self, data, xs=None, ys=None, zs=None, cm='jet', smooth=True, **kwds):
+    def contour(self, data, xs=None, ys=None, levels=5, cm='jet', **kwds):
+        """等值线
+        
+        data        - 数据，二维元组、列表或数组
+        xs/ys       - 点的x/y坐标集，None或与data结构相同的二维元组、列表或数组
+        levels      - 分级数量，整数，升序的一维元组、列表或数组
+        cm          - 颜色映射表
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        if isinstance(data, (tuple,list)):
+            data = np.array(data)
+        assert isinstance(data, np.ndarray) and data.ndim == 2, '期望参数data是二维的元组、列表或数组'
+        rows, cols = data.shape
+        
+        if xs is None:
+            xs = np.tile(np.arange(cols), (rows, 1))
+        elif isinstance(xs, (tuple,list)):
+            xs = np.array(xs)
+        assert isinstance(xs, np.ndarray) and xs.shape == (rows, cols), '期望参数xs为None或与data结构相同的二维元组、列表或数组'
+        
+        if ys is None:
+            ys = np.repeat(np.arange(rows), cols).reshape(rows, cols)
+        elif isinstance(ys, (tuple,list)):
+            ys = np.array(ys)
+        assert isinstance(ys, np.ndarray) and ys.shape == (rows, cols), '期望参数ys为None或与data结构相同的二维元组、列表或数组'
+        
+        cvalues, contours = util.get_contour(data, xs, ys, levels)
+        color = self.cm.cmap(cvalues, cm)
+        
+        self.drange = cvalues.tolist()
+        self.cbcm = cm
+        
+        #if fill:
+        #    for i in range(1, len(self.drange)):
+        #        data[(data>=self.drange[i-1])&(data<self.drange[i])] = self.drange[i-1]
+        #    self.hot(data, xs=xs, ys=ys, cm=cm, smooth=False, **kwds)
+        
+        for group, c, d in zip(contours, color, cvalues):
+            for item in group:
+                self.plot(item[:,0], item[:,1], color=c)
+                self.text('%0.2f'%d, size=32, pos=(*item[0],0.1))
+    
+    def hot(self, data, xs=None, ys=None, cm='jet', smooth=True, **kwds):
         """热力图
         
         data        - 数据，二维元组、列表或数组
-        xs/ys/sz    - 点的x/y/z坐标集，None或与data结构相同的二维元组、列表或数组
+        xs/ys       - 点的x/y坐标集，None或与data结构相同的二维元组、列表或数组
         cm          - 颜色映射表
         smooth      - 是否使用3x3的卷积平滑，默认True
         kwds        - 关键字参数
@@ -406,19 +562,18 @@ class WxGLAxes:
         
         if ys is None:
             ys = np.repeat(np.arange(rows), cols).reshape(rows, cols)
-            self.yreverse = True
-            data = np.flipud(data)
+            #self.yreverse = True
+            #data = np.flipud(data)
         elif isinstance(ys, (tuple,list)):
             ys = np.array(ys)
         assert isinstance(ys, np.ndarray) and ys.shape == (rows, cols), '期望参数ys为None或与data结构相同的二维元组、列表或数组'
         
-        if zs is None:
-            self.set_2d_mode()
-            kwds.update({'light':0})
-            zs = np.zeros((rows, cols))
-        elif isinstance(zs, (tuple,list)):
-            zs = np.array(zs)
-        assert isinstance(zs, np.ndarray) and zs.shape == (rows, cols), '期望参数zs为None或与data结构相同的二维元组、列表或数组'
+        self.set_2d_mode()
+        kwds.update({'light':0})
+        zs = np.zeros((rows, cols))
+        
+        self.drange = np.nanmin(data), np.nanmax(data)
+        self.cbcm = cm
         
         c = self.cm.cmap(data, cm)
         texture = np.uint8(c*255)
@@ -432,6 +587,55 @@ class WxGLAxes:
             texture = np.dstack((r,g,b))
         
         self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
+    
+    def bar(self, data, label=None, color=None, **kwds):
+        """柱状图
+        
+        data        - 数据，一维或二维的元组、列表或数组
+        label       - 数据标签，和data对应的一维或二维的元组、列表
+        color       - 颜色，None表示顺序选择默认的颜色
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        pass
+    
+    def hist(self, data, drange=None, bins=None, color=None, **kwds):
+        """直方图
+        
+        data        - 数据，一维或二维的元组、列表或数组
+        drange      - 统计范围，二元组或列表，None表示data的值域范围
+        bins        - 分段方式，整数表示分段数量，升序的一维元组、列表或数组表示分割点，None表示自动分段
+        color       - 点的颜色，或每个点的颜色，或每个点对应的数据。None表示顺序选择默认的颜色
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        pass
     
     def mesh(self, xs, ys, zs=None, color=None, texture=None, **kwds):
         """绘制网格

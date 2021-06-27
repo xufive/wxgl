@@ -287,13 +287,14 @@ class WxGLFigure:
         
         for ax in self.subgraphs:
             if self.ff.scene.mode == '2D':
-                ax.reg_main.ticks2d(
-                    xlabel=ax.xlabel, ylabel=ax.ylabel, 
-                    xf=ax.xf, yf=ax.yf, 
-                    xd=ax.xd, yd=ax.yd, 
-                    xrotate=ax.xrotate,
-                    yreverse=ax.yreverse
-                )
+                if ax.axis:
+                    ax.reg_main.ticks2d(
+                        xlabel=ax.xlabel, ylabel=ax.ylabel, 
+                        xf=ax.xf, yf=ax.yf, 
+                        xd=ax.xd, yd=ax.yd, 
+                        xrotate=ax.xrotate,
+                        yreverse=ax.yreverse
+                    )
                 
                 self.ff.scene.update_grid_visible(reverse=False, hide=not self.grid_is_show)
                 

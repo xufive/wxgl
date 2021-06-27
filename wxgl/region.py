@@ -613,8 +613,6 @@ class WxGLRegion:
             if key not in ['name', 'inside', 'visible', 'slide', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        kwds.update({'light':0})
-        
         if isinstance(box, (tuple, list)) and len(box) == 4:
             box = np.array(box, dtype=np.float64)
         if not isinstance(box, np.ndarray) or box.shape != (4,3):
@@ -1310,7 +1308,7 @@ class WxGLRegion:
             ticks = drange
         else:
             ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
-        
+       
         if endpoint:
             if (ticks[1]-ticks[0])/(ticks[2]-ticks[1]) < 0.2:
                 ticks.remove(ticks[1])
@@ -1364,18 +1362,18 @@ class WxGLRegion:
                 self.line(np.array([[0.13*w,y,0],[0.2*w,y,0]]), self.scene.style[1], width=0.5, inside=False)
         else:
             if subject is None:
-                vs = np.array([[-0.5*w,0.2*h,0],[-0.5*w,-0.1*h,0],[0.5*w,-0.1*h,0],[0.5*w,0.2*h,0]])
+                vs = np.array([[-0.5*w,0.5*h,0],[-0.5*w,0.2*h,0],[0.5*w,0.2*h,0],[0.5*w,0.5*h,0]])
             else:
-                vs = np.array([[-0.5*w,0.2*h,0],[-0.5*w,-0.1*h,0],[0.5*w,-0.1*h,0],[0.5*w,0.2*h,0]])
-                box = np.array([[-0.5*w,0.5*h,0],[-0.5*w,0.3*h,0],[0.5*w,0.3*h,0],[0.5*w,0.5*h,0]])
+                vs = np.array([[-0.5*w,0.5*h,0],[-0.5*w,0.2*h,0],[0.5*w,0.2*h,0],[0.5*w,0.5*h,0]])
+                box = np.array([[-0.5*w,0.8*h,0],[-0.5*w,0.58*h,0],[0.5*w,0.58*h,0],[0.5*w,0.8*h,0]])
                 self.text3d(subject, box, size=subject_size, align='center-bottom', light=0, inside=False)
             
             tk = (np.max(vs[:,0])-np.min(vs[:,0]))/(dmax-dmin)
             for t in ticks:
                 x = (t-dmin)*tk - 0.5*w
-                box = np.array([[x-0.1,-0.25*h,0],[x-0.1,-0.5*h,0],[x+0.1,-0.5*h,0],[x+0.1,-0.25*h,0]])
+                box = np.array([[x-0.1,0.05*h,0],[x-0.1,-0.25*h,0],[x+0.1,-0.25*h,0],[x+0.1,0.05*h,0]])
                 self.text3d(tick_format(t), box, size=tick_size, align='center-top', light=0, inside=False)
-                self.line(np.array([[x,-0.1*h,0],[x,-0.18*h,0]]), self.scene.style[1], width=0.5, inside=False)
+                self.line(np.array([[x,0.2*h,0],[x,0.12*h,0]]), self.scene.style[1], width=0.5, inside=False)
         
         self._surface(vs, texture=texture, texcoord=texcoord, method='Q', light=0, inside=False)
         
@@ -1666,10 +1664,10 @@ class WxGLRegion:
                 box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da/2,y_min-2*da,0],[x+da/2,y_min-da,0]])
                 ro = np.array([x+da/2,y_min-da,0])
                 box = rx.apply(box-ro) + ro
-                self.text3d(xf(x), box, size=ticksize, align='right-top', inside=False, light=False)
+                self.text3d(xf(x), box, size=ticksize, align='right-top', inside=False, light=0)
             else:
                 box = np.array([[x-da,y_min-da,0],[x-da,y_min-2*da,0],[x+da,y_min-2*da,0],[x+da,y_min-da,0]])
-                self.text3d(xf(x), box, size=ticksize, align='center-top', inside=False, light=False)
+                self.text3d(xf(x), box, size=ticksize, align='center-top', inside=False, light=0)
         
         if yreverse:
             tt = yy[::-1]
@@ -1679,21 +1677,21 @@ class WxGLRegion:
                 y = dy-t
                 self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5*lw, inside=False)
                 box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
-                self.text3d(yf(t), box, size=ticksize, align='right-middle', inside=False, light=False)
+                self.text3d(yf(t), box, size=ticksize, align='right-middle', inside=False, light=0)
         else:
             for y in yy[1:-1]:
                 self.line(np.array([[x_min,y,0],[x_min-da/2,y,0]]), lc, width=0.5*lw, inside=False)
                 box = np.array([[x_min-2*da,y+da,0],[x_min-2*da,y-da,0],[x_min-da,y-da,0],[x_min-da,y+da,0]])
-                self.text3d(yf(y), box, size=ticksize, align='right-middle', inside=False, light=False)
+                self.text3d(yf(y), box, size=ticksize, align='right-middle', inside=False, light=0)
         
         if xlabel:
             if len(xlabel) > 3:
                 m = (x_min+x_max)/2
                 box = np.array([[m-da,y_min-2.5*da,0],[m-da,y_min-3*da,0],[m+da,y_min-3*da,0],[m+da,y_min-2.5*da,0]])
-                self.text3d(xlabel, box, size=labelsize, align='center-top', inside=False, light=False)
+                self.text3d(xlabel, box, size=labelsize, align='center-top', inside=False, light=0)
             else:
                 box = np.array([[x_max,y_min-da,0],[x_max,y_min-2*da,0],[x_max+da,y_min-2*da,0],[x_max+da,y_min-da,0]])
-                self.text3d(xlabel, box, size=labelsize, align='left-top', inside=False, light=False)
+                self.text3d(xlabel, box, size=labelsize, align='left-top', inside=False, light=0)
         
         if ylabel:
             if len(ylabel) > 3:
@@ -1701,10 +1699,10 @@ class WxGLRegion:
                 k = max(map(len, map(yf, yy[1:-1])))//3
                 box = np.array([[x_min-(5+k)*da,m+da,0],[x_min-(5+k)*da,m-da,0],[x_min-(3+k)*da,m-da,0],[x_min-(3+k)*da,m+da,0]])
                 regulate = (((4+k)*da-x_min, -m, 0), (90, (0,0,1)), (x_min-(4+k)*da, m, 0))
-                self.text3d(ylabel, box, size=labelsize, align='center-middle', regulate=regulate, inside=False, light=False)
+                self.text3d(ylabel, box, size=labelsize, align='center-middle', regulate=regulate, inside=False, light=0)
             else:
                 box = np.array([[x_min-2*da,y_max+da,0],[x_min-2*da,y_max,0],[x_min-da,y_max,0],[x_min-da,y_max+da,0]])
-                self.text3d(ylabel, box, size=labelsize, align='right-top', inside=False, light=False)
+                self.text3d(ylabel, box, size=labelsize, align='right-top', inside=False, light=0)
         
         for key in self.grid:
             self.drop_model(self.grid[key])
