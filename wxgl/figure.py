@@ -1,4 +1,36 @@
 # -*- coding: utf-8 -*-
+#
+# MIT License
+# 
+# Copyright (c) 2021 Tianyuan Langzi
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+
+
+"""
+WxGL: 基于pyopengl的三维数据可视化库
+
+WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
+同时，也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
+"""
+
 
 import os
 import uuid
@@ -15,7 +47,7 @@ BASE_PATH = os.path.dirname(__file__)
 
 
 class WxGLFrame(wx.Frame):
-    """"""
+    """绘图窗口主界面"""
     
     ID_STYLE = wx.NewIdRef()    # 风格
     ID_RESTORE = wx.NewIdRef()  # 相机复位
@@ -23,7 +55,7 @@ class WxGLFrame(wx.Frame):
     ID_PAUSE = wx.NewIdRef()    # 动态显示
     ID_GRID = wx.NewIdRef()     # 网格
     
-    id_white = wx.NewIdRef()    # 皓月白
+    id_white = wx.NewIdRef()    # 珍珠白
     id_black = wx.NewIdRef()    # 石墨黑
     id_gray = wx.NewIdRef()     # 国际灰
     id_blue = wx.NewIdRef()     # 太空蓝
@@ -31,12 +63,13 @@ class WxGLFrame(wx.Frame):
     def __init__(self, parent, size):
         """构造函数"""
         
-        wx.Frame.__init__(self, None, -1, 'wxPlot', size=size, style=wx.DEFAULT_FRAME_STYLE)
-        self.parent = parent
+        wx.Frame.__init__(self, None, -1, 'wxPlot', style=wx.DEFAULT_FRAME_STYLE)
+        self.SetSize(parent.size)
         self.Center()
         self.SetIcon(wx.Icon(os.path.join(BASE_PATH, 'res', 'wxplot.ico')))
         
         self.scene = scene.WxGLScene(self, style=parent.style3d, **parent.kwds)
+        self.parent = parent
         self.csize = self.scene.GetClientSize()
         
         bmp_style = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_style_32.png'), wx.BITMAP_TYPE_ANY)
@@ -133,7 +166,7 @@ class WxGLFrame(wx.Frame):
         bmp_gray = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'gray_16.png'), wx.BITMAP_TYPE_ANY)
         bmp_blue = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'blue_16.png'), wx.BITMAP_TYPE_ANY)
         
-        m1 =  wx.MenuItem(submenu, self.id_white, "皓月白")
+        m1 =  wx.MenuItem(submenu, self.id_white, "珍珠白")
         m1.SetBitmap(bmp_white)
         submenu.Append(m1)
 
@@ -151,25 +184,6 @@ class WxGLFrame(wx.Frame):
 
         self.PopupMenu(submenu)
         tb.SetToolSticky(evt.GetId(), False)
-    
-    def set_tb_status(self):
-        """设置工具按钮的图片"""
-        
-        if self.scene.sys_timer.IsRunning():
-            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_stop)
-            self.tb.SetToolShortHelp(self.ID_PAUSE, '停止动态显示')
-        else:
-            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
-            self.tb.SetToolShortHelp(self.ID_PAUSE, '开启动态显示')
-        
-        if self.parent.grid_is_show and self.scene.grid_is_show:
-            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_hide)
-            self.tb.SetToolShortHelp(self.ID_GRID, '隐藏网格')
-        else:
-            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_show)
-            self.tb.SetToolShortHelp(self.ID_GRID, '显示网格')
-        
-        self.tb.Realize()
         
     def on_resize(self, evt):
         """响应窗口尺寸改变事件"""
@@ -193,14 +207,37 @@ class WxGLFrame(wx.Frame):
     def on_grid(self, evt):
         """显示/隐藏坐网格"""
         
-        self.scene.update_grid_visible()
-        self.set_tb_status()
+        self.scene.grid_is_show = not self.scene.grid_is_show
+        if self.scene.grid_is_show:
+            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_hide)
+            self.tb.SetToolShortHelp(self.ID_GRID, '隐藏网格')
+        else:
+            self.tb.SetToolBitmap(self.ID_GRID, self.bmp_show)
+            self.tb.SetToolShortHelp(self.ID_GRID, '显示网格')
+        
+        for ax in self.scene.subgraphs:
+            for key in ax.reg_main.grid:
+                if ax.grid_is_show and self.scene.grid_is_show:
+                    ax.reg_main.show_model(ax.reg_main.grid[key])
+                else:
+                    ax.reg_main.hide_model(ax.reg_main.grid[key])
+        
+        self.tb.Realize()
+        self.scene.update_grid()
+        self.scene.Refresh(False)
     
     def on_pause(self, evt):
         """暂停/启动"""
         
         self.scene.pause_sys_timer()
-        self.set_tb_status()
+        if self.scene.sys_timer.IsRunning():
+            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_stop)
+            self.tb.SetToolShortHelp(self.ID_PAUSE, '停止动态显示')
+        else:
+            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
+            self.tb.SetToolShortHelp(self.ID_PAUSE, '开启动态显示')
+        
+        self.tb.Realize()
     
     def on_save(self, evt):
         """保存为文件"""
@@ -217,36 +254,64 @@ class WxGLFrame(wx.Frame):
         dlg.Destroy()
 
 
-class WxGLFigure:
-    """wxplot的API"""
+def single_figure(cls):
+    """画布类单实例模式装饰器"""
     
-    def __init__(self, size=(1280,960), **kwds):
+    _instance = {}
+
+    def _single_figure(**kwds):
+        for key in kwds:
+            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        if cls not in _instance:
+            _instance[cls] = cls(**kwds)
+        else:
+            if 'size' in kwds:
+                _instance[cls].size = kwds['size']
+            if 'style2d' in kwds:
+                _instance[cls].style2d = kwds['style2d']
+            if 'style3d' in kwds:
+                _instance[cls].style3d = kwds['style3d']
+            if 'dist' in kwds:
+                _instance[cls].kwds.update({'dist': kwds['dist']})
+            if 'view' in kwds:
+                _instance[cls].kwds.update({'view': kwds['view']})
+            if 'elevation' in kwds:
+                _instance[cls].kwds.update({'elevation': kwds['elevation']})
+            if 'azimuth' in kwds:
+                _instance[cls].kwds.update({'azimuth': kwds['azimuth']})
+        
+        return _instance[cls]
+
+    return _single_figure
+
+
+@single_figure
+class WxGLFigure:
+    """画布类"""
+    
+    def __init__(self, **kwds):
         """构造函数
         
-        size        - 画布分辨率， 默认1280x960
         kwds        - 关键字参数
+                        size        - 画布分辨率， 默认1280x960
+                        style2d     - 2D模式下的默认风格，默认
+                        style3d     - 3D模式下的默认风格
                         dist        - 眼睛与ECS原点的距离
                         view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
-                        style2d     - 2D模式下的默认风格
-                        style3d     - 3D模式下的默认风格
-                        grid        - 初始状态是否显示网格
         """
-        
-        for key in kwds:
-            if key not in ['dist', 'view', 'elevation', 'azimuth', 'style2d', 'style3d', 'grid']:
-                raise KeyError('不支持的关键字参数：%s'%key)
         
         dist = kwds.get('dist', 5)
         view = kwds.get('view', [-1, 1, -1, 1, 2.6, 1000])
         elevation = kwds.get('elevation', 5)
         azimuth = kwds.get('azimuth', 30)
         
-        self.size = size
+        self.size = kwds.get('size', (1280,960))
         self.style2d = kwds.get('style2d', 'white')
         self.style3d = kwds.get('style3d', 'blue')
-        self.grid_is_show = kwds.get('grid', True)
         self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth}
         
         self.app = None
@@ -254,7 +319,6 @@ class WxGLFigure:
         self.cm = cm.ColorManager()
         self.curr_ax = None
         self.assembly = list()
-        self.subgraphs = list()
     
     def _create_frame(self):
         """生成窗体"""
@@ -266,7 +330,6 @@ class WxGLFigure:
             self.ff = WxGLFrame(self, self.size)
             self.curr_ax = None
             self.assembly = list()
-            self.subgraphs = list()
     
     def _destroy_frame(self):
         """销毁窗体"""
@@ -285,18 +348,17 @@ class WxGLFigure:
         for item in self.assembly:
             getattr(item[0], item[1])(*item[2], **item[3])
         
-        for ax in self.subgraphs:
+        for ax in self.ff.scene.subgraphs:
             if self.ff.scene.mode == '2D':
-                if ax.axis:
+                if ax.axis_is_show:
                     ax.reg_main.ticks2d(
-                        xlabel=ax.xlabel, ylabel=ax.ylabel, 
+                        xlabel=ax.labelx, ylabel=ax.labely, 
                         xf=ax.xf, yf=ax.yf, 
                         xd=ax.xd, yd=ax.yd, 
                         xrotate=ax.xrotate,
-                        yreverse=ax.yreverse
+                        yreverse=ax.reversey,
+                        grid=ax.grid_is_show
                     )
-                
-                self.ff.scene.update_grid_visible(reverse=False, hide=not self.grid_is_show)
                 
                 cw, ch = self.ff.csize[0]*ax.reg_main.box[2], self.ff.csize[1]*ax.reg_main.box[3]
                 w, h = ax.reg_main.r_x[1]-ax.reg_main.r_x[0], ax.reg_main.r_y[1]-ax.reg_main.r_y[0]
@@ -309,15 +371,14 @@ class WxGLFigure:
                 elif cw < 1 and w < 1:
                     self.ff.scene.set_posture(zoom=1.5*max(ch, h), save=True)
             else:
-                ax.reg_main.ticks3d(
-                    xlabel=ax.xlabel, ylabel=ax.ylabel, zlabel=ax.zlabel, 
-                    xf=ax.xf, yf=ax.yf, zf=ax.zf, 
-                    xd=ax.xd, yd=ax.yd, zd=ax.zd, 
-                    bg=(0.9,1.0,0.6,0.1)
-                )
-                self.ff.scene.update_grid_visible(reverse=False, hide=not self.grid_is_show)
+                if ax.grid_is_show:
+                    ax.reg_main.ticks3d(
+                        xlabel=ax.labelx, ylabel=ax.labely, zlabel=ax.labelz, 
+                        xf=ax.xf, yf=ax.yf, zf=ax.zf, 
+                        xd=ax.xd, yd=ax.yd, zd=ax.zd, 
+                        bg=(0.9,1.0,0.6,0.1)
+                    )
         
-        self.ff.set_tb_status()
         if not self.ff.scene.sys_timer.IsRunning():
             self.ff.tb.EnableTool(self.ff.ID_PAUSE, False)
     
@@ -341,8 +402,8 @@ class WxGLFigure:
             self._draw()
             self.ff.Show()
             self.app.MainLoop()
-        except:
-            pass
+        except Exception as e:
+            print(str(e))
         finally:
             self._destroy_frame()
     
@@ -385,7 +446,7 @@ class WxGLFigure:
         finally:
             self._destroy_frame()
     
-    def add_axes(self, pos):
+    def add_axes(self, pos=111):
         """添加子图
         
         pos         - 子图在场景中的位置和大小
@@ -394,11 +455,12 @@ class WxGLFigure:
         """
         
         self._create_frame()
-        self.curr_ax =  axes.WxGLAxes(self.ff.scene, pos)
-        self.subgraphs.append(self.curr_ax)
+        self.curr_ax = axes.WxGLAxes(self.ff.scene, pos)
+        self.ff.scene.subgraphs.append(self.curr_ax)
+        
+        return self.curr_ax
     
     def add_widget(self, reg, func, *args, **kwds):
         """添加部件"""
         
         self.assembly.append([reg, func, list(args), kwds])
-        

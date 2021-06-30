@@ -37,17 +37,40 @@ from . import figure as wff
 
 
 fig = wff.WxGLFigure()
+create_figure = wff.WxGLFigure
 
-subplot = fig.add_axes
 show = fig.show
 savefig = fig.savefig
 capture = fig.capture
 
-color_help = fig.cm.color_help
-cmap_help = fig.cm.cmap_help
 cmap = fig.cm.cmap
 
+def figure(**kwds):
+    """初始化画布
     
+    kwds        - 关键字参数
+                    size        - 画布分辨率， 默认1280x960
+                    style2d     - 2D模式下的默认风格，默认
+                    style3d     - 3D模式下的默认风格
+                    dist        - 眼睛与ECS原点的距离
+                    view        - 视景体
+                    elevation   - 仰角
+                    azimuth     - 方位角
+    """
+    
+    global fig
+    fig = wff.WxGLFigure(**kwds)
+
+def subplot(pos=111):
+    """添加子图
+    
+    pos         - 子图在场景中的位置和大小
+                    三位数字    - 指定分割画布的行数、列数和子图序号。例如，223表示两行两列的第3个位置
+                    四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
+    """
+    
+    ax = fig.add_axes(pos)
+
 def current_axes(func):
     """装饰器函数，检查是否存在当前子图，若无则创建"""
     
@@ -60,133 +83,49 @@ def current_axes(func):
     
     return wrapper
 
-def figure(size=(960,720), **kwds):
-    """设置画布
-        
-        size        - 画布分辨率， 默认960x720
-        kwds        - 关键字参数
-                        dist        - 眼睛与ECS原点的距离，默认5
-                        view        - 视景体， 默认[-1, 1, -1, 1, 2.6, 1000]
-                        elevation   - 仰角，默认0°
-                        azimuth     - 方位角，默认0°
-                        style2d     - 2D模式下的默认风格
-                        style3d     - 3D模式下的默认风格
-                        grid        - 初始状态是否显示网格
-    """
-    for key in kwds:
-            if key not in ['dist', 'view', 'elevation', 'azimuth', 'style2d', 'style3d', 'grid']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-    
-    dist = kwds.get('dist', 5)
-    view = kwds.get('view', [-1, 1, -1, 1, 2.6, 1000])
-    elevation = kwds.get('elevation', 10)
-    azimuth = kwds.get('azimuth', 30)
-    
-    fig.style2d = kwds.get('style2d', 'white')
-    fig.style3d = kwds.get('style3d', 'blue')
-    fig.grid_is_show = kwds.get('grid', True)
-    fig.size = size
-    fig.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth}
-    
-    if fig.ff:
-        fig.ff.SetSize(fig.size)
-        fig.ff.Center()
-        fig.ff.scene.set_posture(dist=dist, azimuth=azimuth, elevation=elevation, save=True)
-
 @current_axes
-def colors():
-    """绘制可用的颜色及其对应的中英文名称"""
-    
-    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
-    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
-    
-    colors = fig.cm.color_help()
-    for i in range(len(colors)):
-        row, col = i//6, i%6
-        x, y = 2.2+col*5, -row*0.5
-        cen, ccn = colors[i]
-        c = fig.cm.color2c(cen)
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
-        fig.curr_ax.surface(vs, color=c, method='Q')
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
-        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
-        
-        fig.curr_ax.text(ccn, size=32, pos=(x-0.15,y), align='right-middle')
-        fig.curr_ax.text('(%s)'%cen, size=32, pos=(x+0.15,y), align='left-middle')
-    
-    fig.curr_ax.set_axis(False)
-    show()@current_axes
-
-def cmaps():
-    """绘制可用的颜色映射表"""
-    
-    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
-    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
-    
-    cms = fig.cm.cmap_help()
-    for i in range(len(colors)):
-        row, col = i//6, i%6
-        x, y = 2.2+col*5, -row*0.5
-        cen, ccn = colors[i]
-        c = fig.cm.color2c(cen)
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
-        fig.curr_ax.surface(vs, color=c, method='Q')
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
-        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
-        
-        fig.curr_ax.text(ccn, size=32, pos=(x-0.15,y), align='right-middle')
-        fig.curr_ax.text('(%s)'%cen, size=32, pos=(x+0.15,y), align='left-middle')
-    
-    fig.curr_ax.set_axis(False)
-    show()
-
-@current_axes
-def axis(visible):
-    fig.curr_ax.set_axis(visible)
+def axis(**kwds):
+    fig.curr_ax.xlabel(**kwds)
 
 @current_axes
 def xlabel(xlabel):
-    fig.curr_ax.set_xlabel(xlabel)
+    fig.curr_ax.xlabel(xlabel)
 
 @current_axes
 def ylabel(ylabel):
-    fig.curr_ax.set_ylabel(ylabel)
+    fig.curr_ax.ylabel(ylabel)
 
 @current_axes
 def zlabel(zlabel):
-    fig.curr_ax.set_zlabel(zlabel)
+    fig.curr_ax.zlabel(zlabel)
 
 @current_axes
-def rotate_xtick():
-    fig.curr_ax.rotate_xtick()
+def xrotate():
+    fig.curr_ax.xrotate()
 
 @current_axes
-def format_xtick(xf):
-    fig.curr_ax.format_xtick(xf)
+def xformat(xf):
+    fig.curr_ax.xformat(xf)
 
 @current_axes
-def format_ytick(yf):
-    fig.curr_ax.format_ytick(yf)
+def yformat(yf):
+    fig.curr_ax.yformat(yf)
 
 @current_axes
-def format_ztick(zf):
-    fig.curr_ax.format_ytick(zf)
+def zformat(zf):
+    fig.curr_ax.zformat(zf)
 
 @current_axes
-def density_xtick(xd):
-    fig.curr_ax.density_xtick(xd)
+def xdensity(xd):
+    fig.curr_ax.xdensity(xd)
 
 @current_axes
-def density_ytick(yd):
-    fig.curr_ax.density_ytick(yd)
+def ydensity(yd):
+    fig.curr_ax.ydensity(yd)
 
 @current_axes
-def density_ztick(zd):
-    fig.curr_ax.density_ztick(zd)
+def zdensity(zd):
+    fig.curr_ax.zdensity(zd)
 
 @current_axes
 def title(*args, **kwds):
@@ -239,5 +178,57 @@ def cone(*args, **kwds):
 @current_axes
 def cylinder(*args, **kwds):
     fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def colors():
+    """绘制可用的颜色及其对应的中英文名称"""
+    
+    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
+    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
+    
+    colors = fig.cm.color_help()
+    for i in range(len(colors)):
+        row, col = i//6, i%6
+        x, y = 2.2+col*5, -row*0.5
+        cen, ccn = colors[i]
+        c = fig.cm.color2c(cen)
+        
+        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
+        fig.curr_ax.surface(vs, color=c, method='Q')
+        
+        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
+        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
+        
+        fig.curr_ax.text(ccn, size=28, pos=(x-0.15,y), align='right-middle')
+        fig.curr_ax.text('(%s)'%cen, size=28, pos=(x+0.15,y), align='left-middle')
+    
+    fig.curr_ax.axis(visible=False)
+    show()
+
+@current_axes
+def cmaps():
+    """绘制可用的颜色映射表"""
+    
+    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
+    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
+    
+    cms = fig.cm.cmap_help()
+    for i in range(len(colors)):
+        row, col = i//6, i%6
+        x, y = 2.2+col*5, -row*0.5
+        cen, ccn = colors[i]
+        c = fig.cm.color2c(cen)
+        
+        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
+        fig.curr_ax.surface(vs, color=c, method='Q')
+        
+        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
+        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
+        
+        fig.curr_ax.text(ccn, size=32, pos=(x-0.15,y), align='right-middle')
+        fig.curr_ax.text('(%s)'%cen, size=32, pos=(x+0.15,y), align='left-middle')
+    
+    fig.curr_ax.axis(visible=False)
+    show()
 
 

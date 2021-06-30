@@ -23,13 +23,13 @@ class WxGLAxes:
         
         self.scene = scene
         self.ff = self.scene.parent
-        self.fig = self.scene.parent.parent
+        self.fig = self.ff.parent
         self.cm = self.scene.cm
         
         w, h = self.scene.size
         margin, padding = 0.05, 0.01
         
-        if isinstance(pos, (str, int)) and re.compile(r'^[\d]{3}$').match(str(pos)): 
+        if isinstance(pos, (str, int)) and re.compile(r'^[1-9]{3}$').match(str(pos)): 
             rows, cols, cell = [int(ch) for ch in str(pos)]
             i, j = (cell-1)//cols, (cell-1)%cols
             cw, ch = (1-2*margin)/cols, (1-2*margin)/rows
@@ -39,105 +39,107 @@ class WxGLAxes:
         else:
             raise ValueError("期望参数pos是三个数字组成的整数或字符串，或者长度为4的元组或列表")
         
-        self.reg_main = self.scene.add_region(box)
-        self.reg_title = None
-        self.reg_cb_r = None
-        self.reg_cb_l = None
-        self.reg_cb_b = None
-        self.reg_cb_br = None
-        self.reg_cb_bl = None
+        self.reg_main = self.scene.add_region(box)      # 主视区
+        self.reg_title = None                           # 标题视区
+        self.reg_cb_r = None                            # 右侧色条视区
+        self.reg_cb_l = None                            # 左侧色条视区
+        self.reg_cb_b = None                            # 底部色条视区
+        self.reg_cb_br = None                           # 底部右侧色条视区
+        self.reg_cb_bl = None                           # 底部左侧色条视区
+        
+        self.grid_is_show = True                        # 网格是否显示
+        self.axis_is_show = True                        # 坐标轴是否显示（仅2D模式有效）
+        self.ci = 0                                     # 默认颜色选择指针
+        self.widgets = list()                           # 部件列表
         
         self.drange = None
         self.cbcm = None
         
-        self.axis = True
-        self.xlabel = 'X'
-        self.ylabel = 'Y'
-        self.zlabel = 'Z'
-        self.xf = str
-        self.yf = str
-        self.zf = str
-        self.xd = 0
-        self.yd = 0
-        self.zd = 0
-        self.xrotate = False
-        self.yreverse = False
-        
-        self.colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-        self.ci = 0
+        self.labelx = 'X'                               # x轴名称
+        self.labely = 'Y'                               # y轴名称
+        self.labelz = 'Z'                               # z轴名称
+        self.xf = str                                   # x轴标注格式化函数
+        self.yf = str                                   # y轴标注格式化函数
+        self.zf = str                                   # z轴标注格式化函数
+        self.xd = 0                                     # x轴标注密度
+        self.yd = 0                                     # y轴标注密度
+        self.zd = 0                                     # z轴标注密度
+        self.rotatex = False                            # x轴标注是否旋转
+        self.reversey = False                           # y轴是否反转
     
     def get_color(self):
         """返回下一个可用的默认颜色"""
         
-        color = self.colors[self.ci]
-        self.ci = (self.ci+1)%len(self.colors)
+        color = self.cm.default_colors[self.ci]
+        self.ci = (self.ci+1)%len(self.cm.default_colors)
         
         return color
     
     def set_2d_mode(self):
         """设置scene为2D模式"""
         
+        h2d_offset = -0.1 if self.axis_is_show else 0
+        
         self.scene.set_proj('ortho')
         self.scene.set_mode('2D')
         self.scene.set_style(self.fig.style2d)
-        self.scene.set_posture(zoom=1.5, oecs=(-0.1,0,0), dist=5, azimuth=0, elevation=0, save=True)
+        self.scene.set_posture(zoom=1.5, oecs=(h2d_offset,0,0), dist=5, azimuth=0, elevation=0, save=True)
     
-    def set_axis(self, visible):
-        """设置坐标轴是否可见"""
+    def axis(self, **kwds):
+        """设置坐标轴"""
         
-        self.axis = visible
-        
-        if self.axis:
-            self.scene.set_posture(oecs=(-0.1,0,0), save=True)
-        else:
-            self.scene.set_posture(oecs=(0,0,0), save=True)
+        if not kwds.get('visible', True):
+            self.axis_is_show = False
+            if self.scene.mode == '2D':
+                h2d_offset = -0.1 if self.axis_is_show else 0
+                self.scene.set_posture(oecs=(h2d_offset,0,0), save=True)
     
-    def set_xlabel(self, xlabel):
+    def xlabel(self, xlabel):
         """设置x轴名称，text为文本字符串"""
         
-        self.xlabel = xlabel
+        self.labelx = xlabel
     
-    def set_ylabel(self, ylabel):
+    def ylabel(self, ylabel):
         """设置y轴名称"""
         
-        self.ylabel = ylabel
+        self.labely = ylabel
     
-    def set_zlabel(self, zlabel):
+    def zlabel(self, zlabel):
         """设置z轴名称"""
         
-        self.zlabel = zlabel
+        self.labelz = zlabel
     
-    def rotate_xtick(self):
+    def xrotate(self):
         """旋转x轴的标注"""
         
-        self.xrotate = True
+        self.rotatex = True
     
-    def format_xtick(self, xf):
+    def xformat(self, xf):
         """格式化x轴的标注"""
         
         self.xf = xf
     
-    def format_ytick(self, yf):
+    def yformat(self, yf):
         """格式化y轴的标注"""
         
         self.yf = yf
     
-    def format_ztick(self, zf):
+    def zformat(self, zf):
         """格式化z轴的标注"""
         
         self.zf = zf
     
-    def density_xtick(self, xd):
+    def xdensity(self, xd):
         """设置x轴标注疏密度"""
         
         self.xd = xd
     
-    def density_ytick(self, yd):
+    def ydensity(self, yd):
         """设置y轴标注疏密度"""
         
         self.yd = yd
     
-    def density_ztick(self, zd):
+    def zdensity(self, zd):
         """设置z轴标注疏密度"""
         
         self.zd = zd
@@ -184,6 +186,7 @@ class WxGLAxes:
         box = np.array([[-1,0,0],[-1,-0.3,0],[1,-0.3,0],[1,0,0]])
         kwds.update({'light':0})
         self.fig.add_widget(self.reg_title, 'text3d', text, size=size, color=color, box=box, **kwds)
+        self.widgets.append({'cm':None})
         
     def colorbar(self, drange=None, cm=None, loc='right', **kwds):
         """绘制colorbar
@@ -206,11 +209,16 @@ class WxGLAxes:
         """
         
         if drange is None:
-            drange = self.drange
+            if self.widgets and 'drange' in self.widgets[-1] and not self.widgets[-1]['drange'] is None:
+                drange = self.widgets[-1]['drange']
+            else:
+                return
+                
         if cm is None:
-            cm = self.cbcm
-        if drange is None or cm is None:
-            return
+            if self.widgets and 'cm' in self.widgets[-1] and not self.widgets[-1]['cm'] is None:
+                cm = self.widgets[-1]['cm']
+            else:
+                return
         
         assert loc in ('right','left','bottom','bottom-left','bottom-right'), '参数loc的值不是合法选项'
         
@@ -266,6 +274,8 @@ class WxGLAxes:
                 box = (0, 0.02, 1, h)
                 self.reg_cb_b = self.scene.add_region(box, fixed=True, proj='ortho')
                 self.fig.add_widget(self.reg_cb_b, 'colorbar', drange, cm, mode='H', **kwds)
+        
+        self.widgets.append({'cm':None})
     
     def text(self, text, size=40, color=None, pos=(0,0,0), align=None, family=None, weight='normal', **kwds):
         """绘制文本
@@ -338,12 +348,14 @@ class WxGLAxes:
             if align not in ('VR', 'VL'):
                 align = None
             self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, align=align, **kwds)
+        
+        self.widgets.append({'cm':None})
     
     def plot(self, xs, ys, zs=None, color=None, cm=None, size=None, width=1.0, style='solid', **kwds):
         """绘制点和线
         
         xs/ys/sz    - 点的x/y/z坐标集，等长的一维元组、列表或数组。若zs为None，则自动切换为2D模式
-        color       - 点或每个点的颜色，或每个点对应的数据（此种情况下cmap参数不能为None）
+        color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
         cm          - 颜色映射表，仅当参数color为每个点对应的数据时有效
         size        - 点的大小，若为0或None，则表示不绘制点，只绘制线
         width       - 线宽，0.0~10.0之间的浮点数。若为0或None，则表示不绘制线，只绘制点
@@ -401,11 +413,16 @@ class WxGLAxes:
         if cm is None:
             if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
                 color = self.get_color()
+            
+            self.widgets.append({'cm':None})
             color = self.cm.color2c(color)
         else:
             if isinstance(color, (tuple,list)):
                 color = np.array(color)
+            
             assert isinstance(color, np.ndarray) and color.shape == xs.shape, '参数cmap有效时，期望参数color是和x或y等长的元组、列表或一维数组'
+            
+            self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
             color = self.cm.cmap(color, cm)
         
         # 添加到部件库
@@ -418,7 +435,7 @@ class WxGLAxes:
         """绘制散点图
         
         vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 点的颜色，或每个点的颜色，或每个点对应的数据（此种情况下cmap参数不能为None）
+        color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
         cm          - 颜色映射表，仅当参数color为每个点对应的数据时有效
         size        - 点或每个点的大小
         kwds        - 关键字参数
@@ -452,11 +469,16 @@ class WxGLAxes:
         if cm is None:
             if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
                 color = self.get_color()
+            
+            self.widgets.append({'cm':None})
             color = self.cm.color2c(color, size=len(vs))
         else:
             if isinstance(color, (tuple,list)):
                 color = np.array(color)
-            assert isinstance(color, np.ndarray) and color.shape == vs.shape[:-1], '参数cmap有效时，期望参数color是和vs等长的一维元组、列表或数组'
+            
+            assert isinstance(color, np.ndarray) and color.shape == vs.shape[:-1], '参数cm有效时，期望参数color是和vs等长的一维元组、列表或数组'
+            
+            self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
             color = self.cm.cmap(color, cm)
         
         # size参数处理
@@ -512,9 +534,7 @@ class WxGLAxes:
         
         cvalues, contours = util.get_contour(data, xs, ys, levels)
         color = self.cm.cmap(cvalues, cm)
-        
-        self.drange = cvalues.tolist()
-        self.cbcm = cm
+        self.widgets.append({'cm':cm, 'drange':cvalues.tolist()})
         
         #if fill:
         #    for i in range(1, len(self.drange)):
@@ -562,7 +582,7 @@ class WxGLAxes:
         
         if ys is None:
             ys = np.repeat(np.arange(rows), cols).reshape(rows, cols)
-            #self.yreverse = True
+            #self.reversey = True
             #data = np.flipud(data)
         elif isinstance(ys, (tuple,list)):
             ys = np.array(ys)
@@ -571,12 +591,9 @@ class WxGLAxes:
         self.set_2d_mode()
         kwds.update({'light':0})
         zs = np.zeros((rows, cols))
-        
-        self.drange = np.nanmin(data), np.nanmax(data)
-        self.cbcm = cm
-        
         c = self.cm.cmap(data, cm)
         texture = np.uint8(c*255)
+        self.widgets.append({'cm':cm, 'drange':(np.nanmin(data), np.nanmax(data))})
         
         if smooth:
             w = np.ones((3,3))
@@ -637,11 +654,12 @@ class WxGLAxes:
         
         pass
     
-    def mesh(self, xs, ys, zs=None, color=None, texture=None, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, **kwds):
         """绘制网格
         
-        xs/ys/sz    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
+        color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
+        cm          - 颜色映射表
         texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
         kwds        - 关键字参数
                         name        - 模型名
@@ -680,12 +698,39 @@ class WxGLAxes:
         elif isinstance(zs, (tuple,list)):
             zs = np.array(zs)
         
-        assert isinstance(xs, np.ndarray) and xs.ndim == 2, '期望参数xs是二维的元组、列表或数组'
-        assert isinstance(ys, np.ndarray) and ys.ndim == 2, '期望参数ys是二维的元组、列表或数组'
-        assert isinstance(zs, np.ndarray) and zs.ndim == 2, '期望参数zs是二维的元组、列表或数组'
+        assert isinstance(xs, np.ndarray) and xs.ndim == 2, '期望参数xs是类二维数组'
+        assert isinstance(ys, np.ndarray) and ys.ndim == 2, '期望参数ys是类二维数组'
+        assert isinstance(zs, np.ndarray) and zs.ndim == 2, '期望参数zs是类二维数组'
         assert xs.shape == ys.shape == zs.shape, '期望参数xs/ys/zs结构相同'
         
-        self.fig.add_widget(self.reg_main, 'mesh', xs, ys, zs, color=color, texture=texture, **kwds)
+        # color参数处理
+        if color is None:
+            self.widgets.append({'cm':None})
+            if texture is None:
+                color = self.get_color()
+                c = self.cm.color2c(color, size=(2,2))
+                texture = np.uint8(c*255)
+        else:
+            if isinstance(color, str):
+                self.widgets.append({'cm':None})
+                c = self.cm.color2c(color, size=(2,2))
+            else:
+                if isinstance(color, (tuple,list)):
+                    color = np.array(color)
+                
+                assert isinstance(color, np.ndarray), '期望参数color是类数组'
+                
+                if color.ndim == 1:
+                    self.widgets.append({'cm':None})
+                    c = self.cm.color2c(color, size=(2,2))
+                elif color.ndim == 2 and not cm is None:
+                    self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
+                    c = self.cm.cmap(color, cm)
+                else:
+                    raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
+            texture = np.uint8(c*255)
+        
+        self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
     
     def surface(self, vs, color=None, texture=None, texcoord=None, method='Q', **kwds):
         """绘制表面
@@ -739,7 +784,18 @@ class WxGLAxes:
             z = np.zeros((vs.shape[0],1))
             vs = np.hstack((vs,z))
         
-        self.fig.add_widget(self.reg_main, 'surface', vs, color=color, texture=texture, texcoord=texcoord, method=method, **kwds)
+        if method == 'P':
+            assert not color is None, '绘制多边形必须要指定颜色'
+        
+        if not color is None:
+            c = self.cm.color2c(color, size=(2,2))
+            texture = np.uint8(c*255)
+            texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
+        elif texture is None or texcoord is None:
+            raise ValueError('参数color为None时，参数texcoord和texture必须同时有效')
+        
+        self.widgets.append({'cm':None})
+        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
     
     def cube(self, center, side, color=None, **kwds):
         """绘制六面体
@@ -792,6 +848,7 @@ class WxGLAxes:
         texture = np.uint8(c*255)
         texcoord = np.tile(np.zeros(2), (24,1))
         
+        self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, 'Q', **kwds)
     
     def sphere(self, center, radius, color=None, texture=None, slices=90, **kwds):
@@ -838,6 +895,7 @@ class WxGLAxes:
         ys = radius * np.cos(lats)*np.sin(lons) + center[1]
         zs = radius * np.sin(lats) + center[2]
         
+        self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
     
     def cone(self, center, spire, radius, color=None, slices=90, bottom=True, **kwds):
@@ -898,6 +956,7 @@ class WxGLAxes:
         texcoord_cone = np.tile(np.zeros(2), (vs_cone.shape[0],1))
         texcoord_ground = np.tile(np.zeros(2), (vs_ground.shape[0],1))
         
+        self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs_cone, texture, texcoord_cone, 'F', **kwds)
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_ground, texture, texcoord_ground, 'P', **kwds)
@@ -960,6 +1019,7 @@ class WxGLAxes:
         vs = np.stack((vs_t, vs_b, np.vstack((vs_b[1:],vs_b[:1])), np.vstack((vs_t[1:],vs_t[:1]))), axis=1).reshape(-1,3)
         texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         
+        self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, 'Q', **kwds)
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_b, texture, texcoord_end, 'P', **kwds)

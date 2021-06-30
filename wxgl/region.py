@@ -460,7 +460,7 @@ class WxGLRegion:
     def refresh(self):
         """更新视区显示"""
         
-        wx.CallAfter(self.scene._update_grid)
+        wx.CallAfter(self.scene.update_grid)
         wx.CallAfter(self.scene.Refresh, False)
     
     def show_model(self, name):
@@ -624,7 +624,7 @@ class WxGLRegion:
             color = self.cm.color2c(color)
         
         texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
-        texture = self.fm.text2img(text, size, color, family, weight)
+        texture = self.fm.text2img(text, 2*size, color, family, weight)
         
         cw0, ch0 = self.scene.osize[0]*self.box[2], self.scene.osize[1]*self.box[3]
         cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
@@ -1607,6 +1607,7 @@ class WxGLRegion:
                         lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
+                        grid            - 是否显示网格
                         
         """
         
@@ -1614,7 +1615,7 @@ class WxGLRegion:
             return
         
         for key in kwds:
-            if key not in ['xlabel','ylabel','xr','yr','xf','yf','font','labelsize','ticksize','xrotate','yreverse','xd','yd','lc','lw','bg']:
+            if key not in ['xlabel','ylabel','xr','yr','xf','yf','font','labelsize','ticksize','xrotate','yreverse','xd','yd','lc','lw','bg','grid']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         xlabel = kwds.get('xlabel', 'X')
@@ -1633,6 +1634,7 @@ class WxGLRegion:
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 1)
         bg = kwds.get('bg', False)
+        grid = kwds.get('grid', True)
         
         if xd < -2:
             xd = -2
@@ -1704,19 +1706,20 @@ class WxGLRegion:
                 box = np.array([[x_min-2*da,y_max+da,0],[x_min-2*da,y_max,0],[x_min-da,y_max,0],[x_min-da,y_max+da,0]])
                 self.text3d(ylabel, box, size=labelsize, align='right-top', inside=False, light=0)
         
-        for key in self.grid:
-            self.drop_model(self.grid[key])
-        
-        name = uuid.uuid1().hex
-        self.grid.clear()
-        self.grid.update({'grid':name})
-        
-        vs = list()
-        for x in xx[1:]:
-            vs.append((x, y_min, 0))
-            vs.append((x, y_max, 0))
-        for y in yy[1:]:
-            vs.append((x_min, y, 0))
-            vs.append((x_max, y, 0))
-        
-        self.line(np.array(vs), lc, width=0.3*lw, method='MULTI', stipple=(1,0xF0F0), inside=False, name=name)
+        if grid: # 绘制网格
+            for key in self.grid:
+                self.drop_model(self.grid[key])
+            
+            name = uuid.uuid1().hex
+            self.grid.clear()
+            self.grid.update({'grid':name})
+            
+            vs = list()
+            for x in xx[1:]:
+                vs.append((x, y_min, 0))
+                vs.append((x, y_max, 0))
+            for y in yy[1:]:
+                vs.append((x_min, y, 0))
+                vs.append((x_max, y, 0))
+            
+            self.line(np.array(vs), lc, width=0.3*lw, method='MULTI', stipple=(1,0xF0F0), inside=False, name=name)

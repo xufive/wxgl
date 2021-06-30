@@ -58,7 +58,7 @@ class WxGLScene(glcanvas.GLCanvas):
                         mode        - 2D/3D模式，字符串
                             '2D'        - 2D模式，y轴向上
                             '3D'        - 3D模式，z轴向上
-                        oecs        - 眼睛坐标系（Eye Coordinate System）原点
+                        oecs        - 视点坐标系（Eye Coordinate System）原点
                         dist        - 眼睛与ECS原点的距离
                         azimuth     - 方位角
                         elevation   - 仰角
@@ -68,7 +68,7 @@ class WxGLScene(glcanvas.GLCanvas):
                         light0      - 光源0的位置
                         light1      - 光源1的位置
                         style       - 场景风格
-                            'white'     - 皓月白
+                            'white'     - 珍珠白
                             'black'     - 石墨黑
                             'gray'      - 国际灰
                             'blue'      - 太空蓝
@@ -111,6 +111,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.size = self.GetClientSize()                                    # OpenGL窗口的大小
         self.context = glcanvas.GLContext(self)                             # OpenGL上下文
         self.regions = list()                                               # 存储视区信息
+        self.subgraphs = list()                                             # 存储子图信息
         self.mpos = None                                                    # 鼠标位置
         
         self.osize = None                                                   # Scene窗口的初始分辨率
@@ -254,7 +255,7 @@ class WxGLScene(glcanvas.GLCanvas):
                 self.azimuth = (self.azimuth - self.up[2]*0.1*dx)%360
                 self.elevation = (self.elevation + 0.1*dy +180)%360 -180
                 self._set_eye_and_up()
-                self._update_grid()
+                self.update_grid()
             else:
                 dx = self.zoom*(self.view[1]-self.view[0])*dx/self.size[0]
                 dy = self.zoom*(self.view[3]-self.view[2])*dy/self.size[1]
@@ -288,17 +289,18 @@ class WxGLScene(glcanvas.GLCanvas):
             azimuth = self.azimuth + self.rotate
             self.set_posture(azimuth=azimuth)
         
-        self._update_grid()
+        self.update_grid()
         self.Refresh(False)
     
-    def _update_grid(self):
+    def update_grid(self):
         """刷新坐标轴网格"""
         
         if self.mode == '2D' or not self.grid_is_show:
             return
         
-        for reg in self.regions:
-            if not reg.grid:
+        for ax in self.subgraphs:
+            reg = ax.reg_main
+            if not ax.grid_is_show or not reg.grid:
                 continue
             
             if self.elevation > 0:
@@ -583,7 +585,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.mode = mode
         self._set_eye_and_up(save=True)
-        self._update_grid()
+        self.update_grid()
     
     def set_style(self, style):
         """设置风格（背景和文本颜色）"""
@@ -614,43 +616,13 @@ class WxGLScene(glcanvas.GLCanvas):
             self.elevation = elevation
         
         self._set_eye_and_up(save=save)
-        self._update_grid()
+        self.update_grid()
         self.Refresh(False)
         
     def restore_posture(self):
         """还原观察姿态"""
         
         self.set_posture(**self.store)
-    
-    def update_grid_visible(self, reverse=True, hide=False):
-        """显示或隐藏坐标轴网格"""
-        
-        if self.mode == '2D':
-            if hide:
-                self.grid_is_show = False
-            elif reverse:
-                self.grid_is_show = not self.grid_is_show
-            
-            for reg in self.regions:
-                for key in reg.grid:
-                    if self.grid_is_show:
-                        reg.show_model(reg.grid[key])
-                    else:
-                        reg.hide_model(reg.grid[key])
-        else:
-            if hide:
-                self.grid_is_show = False
-            elif reverse:
-                self.grid_is_show = not self.grid_is_show
-            
-            if not self.grid_is_show:
-                for reg in self.regions:
-                    for key in reg.grid:
-                        reg.hide_model(reg.grid[key])
-            
-            self._update_grid()
-        
-        self.Refresh(False)
         
     def save_scene(self, fn, alpha=True, buffer='FRONT'):
         """保存场景为图像文件
