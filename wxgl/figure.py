@@ -195,6 +195,7 @@ class WxGLFrame(wx.Frame):
         self.scene.tscale = (self.csize[0]/self.scene.osize[0], self.csize[1]/self.scene.osize[1])
         
         self.parent.redraw()
+        self.scene.update_grid()
         self.scene.Refresh(False)
         
         evt.Skip()

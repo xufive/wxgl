@@ -624,7 +624,7 @@ class WxGLRegion:
             color = self.cm.color2c(color)
         
         texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
-        texture = self.fm.text2img(text, 2*size, color, family, weight)
+        texture = self.fm.text2img(text, size, color, family, weight)
         
         cw0, ch0 = self.scene.osize[0]*self.box[2], self.scene.osize[1]*self.box[3]
         cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]

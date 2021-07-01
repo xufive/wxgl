@@ -170,17 +170,21 @@ class WxGLAxes:
                 k = 0.17647
             
             a0, a1, a2, a3 = self.reg_main.box
+            x, w = a0, a2
             self.reg_main.reset_box((a0, a1, a2, a3*(1-k)))
             
             if not self.reg_cb_r is None:
                 b0, b1, b2, b3 = self.reg_cb_r.box
+                w += b2
                 self.reg_cb_r.reset_box((b0, b1, b2, b3*(1-k)))
             
             if not self.reg_cb_l is None:
                 c0, c1, c2, c3 = self.reg_cb_l.box
+                x = c0
+                w += c2
                 self.reg_cb_l.reset_box((c0, c1, c2, c3*(1-k)))
             
-            box = (0, a1+a3*(1-k), 1, a3*k)
+            box = (x, a1+a3*(1-k), w, a3*k)
             self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
         
         box = np.array([[-1,0,0],[-1,-0.3,0],[1,-0.3,0],[1,0,0]])
