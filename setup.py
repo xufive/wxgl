@@ -43,6 +43,6 @@ setuptools.setup(
         'matplotlib>=3.1.2', 
         'wxpython>=4.0.7.post2',
         'pillow>=8.2.0',
-        'freetype-py>=2.1.0.post1'
+        'freetype-py>=2.2.0'
     ]
 )

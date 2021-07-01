@@ -355,7 +355,7 @@ class WxGLFigure:
                         xlabel=ax.labelx, ylabel=ax.labely, 
                         xf=ax.xf, yf=ax.yf, 
                         xd=ax.xd, yd=ax.yd, 
-                        xrotate=ax.xrotate,
+                        xrotate=ax.rotatex,
                         yreverse=ax.reversey,
                         grid=ax.grid_is_show
                     )

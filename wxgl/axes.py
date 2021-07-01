@@ -654,13 +654,13 @@ class WxGLAxes:
         
         pass
     
-    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm='jet', texture=None, **kwds):
         """绘制网格
         
         xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
-        color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
+        color       - 颜色，或每个点对应的数据。texture为None时该参数有效
         cm          - 颜色映射表
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
+        texture     - 纹理图片文件或numpy数组形式的图像数据
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
@@ -704,20 +704,16 @@ class WxGLAxes:
         assert xs.shape == ys.shape == zs.shape, '期望参数xs/ys/zs结构相同'
         
         # color参数处理
-        if color is None:
-            self.widgets.append({'cm':None})
-            if texture is None:
-                color = self.get_color()
-                c = self.cm.color2c(color, size=(2,2))
-                texture = np.uint8(c*255)
-        else:
+        if texture is None:
+            if color is None:
+                color = self.get_color() # 顺序选择默认的颜色
+            
             if isinstance(color, str):
                 self.widgets.append({'cm':None})
                 c = self.cm.color2c(color, size=(2,2))
             else:
                 if isinstance(color, (tuple,list)):
                     color = np.array(color)
-                
                 assert isinstance(color, np.ndarray), '期望参数color是类数组'
                 
                 if color.ndim == 1:
@@ -729,6 +725,8 @@ class WxGLAxes:
                 else:
                     raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
             texture = np.uint8(c*255)
+        else:
+            self.widgets.append({'cm':None})
         
         self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
     
@@ -787,12 +785,13 @@ class WxGLAxes:
         if method == 'P':
             assert not color is None, '绘制多边形必须要指定颜色'
         
-        if not color is None:
+        if texture is None or texcoord is None:
+            if color is None:
+                color = self.get_color() # 顺序选择默认的颜色
+            
             c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
             texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
-        elif texture is None or texcoord is None:
-            raise ValueError('参数color为None时，参数texcoord和texture必须同时有效')
         
         self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
@@ -882,11 +881,10 @@ class WxGLAxes:
                         
         """
         
-        if color is None and texture is None:
-            color = self.get_color()
-            c = self.cm.color2c(color, size=(2,2))
-            texture = np.uint8(c*255)
-        elif not color is None:
+        if texture is None:
+            if color is None:
+                color = self.get_color() # 顺序选择默认的颜色
+            
             c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
         

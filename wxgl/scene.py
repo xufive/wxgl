@@ -112,7 +112,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.context = glcanvas.GLContext(self)                             # OpenGL上下文
         self.regions = list()                                               # 存储视区信息
         self.subgraphs = list()                                             # 存储子图信息
-        self.mpos = None                                                    # 鼠标位置
+        self.mpos = wx._core.Point()                                        # 鼠标位置
         
         self.osize = None                                                   # Scene窗口的初始分辨率
         self.tscale = (1,1)                                                 # 和初始分辨率相比，Scene窗口的宽高变化率
