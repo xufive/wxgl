@@ -19,7 +19,7 @@ class mainFrame(wx.Frame):
         self.SetSize((1200, 800))
         self.Center()
         
-        icon = wx.Icon('res/wxgl.ico', wx.BITMAP_TYPE_ICO)
+        icon = wx.Icon('res/wxplot.ico', wx.BITMAP_TYPE_ICO)
         self.SetIcon(icon)
         
         # 创建场景，并设置视区

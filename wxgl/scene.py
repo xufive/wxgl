@@ -2,7 +2,7 @@
 #
 # MIT License
 # 
-# Copyright (c) 2020 天元浪子
+# Copyright (c) 2021 Tianyuan Langzi
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,15 +23,15 @@
 # SOFTWARE.
 #
 
+
 """
-WxGL是一个基于pyopengl的三维数据可视化库
+WxGL: 基于pyopengl的三维数据可视化库
 
 WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
 同时，也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
 """
 
 
-import uuid
 import wx
 from wx import glcanvas
 import numpy as np
@@ -40,9 +40,8 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from . import region
-from . import axes
-from . import colormap
-from . import fontmanager
+from . import cm
+from . import fm
 
 
 class WxGLScene(glcanvas.GLCanvas):
@@ -53,94 +52,78 @@ class WxGLScene(glcanvas.GLCanvas):
         
         parent      - 父级窗口对象
         kwds        - 关键字参数
-                        head        - 观察者头部的指向，字符串
-                            'x+'        - 头部指向x轴正方向
-                            'y+'        - 头部指向y轴正方向
-                            'z+'        - 头部指向z轴正方向
-                        
-                        zoom        - 视口缩放因子
                         proj        - 投影模式，字符串
                             'ortho'     - 平行投影
                             'cone'      - 透视投影
                         mode        - 2D/3D模式，字符串
-                        aim         - 观察焦点
-                        dist        - 相机距离观察焦点的距离
-                        view        - 视景体
-                        elevation   - 仰角
+                            '2D'        - 2D模式，y轴向上
+                            '3D'        - 3D模式，z轴向上
+                        oecs        - 视点坐标系（Eye Coordinate System）原点
+                        dist        - 眼睛与ECS原点的距离
                         azimuth     - 方位角
-                        interval    - 模型动画帧间隔时间（单位：ms）
+                        elevation   - 仰角
+                        view        - 视景体
+                        zoom        - 视口缩放因子
+                        interval    - 定时器间隔（毫秒）
+                        light0      - 光源0的位置
+                        light1      - 光源1的位置
                         style       - 场景风格
-                            'black'     - 背景黑色，文本白色
-                            'white'     - 背景白色，文本黑色
-                            'gray'      - 背景浅灰色，文本深蓝色
-                            'blue'      - 背景深蓝色，文本淡青色
+                            'white'     - 珍珠白
+                            'black'     - 石墨黑
+                            'gray'      - 国际灰
+                            'blue'      - 太空蓝
+                            'royal'     - 宝石蓝
         """
         
         for key in kwds:
-            if key not in ['head', 'zoom', 'proj', 'mode', 'aim', 'dist', 'view', 'elevation', 'azimuth', 'interval', 'style']:
+            if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'light0', 'light1', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        head = kwds.get('head', 'z+')
-        zoom = kwds.get('zoom', 1.0)
-        proj = kwds.get('proj', 'cone')
-        mode = kwds.get('mode', '3D')
-        aim = kwds.get('aim', [0,0,0])
-        dist = kwds.get('dist', 5)
-        view = kwds.get('view', [-1,1,-1,1,3.2,7])
-        elevation = kwds.get('elevation', None)
-        azimuth = kwds.get('azimuth', None)
-        interval = kwds.get('interval', 100)
-        style = kwds.get('style', 'black')
+        self.parent = parent                                                # 父级窗口对象
+        while not isinstance(self.parent, wx.Frame):
+            self.parent = self.parent.parent
+        
+        self.proj = kwds.get('proj', 'cone')                                # 投影模式，默认透视投影
+        self.mode = kwds.get('mode', '3D').upper()                          # 设置2D/3D模式，默认3D模式
+        self.oecs = np.array(kwds.get('oecs', [0.0,0.0,0.0]))               # ECS原点，默认与OCS（目标坐标系）原点重合
+        self.dist = kwds.get('dist', 5)                                     # 眼睛与ECS原点的距离，默认5个单位
+        self.azimuth = kwds.get('azimuth', 0)                               # 方位角，默认0°
+        self.elevation = kwds.get('elevation', 0)                           # 仰角，默认0°
+        self.view = np.array(kwds.get('view', [-1,1,-1,1,2.6,1000]))        # 视景体
+        self.zoom = kwds.get('zoom', 1.0 if self.proj=='cone' else 1.5)     # 视口缩放因子，默认1
+        self.interval = kwds.get('interval', 30)                            # 定时器间隔，默认30毫秒
+        self.light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))               # 光源0的位置
+        self.light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))              # 光源1的位置
+        self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
+        
+        self.eye = None                                                     # 眼睛的位置
+        self.up = None                                                      # 向上的方向
+        self.store = dict()                                                 # 存储相机姿态、缩放比例等
+        self.rotate = None                                                  # 相机自动水平旋转角度
+        self._set_eye_and_up(save=True)                                     # 根据方位角、仰角和距离设置眼睛位置和向上的方向
+        
+        self.fm = fm.FontManager()                                          # 字体管理对象
+        self.cm = cm.ColorManager()                                         # 颜色管理对象
+        self.grid_is_show = True                                            # 是否显示网格
         
         glcanvas.GLCanvas.__init__(self, parent, -1, style=glcanvas.WX_GL_RGBA|glcanvas.WX_GL_DOUBLEBUFFER|glcanvas.WX_GL_DEPTH_SIZE)
         
-        self.fm = fontmanager.FontManager()                     # 字体管理对象
-        self.cm = colormap.WxGLColorMap()                       # 调色板对象
-        self.set_style(style)                                   # 设置风格
+        self.size = self.GetClientSize()                                    # OpenGL窗口的大小
+        self.context = glcanvas.GLContext(self)                             # OpenGL上下文
+        self.regions = list()                                               # 存储视区信息
+        self.subgraphs = list()                                             # 存储子图信息
+        self.mpos = None                                                    # 鼠标位置
         
-        self.parent = parent                                    # 父级窗口对象
-        self.proj = proj                                        # 投影模式（平行投影/透视投影）
-        self.mode = mode.upper()                                # 2D/3D模式
+        self.osize = None                                                   # Scene窗口的初始分辨率
+        self.tscale = (1,1)                                                 # 和初始分辨率相比，Scene窗口的宽高变化率
         
-        if self.mode == '2D':
-            head = 'y+'
+        self.sys_timer = wx.Timer()                                         # 模型几何变换定时器
+        self.sys_n = 0                                                      # 模型几何变换计数器
         
-        if head == 'x+':
-            cam = [0, 1, 0]
-        elif head == 'y+':
-            cam = [0, 0, 1]
-        else:
-            cam = [1, 0, 0]
+        self._init_gl()                                                     # 画布初始化
         
-        self.cam = np.array(cam, dtype=np.float) * dist         # 相机位置
-        self.aim = np.array(aim, dtype=np.float)                # 目标点位
-        self.head = head                                        # 观察者头部的指向
-        self.view = np.array(view, dtype=np.float)              # 视景体
-        self.zoom = zoom                                        # 视口缩放因子
-        self.up = None                                          # 向上的方向定义
-        self.dist = None                                        # 相机位置与目标点位之间的距离
-        self.elevation = None                                   # 仰角
-        self.azimuth = None                                     # 方位角
-        self.mpos = None                                        # 鼠标位置
-        
-        self.rotate_timer = wx.Timer()                          # 旋转定时器
-        self.rotate_mode = 'h+'                                 # 旋转模式
-        self.rotate_step = 1/180                                # 旋转步长
-        
-        self.slide_timer = wx.Timer()                           # 模型动画定时器
-        self.interval = interval                                # 模型动画帧间隔时间（单位：ms）
-        self.pages = list()                                     # 动画帧模型
-        self.curr_page = 0                                      # 当前动画帧
-        
-        self.size = self.GetClientSize()                        # OpenGL窗口的大小
-        self.context = glcanvas.GLContext(self)                 # OpenGL上下文
-        
-        self.regions = dict()                                   # 存储视区信息
-        self.subgraphs = dict()                                 # 存储子图信息
-        self.store = {'zoom':zoom}                              # 存储相机姿态、缩放比例等
-        
-        self.set_camera(save=True)                              # 设置相机位置
-        self.init_gl()                                          # 画布初始化
+        self.parent.Bind(wx.EVT_CLOSE, self.on_close)
+        self.sys_timer.Bind(wx.EVT_TIMER, self.on_sys_timer)
         
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
         self.Bind(wx.EVT_SIZE, self.on_resize)
@@ -152,74 +135,67 @@ class WxGLScene(glcanvas.GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)
         self.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
-        
-        self.rotate_timer.Bind(wx.EVT_TIMER, self.on_rotate_timer)
-        self.slide_timer.Bind(wx.EVT_TIMER, self.on_slide_timer)
-        
-        if self.mode == '3D' and (elevation != None or azimuth != None):
-            self.set_posture(elevation=elevation, azimuth=azimuth, save=True)
     
-    def set_style(self, style):
+    def _set_style(self, style):
         """设置风格"""
         
-        assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是"black", "white", "gray", "blue"其中之一'
+        assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是black/white/gray/blue/royal其中之一'
         
-        self.style = style
+        if style == 'black':
+            return (0.0, 0.0, 0.0, 1.0), (0.9, 0.9, 0.9)
         if style == 'white':
-            self.bg = [1.0, 1.0, 1.0, 1.0]
-            self.tc = [0.1, 0.1, 0.1]
-        elif style == 'gray':
-            self.bg = [0.9, 0.9, 0.9, 1.0]
-            self.tc = [0.0, 0.0, 0.3]
-        elif style == 'blue':
-            self.bg = [0.0, 0.0, 0.2, 1.0]
-            self.tc = [0.9, 1.0, 1.0]
-        else:
-            self.bg = [0.0, 0.0, 0.0, 1.0]
-            self.tc = [0.9, 0.9, 0.9]
+            return (1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
+        if style == 'gray':
+            return (0.9, 0.9, 0.9, 1.0), (0.0, 0.0, 0.3)
+        if style == 'blue':
+            return (0.0, 0.0, 0.2, 1.0), (0.9, 1.0, 1.0)
+        if style == 'royal':
+            return (0.133, 0.302, 0.361, 1.0), (1.0, 1.0, 0.9)
     
-    def on_rotate_timer(self, evt):
-        """场景旋转定时器函数"""
+    def _set_eye_and_up(self, save=False):
+        """设置眼睛的位置和向上的方向
         
-        if self.rotate_mode == 'h+':
-            a = self.azimuth + self.rotate_step
-            self.set_posture(azimuth=np.degrees(a), save=False)
-        elif self.rotate_mode == 'h-':
-            a = self.azimuth - self.rotate_step
-            self.set_posture(azimuth=np.degrees(a), save=False)
-        elif self.rotate_mode == 'v+':
-            e = self.elevation + self.rotate_step
-            self.set_posture(elevation=np.degrees(e), save=False)
+        save        - 是否保存当前设置，默认不保存
+        """
+        
+        if self.mode == '2D':
+            self.eye = np.array([0, 0, self.dist], dtype=np.float)
+            self.up = np.array([0,1,0], dtype=np.float)
         else:
-            e = self.elevation - self.rotate_step
-            self.set_posture(elevation=np.degrees(e), save=False)
+            d = self.dist * np.cos(np.radians(self.elevation))
+            x = d * np.sin(np.radians(self.azimuth))
+            y = -d * np.cos(np.radians(self.azimuth))
+            z = self.dist * np.sin(np.radians(self.elevation))
+            self.eye = np.array([x, y, z], dtype=np.float)
+            
+            if -90 < self.elevation < 90:
+                self.up = np.array([0,0,1], dtype=np.float)
+            else:
+                self.up = np.array([0,0,-1], dtype=np.float)
+        
+        if save:
+            self.store.update({
+                'oecs': (*self.oecs,),
+                'zoom': self.zoom,
+                'dist': self.dist,
+                'azimuth': self.azimuth,
+                'elevation': self.elevation
+            })
     
-    def on_slide_timer(self, evt):
-        """模型动画定时器函数"""
+    def on_close(self, evt):
+        """点击窗口关闭按钮时"""
         
-        reg, name = self.pages[self.curr_page]
-        reg.hide_model(name)
-        
-        self.curr_page += 1
-        self.curr_page %= len(self.pages)
-        reg, name = self.pages[self.curr_page]
-        reg.show_model(name)
-        
-        self.Refresh(False)
-        
+        self.sys_timer.Stop()
+        evt.Skip()
     
     def on_destroy(self, evt):
         """加载场景的应用程序关闭时回收GPU的缓存"""
         
-        self.rotate_timer.Stop()
-        self.slide_timer.Stop()
-        for rid in self.regions:
-            for buf_id in self.regions[rid].buffers:
-                self.regions[rid].buffers[buf_id].delete()
-            for item in self.regions[rid].textures:
-                self.regions[rid].delete_texture(item)
-            for name in self.regions[rid].timers:
-                self.regions[rid].timers[name]['timer'].Unbind(wx.EVT_TIMER)
+        self.sys_timer.Stop()
+        
+        for reg in self.regions:
+            for id in reg.buffers:
+                reg.buffers[id].delete()
         
         evt.Skip()
         
@@ -231,6 +207,9 @@ class WxGLScene(glcanvas.GLCanvas):
             self.size = self.GetClientSize()
             self.Refresh(False)
         
+        if self.osize is None:
+            self.osize = self.GetSize()
+        
         evt.Skip()
         
     def on_erase(self, evt):
@@ -241,10 +220,7 @@ class WxGLScene(glcanvas.GLCanvas):
     def on_paint(self, evt):
         """响应重绘事件"""
         
-        self.SetCurrent(self.context)
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)    # 清除屏幕及深度缓存
-        self.draw_gl()                                      # 绘图
-        self.SwapBuffers()                                  # 切换缓冲区，以显示绘制内容
+        self.repaint()
         evt.Skip()
         
     def on_left_down(self, evt):
@@ -264,7 +240,7 @@ class WxGLScene(glcanvas.GLCanvas):
     def on_right_up(self, evt):
         """响应鼠标右键弹起事件"""
         
-        self.stop_rotate()
+        pass
         evt.Skip()
         
     def on_mouse_motion(self, evt):
@@ -272,26 +248,22 @@ class WxGLScene(glcanvas.GLCanvas):
         
         if evt.Dragging() and evt.LeftIsDown():
             pos = evt.GetPosition()
-            try:
-                dx, dy = pos - self.mpos
-            except:
-                return
+            dx, dy = pos - self.mpos
             self.mpos = pos
             
             if self.mode == '3D':
-                elevation = self.elevation + 2*np.pi*dy/self.size[1]
-                azimuth = self.azimuth - 2*np.pi*dx/self.size[0]
-                
-                self._set_posture(elevation=elevation, azimuth=azimuth, dist=self.dist)
+                self.azimuth = (self.azimuth - self.up[2]*0.1*dx)%360
+                self.elevation = (self.elevation + 0.1*dy +180)%360 -180
+                self._set_eye_and_up()
+                self.update_grid()
             else:
-                dx = (self.view[1]-self.view[0])*dx/self.size[0]
-                dy = (self.view[3]-self.view[2])*dy/self.size[1]
-                self.aim[0] -= dx
-                self.aim[1] += dy
-                self.cam[0] -= dx
-                self.cam[1] += dy
+                dx = self.zoom*(self.view[1]-self.view[0])*dx/self.size[0]
+                dy = self.zoom*(self.view[3]-self.view[2])*dy/self.size[1]
                 
-                self.set_camera(cam=self.cam.tolist(), aim=self.aim.tolist(), head=self.head)
+                self.oecs[0] -= dx
+                self.oecs[1] += dy
+                self.eye[0] -= dx
+                self.eye[1] += dy
             
             self.Refresh(False)
         
@@ -309,40 +281,190 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.Refresh(False)
     
-    def init_gl(self):
+    def on_sys_timer(self, evt):
+        """模型定时器函数"""
+        
+        self.sys_n += 1
+        if not self.rotate is None:
+            azimuth = self.azimuth + self.rotate
+            self.set_posture(azimuth=azimuth)
+        
+        self.update_grid()
+        self.Refresh(False)
+    
+    def update_grid(self):
+        """刷新坐标轴网格"""
+        
+        if self.mode == '2D' or not self.grid_is_show:
+            return
+        
+        for ax in self.subgraphs:
+            reg = ax.reg_main
+            if not ax.grid_is_show or not reg.grid:
+                continue
+            
+            if self.elevation > 0:
+                reg.hide_model(reg.grid['top'])
+                reg.show_model(reg.grid['bottom'])
+                reg.hide_model(reg.grid['x_ymin_zmax'])
+                reg.hide_model(reg.grid['x_ymax_zmax'])
+                reg.hide_model(reg.grid['y_xmin_zmax'])
+                reg.hide_model(reg.grid['y_xmax_zmax'])
+                
+                if 0 <= self.azimuth < 90:
+                    reg.show_model(reg.grid['x_ymin_zmin'])
+                    reg.hide_model(reg.grid['x_ymax_zmin'])
+                    reg.show_model(reg.grid['y_xmax_zmin'])
+                    reg.hide_model(reg.grid['y_xmin_zmin'])
+                elif 90 <= self.azimuth < 180:
+                    reg.hide_model(reg.grid['x_ymin_zmin'])
+                    reg.show_model(reg.grid['x_ymax_zmin'])
+                    reg.show_model(reg.grid['y_xmax_zmin'])
+                    reg.hide_model(reg.grid['y_xmin_zmin'])
+                elif 180 <= self.azimuth < 270:
+                    reg.hide_model(reg.grid['x_ymin_zmin'])
+                    reg.show_model(reg.grid['x_ymax_zmin'])
+                    reg.hide_model(reg.grid['y_xmax_zmin'])
+                    reg.show_model(reg.grid['y_xmin_zmin'])
+                else:
+                    reg.show_model(reg.grid['x_ymin_zmin'])
+                    reg.hide_model(reg.grid['x_ymax_zmin'])
+                    reg.hide_model(reg.grid['y_xmax_zmin'])
+                    reg.show_model(reg.grid['y_xmin_zmin'])
+            else:
+                reg.show_model(reg.grid['top'])
+                reg.hide_model(reg.grid['bottom'])
+                reg.hide_model(reg.grid['x_ymin_zmin'])
+                reg.hide_model(reg.grid['x_ymax_zmin'])
+                reg.hide_model(reg.grid['y_xmin_zmin'])
+                reg.hide_model(reg.grid['y_xmax_zmin'])
+                
+                if 0 <= self.azimuth < 90:
+                    reg.show_model(reg.grid['x_ymin_zmax'])
+                    reg.hide_model(reg.grid['x_ymax_zmax'])
+                    reg.show_model(reg.grid['y_xmax_zmax'])
+                    reg.hide_model(reg.grid['y_xmin_zmax'])
+                elif 90 <= self.azimuth < 180:
+                    reg.hide_model(reg.grid['x_ymin_zmax'])
+                    reg.show_model(reg.grid['x_ymax_zmax'])
+                    reg.show_model(reg.grid['y_xmax_zmax'])
+                    reg.hide_model(reg.grid['y_xmin_zmax'])
+                elif 180 <= self.azimuth < 270:
+                    reg.hide_model(reg.grid['x_ymin_zmax'])
+                    reg.show_model(reg.grid['x_ymax_zmax'])
+                    reg.hide_model(reg.grid['y_xmax_zmax'])
+                    reg.show_model(reg.grid['y_xmin_zmax'])
+                else:
+                    reg.show_model(reg.grid['x_ymin_zmax'])
+                    reg.hide_model(reg.grid['x_ymax_zmax'])
+                    reg.hide_model(reg.grid['y_xmax_zmax'])
+                    reg.show_model(reg.grid['y_xmin_zmax'])
+            
+            if 90 <= self.azimuth < 270:
+                reg.show_model(reg.grid['front'])
+                reg.hide_model(reg.grid['back'])
+            else:
+                reg.show_model(reg.grid['back'])
+                reg.hide_model(reg.grid['front'])
+            
+            if 0 <= self.azimuth < 180:
+                reg.show_model(reg.grid['left'])
+                reg.hide_model(reg.grid['right'])
+            else:
+                reg.show_model(reg.grid['right'])
+                reg.hide_model(reg.grid['left'])
+            
+            if 0 <= self.azimuth < 90:
+                reg.show_model(reg.grid['z_xmax_ymax'])
+                reg.hide_model(reg.grid['z_xmin_ymax']) 
+                reg.hide_model(reg.grid['z_xmin_ymin']) 
+                reg.hide_model(reg.grid['z_xmax_ymin']) 
+            elif 90 <= self.azimuth < 180:
+                reg.hide_model(reg.grid['z_xmax_ymax'])
+                reg.show_model(reg.grid['z_xmin_ymax']) 
+                reg.hide_model(reg.grid['z_xmin_ymin']) 
+                reg.hide_model(reg.grid['z_xmax_ymin']) 
+            elif 180 <= self.azimuth < 270:
+                reg.hide_model(reg.grid['z_xmax_ymax'])
+                reg.hide_model(reg.grid['z_xmin_ymax']) 
+                reg.show_model(reg.grid['z_xmin_ymin']) 
+                reg.hide_model(reg.grid['z_xmax_ymin']) 
+            else:
+                reg.hide_model(reg.grid['z_xmax_ymax'])
+                reg.hide_model(reg.grid['z_xmin_ymax']) 
+                reg.hide_model(reg.grid['z_xmin_ymin']) 
+                reg.show_model(reg.grid['z_xmax_ymin']) 
+    
+    def _wxglDrawElements(self, reg, vars):
+        """绘制图元"""
+        
+        vid, eid, v_type, gl_type, texture = vars
+        
+        if not texture is None:
+            glEnable(GL_TEXTURE_2D)
+            glBindTexture(GL_TEXTURE_2D, texture)
+        
+        reg.buffers[vid].bind()
+        glInterleavedArrays(v_type, 0, None)
+        reg.buffers[eid].bind()
+        glDrawElements(gl_type, int(reg.buffers[eid].size/4), GL_UNSIGNED_INT, None) 
+        reg.buffers[vid].unbind()
+        reg.buffers[eid].unbind()
+        
+        if not texture is None:
+            glDisable(GL_TEXTURE_2D)
+    
+    def _wxglDrawPixels(self, reg, vars):
+        """绘制像素"""
+        
+        k = 1/pow(self.zoom, 1/2)
+        pid, rows, cols, pos = vars
+        glPixelZoom(k, k)
+        glDepthMask(GL_FALSE)
+        glRasterPos3fv(pos)
+        reg.buffers[pid].bind()
+        glDrawPixels(cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        reg.buffers[pid].unbind()
+        glDepthMask(GL_TRUE)
+    
+    def _init_gl(self):
         """初始化GL"""
         
         self.SetCurrent(self.context)
         
-        glClearColor(*self.bg,)                                     # 设置画布背景色
-        glEnable(GL_DEPTH_TEST)                                     # 开启深度测试，实现遮挡关系        
-        glDepthFunc(GL_LEQUAL)                                      # 设置深度测试函数
-        glShadeModel(GL_SMOOTH)                                     # GL_SMOOTH(光滑着色)/GL_FLAT(恒定着色)
-        glEnable(GL_BLEND)                                          # 开启混合        
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)           # 设置混合函数
-        glEnable(GL_ALPHA_TEST)                                     # 启用Alpha测试 
-        glAlphaFunc(GL_GREATER, 0.05)                               # 设置Alpha测试条件为大于0.05则通过
-        glFrontFace(GL_CW)                                          # 设置逆时针索引为正面（GL_CCW/GL_CW）
-        glEnable(GL_LINE_SMOOTH)                                    # 开启线段反走样
-        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
+        glClearColor(*self.style[0],)                                       # 设置画布背景色
+        glEnable(GL_DEPTH_TEST)                                             # 开启深度测试，实现遮挡关系        
+        glDepthFunc(GL_LEQUAL)                                              # 设置深度测试函数
+        glShadeModel(GL_SMOOTH)                                             # GL_SMOOTH(光滑着色)/GL_FLAT(恒定着色)
+        glEnable(GL_BLEND)                                                  # 开启混合        
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)                   # 设置混合函数
+        glEnable(GL_ALPHA_TEST)                                             # 启用Alpha测试 
+        glAlphaFunc(GL_GREATER, 0.05)                                       # 设置Alpha测试条件为大于0.05则通过
+        glEnable(GL_LINE_SMOOTH)                                            # 开启直线反走样
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                              # 最高质量直线反走样
+        glEnable(GL_POLYGON_SMOOTH)                                         # 开启多边形反走样
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST)                           # 最高质量多边形反走样
+        glEnable(GL_POINT_SMOOTH)                                           # 开启点反走样
+        glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)                             # 最高质量点反走样
         
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (0.6,0.6,0.6,1.0))
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (0.2,0.2,0.2,1.0))
-        glLightfv(GL_LIGHT0, GL_POSITION, (6.0,0.0,2.0,1.0))
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.2,0.2,0.2,1.0))
-        glEnable(GL_LIGHT0)
-                
-    def draw_gl(self):
-        """绘制"""
+        glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8,0.8,0.8,1.0))                 # 光源中的环境光
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8,0.8,0.8,1.0))                 # 光源中的散射光
+        glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
+        glLightfv(GL_LIGHT0, GL_POSITION, self.light0)                      # 光源位置
         
-        for rid in list(self.regions.keys()):
-            if rid in self.regions:
-                reg = self.regions[rid]
-            else:
-                return
-            
+        glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5,0.5,0.5,1.0))                 # 光源中的环境光
+        glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3,0.3,0.3,1.0))                 # 光源中的散射光
+        glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
+        glLightfv(GL_LIGHT1, GL_POSITION, self.light1)                      # 光源位置
+        
+        glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)                     # 启用双面渲染
+        
+    def _draw_gl(self):
+        """绘制模型"""
+        
+        for reg in self.regions:
             x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
-            w_reg, h_reg = int(reg.box[2]*self.size[0]), int(reg.box[3]*self.size[1])
+            w_reg, h_reg = int(reg.box[2]*self.size[0])+1, int(reg.box[3]*self.size[1])
             k = w_reg/h_reg
             
             glViewport(x0, y0, w_reg, h_reg)
@@ -350,20 +472,20 @@ class WxGLScene(glcanvas.GLCanvas):
             glLoadIdentity()
             
             if reg.fixed:
-                proj = 'ortho'
-                zoom, lookat = 1, (0,0,5,0,0,0,0,1,0)
-                scale, translate = 1, (0,0,0)
+                zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
+                #if self.mode == '2D':
+                #    zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
+                #else:
+                #    zoom, lookat = reg.zoom, (0,-5,0,0,0,0,0,0,1)
             else:
-                proj = self.proj
-                zoom, lookat = self.zoom, (*self.cam, *self.aim, *self.up)
-                scale, translate = reg.scale, reg.translate
+                zoom, lookat = self.zoom, (*self.eye, *self.oecs, *self.up)
             
             if k > 1:
                 box = (-zoom*k, zoom*k, -zoom, zoom)
             else:
                 box = (-zoom, zoom, -zoom/k, zoom/k)
             
-            if proj == 'ortho':
+            if reg.proj == 'ortho':
                 glOrtho(*box, self.view[4], self.view[5])
             else:
                 glFrustum(*box, self.view[4], self.view[5])
@@ -371,301 +493,136 @@ class WxGLScene(glcanvas.GLCanvas):
             gluLookAt(*lookat,)
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
-            glScale(scale, scale, scale)
-            glTranslate(*translate,)
+            glScale(reg.scale, reg.scale, reg.scale)
+            glTranslate(*reg.translate,)
             
-            for name in reg.assembly:
-                if reg.assembly[name]['display']:
-                    for item in reg.assembly[name]['component']:
-                        item['cmd'](item['args'])
+            for name in reg.models:
+                if reg.models[name]['display'] and (reg.models[name]['slide'] is None or reg.models[name]['slide'](self.sys_n)):
+                    for item in reg.models[name]['component']:
+                        if 'order' in item:
+                            glPushMatrix()
+                            if item['order'] in ('R', 'RT'):
+                                phi, vec = item['rotate'](self.sys_n)
+                                glRotatef(phi, *vec)
+                                if item['order'] == 'RT':
+                                    dx, dy, dz = item['translate'](self.sys_n)
+                                    glTranslate(dx, dy, dz)
+                            elif item['order'] in ('T', 'TR'):
+                                dx, dy, dz = item['translate'](self.sys_n)
+                                glTranslate(dx, dy, dz)
+                                if item['order'] == 'TR':
+                                    phi, vec = item['rotate'](self.sys_n)
+                                    glRotatef(phi, *vec)
+                        
+                        if item['genre'] in ('surface', 'mesh'):
+                            vid, eid, v_type, gl_type, texture = item['vars']
+                            if 'light' in item or 'fill' in item:
+                                glPushAttrib(GL_ALL_ATTRIB_BITS)
+                                if 'light' in item:
+                                    f = 1 + np.log(reg.scale) if reg.scale > 1 else pow(reg.scale, 1/3)
+                                    
+                                    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8*f,0.8*f,0.8*f,1.0))
+                                    glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8*f,0.8*f,0.8*f,1.0))
+                                    glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2*f,0.2*f,0.2*f,1.0))
+                                    
+                                    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5*f,0.5*f,0.5*f,1.0))
+                                    glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3*f,0.3*f,0.3*f,1.0))
+                                    glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2*f,0.2*f,0.2*f,1.0))
+                                    
+                                    glEnable(GL_LIGHTING)
+                                    if item['light'] in (1,3):
+                                        glEnable(GL_LIGHT0)
+                                    if item['light'] in (2,3):
+                                        glEnable(GL_LIGHT1)
+                                if 'fill' in item:
+                                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                            self._wxglDrawElements(reg, (vid, eid, v_type, gl_type, texture))
+                            if 'light' in item or 'fill' in item:
+                                glPopAttrib()
+                        elif item['genre'] == 'line':
+                            vid, eid, v_type, gl_type, width, stipple = item['vars']
+                            if width or stipple:
+                                glPushAttrib(GL_LINE_BIT)
+                                if width:
+                                    glLineWidth(width)
+                                if stipple:
+                                    glEnable(GL_LINE_STIPPLE)
+                                    glLineStipple(*stipple,)
+                            self._wxglDrawElements(reg, (vid, eid, v_type, gl_type, None))
+                            if width or stipple:
+                                glPopAttrib()
+                        elif item['genre'] == 'point':
+                            vid, eid, v_type, gl_type, size = item['vars']
+                            if size:
+                                glPushAttrib(GL_POINT_BIT)
+                                glPointSize(size)
+                            self._wxglDrawElements(reg, (vid, eid, v_type, gl_type, None))
+                            if size:
+                                glPopAttrib()
+                        elif item['genre'] == 'text':
+                            self._wxglDrawPixels(reg, item['vars'])
+                        
+                        if 'order' in item:
+                            glPopMatrix()
         
-    def set_camera(self, cam=None, aim=None, head=None, save=False):
-        """设置相机位置、目标点位、观察者头部的指向"""
+    def repaint(self):
+        """重绘"""
         
-        if isinstance(cam, list) and len(cam)==3:
-            self.cam = np.array(cam, dtype=np.float)
-        if isinstance(aim, list) and len(aim)==3:
-            self.aim = np.array(aim, dtype=np.float)
-        if head in ['x+', 'y+', 'z+']:
-            self.head = head
+        self.SetCurrent(self.context)
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)    # 清除屏幕及深度缓存
+        self._draw_gl()                                     # 绘图
+        self.SwapBuffers()                                  # 切换缓冲区，以显示绘制内容
+    
+    def set_proj(self, proj):
+        """设置投影模式"""
         
-        self.dist = np.sqrt(np.power((self.cam-self.aim), 2).sum())
-        if self.dist > 0:
-            if self.head == 'z+':
-                #  +-->y
-                #  ↓
-                #  x：0°方位角，逆时针为正
-                self.elevation = np.arcsin((self.cam[2]-self.aim[2])/self.dist)
-                self.azimuth = np.arccos((self.cam[0]-self.aim[0])/(self.dist*np.cos(self.elevation)))
-                if self.cam[1] < self.aim[1]:
-                    self.azimuth *= -1
-                self.up = np.array([0,0,1], dtype=np.float)
-            elif self.head == 'y+':
-                #  +-->x
-                #  ↓
-                #  z：0°方位角，逆时针为正
-                self.elevation = np.arcsin((self.cam[1]-self.aim[1])/self.dist)
-                self.azimuth = np.arccos((self.cam[2]-self.aim[2])/(self.dist*np.cos(self.elevation)))
-                if self.cam[0] < self.aim[0]:
-                    self.azimuth *= -1
-                self.up = np.array([0,1,0], dtype=np.float)
-            elif self.head == 'x+':
-                #  +-->z
-                #  ↓
-                #  y：0°方位角，逆时针为正
-                self.elevation = np.arcsin((self.cam[0]-self.aim[0])/self.dist)
-                self.azimuth = np.arccos((self.cam[1]-self.aim[1])/(self.dist*np.cos(self.elevation)))
-                if self.cam[2] < self.aim[2]:
-                    self.azimuth *= -1
-                self.up = np.array([1,0,0], dtype=np.float)
-        else:
-            self.elevation = 0.0
-            self.azimuth = 0.0
+        self.proj = proj
+        for reg in self.regions:
+            reg.proj = proj
+    
+    def set_mode(self, mode):
+        """设置2D/3D模式"""
         
-        if 0.5*np.pi < self.elevation or self.elevation < -.5*np.pi:
-            self.up = -1*np.abs(self.up)
-        else:
-            self.up = np.abs(self.up)
+        self.mode = mode
+        self._set_eye_and_up(save=True)
+        self.update_grid()
+    
+    def set_style(self, style):
+        """设置风格（背景和文本颜色）"""
         
-        self.Refresh(False)
-        if save:
-            self.store.update({'cam':self.cam.tolist(), 'aim':self.aim.tolist(), 'head':self.head})
+        self.style = self._set_style(style)
+        self._init_gl()
+    
+    def set_posture(self, oecs=None, zoom=None, dist=None, azimuth=None, elevation=None, save=False):
+        """设置观察姿态（距离、方位角和仰角）
         
-    def _set_posture(self, elevation, azimuth, dist):
-        """设置仰角、方位角、相机位置与目标点位之间的距离
-        
-        elevation   - 仰角(弧度)
-        azimuth     - 方位角(弧度)
-        dist        - 相机位置与目标点位之间的距离
-        """
-        
-        elevation %= 2*np.pi
-        if elevation > np.pi:
-            elevation -= 2*np.pi
-        
-        azimuth %= 2*np.pi
-        if azimuth > np.pi:
-            azimuth -= 2*np.pi
-        
-        self.elevation = elevation
-        self.azimuth = azimuth
-        self.dist = dist
-        
-        d = self.dist*np.cos(self.elevation)
-        
-        if self.head == 'z+':
-            self.cam = np.array([d*np.cos(self.azimuth), d*np.sin(self.azimuth), self.dist*np.sin(self.elevation)+self.aim[2]])
-            u, v, w = 'x', 'y', 'z'
-        elif self.head == 'y+':
-            self.cam = np.array([d*np.sin(self.azimuth), self.dist*np.sin(self.elevation)+self.aim[1], d*np.cos(self.azimuth)])
-            u, v, w = 'z', 'x', 'y'
-        elif self.head == 'x+':
-            self.cam = np.array([self.dist*np.sin(self.elevation)+self.aim[0], d*np.cos(self.azimuth), d*np.sin(self.azimuth)])
-            u, v, w = 'y', 'z', 'x'
-        
-        if 0.5*np.pi < self.elevation or self.elevation < -.5*np.pi:
-            self.up = -1*np.abs(self.up)
-        else:
-            self.up = np.abs(self.up)
-        
-        for rid in self.regions:
-            reg = self.regions[rid]
-            if reg.grid_tick:
-                gid = reg.grid_tick['gid']
-                tick = reg.grid_tick['tick']
-                
-                if elevation < 0:
-                    reg.show_model('%s_%s%s_%smax'%(gid,u,v,w))
-                    reg.hide_model('%s_%s%s_%smin'%(gid,u,v,w))
-                else:
-                    reg.show_model('%s_%s%s_%smin'%(gid,u,v,w))
-                    reg.hide_model('%s_%s%s_%smax'%(gid,u,v,w))
-                
-                if -np.pi <= azimuth < -np.pi/2:
-                    reg.hide_model('%s_%s%s_%smin'%(gid,v,w,u))
-                    reg.hide_model('%s_%s%s_%smin'%(gid,w,u,v))
-                    reg.show_model('%s_%s%s_%smax'%(gid,v,w,u))
-                    reg.show_model('%s_%s%s_%smax'%(gid,w,u,v))
-                elif -np.pi/2 <= azimuth < 0:
-                    reg.hide_model('%s_%s%s_%smax'%(gid,v,w,u))
-                    reg.hide_model('%s_%s%s_%smin'%(gid,w,u,v))
-                    reg.show_model('%s_%s%s_%smin'%(gid,v,w,u))
-                    reg.show_model('%s_%s%s_%smax'%(gid,w,u,v))
-                elif 0 <= azimuth < np.pi/2:
-                    reg.hide_model('%s_%s%s_%smax'%(gid,v,w,u))
-                    reg.hide_model('%s_%s%s_%smax'%(gid,w,u,v))
-                    reg.show_model('%s_%s%s_%smin'%(gid,v,w,u))
-                    reg.show_model('%s_%s%s_%smin'%(gid,w,u,v))
-                elif np.pi/2 <= azimuth < np.pi:
-                    reg.hide_model('%s_%s%s_%smin'%(gid,v,w,u))
-                    reg.hide_model('%s_%s%s_%smax'%(gid,w,u,v))
-                    reg.show_model('%s_%s%s_%smax'%(gid,v,w,u))
-                    reg.show_model('%s_%s%s_%smin'%(gid,w,u,v))
-                
-                if -np.pi <= azimuth < -5*np.pi/6:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.show_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                elif -5*np.pi/6 <= azimuth < -np.pi/2:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.show_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                elif -np.pi/2 <= azimuth < -np.pi/3:
-                    reg.show_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                elif -np.pi/3 <= azimuth < 0:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.show_models(tick[w]['%s1%s1'%(u,v)])
-                elif 0 <= azimuth < np.pi/6:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.show_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                elif np.pi/6 <= azimuth < np.pi/2:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.show_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                elif np.pi/2 <= azimuth < 2*np.pi/3:
-                    reg.hide_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.show_models(tick[w]['%s1%s1'%(u,v)])
-                elif 2*np.pi/3 <= azimuth < np.pi:
-                    reg.show_models(tick[w]['%s0%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s0%s1'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s0'%(u,v)])
-                    reg.hide_models(tick[w]['%s1%s1'%(u,v)])
-                
-                if -np.pi <= azimuth < -np.pi/2:
-                    if elevation < 0:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.show_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                    else:
-                        reg.show_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                elif -np.pi/2 <= azimuth < 0:
-                    if elevation < 0:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.show_models(tick[v]['%s1%s1'%(w,u)])
-                    else:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.show_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                elif 0 <= azimuth < np.pi/2:
-                    if elevation < 0:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.show_models(tick[v]['%s1%s1'%(w,u)])
-                    else:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.show_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                elif np.pi/2 <= azimuth < np.pi:
-                    if elevation < 0:
-                        reg.hide_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.show_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                    else:
-                        reg.show_models(tick[v]['%s0%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s0'%(w,u)])
-                        reg.hide_models(tick[v]['%s0%s1'%(w,u)])
-                        reg.hide_models(tick[v]['%s1%s1'%(w,u)])
-                
-                if azimuth < 0:
-                    if elevation < 0:
-                        reg.hide_models(tick[u]['%s0%s0'%(v,w)])
-                        reg.show_models(tick[u]['%s0%s1'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s1'%(v,w)])
-                    else:
-                        reg.show_models(tick[u]['%s0%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s0%s1'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s1'%(v,w)])
-                else:
-                    if elevation < 0:
-                        reg.hide_models(tick[u]['%s0%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s0%s1'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s0'%(v,w)])
-                        reg.show_models(tick[u]['%s1%s1'%(v,w)])
-                    else:
-                        reg.hide_models(tick[u]['%s0%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s0%s1'%(v,w)])
-                        reg.show_models(tick[u]['%s1%s0'%(v,w)])
-                        reg.hide_models(tick[u]['%s1%s1'%(v,w)])
-                
-                reg.refresh()
-        
-    def set_posture(self, elevation=None, azimuth=None, dist=None, save=False):
-        """设置仰角、方位角、相机位置与目标点位之间的距离
-        
-        elevation   - 仰角(度)
+        oecs        - ECS原点
+        zoom        - 视口缩放因子
+        dist        - 眼睛与ECS原点的距离
         azimuth     - 方位角(度)
-        dist        - 相机位置与目标点位之间的距离
-        save        - 是否保存相机姿态
+        elevation   - 仰角(度)
+        save        - 是否保存当前设置，默认不保存
         """
         
-        if isinstance(elevation, (int,float)):
-            elevation %= 360
-            if elevation > 180:
-                elevation -= 360
-            elevation = np.radians(elevation)
-        else:
-            elevation = self.elevation
-            
-        if isinstance(azimuth, (int,float)):
-            azimuth %= 360
-            if azimuth > 180:
-                azimuth -= 360
-            azimuth = np.radians(azimuth)
-        else:
-            azimuth = self.azimuth
+        if not oecs is None:
+            self.oecs = np.array(oecs)
+        if not zoom is None:
+            self.zoom = zoom
+        if not dist is None:
+            self.dist = dist
+        if not azimuth is None:
+            self.azimuth = azimuth
+        if not elevation is None:
+            self.elevation = elevation
         
-        if not isinstance(dist, (int,float)):
-            dist = self.dist
-        
-        self._set_posture(elevation, azimuth, dist)
+        self._set_eye_and_up(save=save)
+        self.update_grid()
         self.Refresh(False)
         
-        if save:
-            self.store.update({'cam':self.cam.tolist()})
+    def restore_posture(self):
+        """还原观察姿态"""
         
-    def set_zoom(self, zoom, save=False):
-        """设置视口缩放因子"""
-        
-        assert isinstance(zoom, (int, float)), '参数类型错误'
-        
-        self.zoom = zoom
-        self.Refresh(False)
-        
-        if save:
-            self.store.update({'zoom':zoom})
-        
-    def reset_posture(self):
-        """还原观察姿态、视口缩放因子"""
-        
-        self.zoom = self.store['zoom']
-        self.set_camera(cam=self.store['cam'], aim=self.store['aim'], head=self.store['head'])
-        self.set_posture()
-        self.stop_rotate()
-        self.Refresh(False)
+        self.set_posture(**self.store)
         
     def save_scene(self, fn, alpha=True, buffer='FRONT'):
         """保存场景为图像文件
@@ -692,75 +649,68 @@ class WxGLScene(glcanvas.GLCanvas):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
         img.save(fn)
         
-    def add_region(self, box, fixed=False):
+    def start_sys_timer(self):
+        """启动模型几何变换定时器"""
+        
+        self.sys_timer.Stop()
+        self.sys_n = 0
+        self.sys_timer.Start(self.interval)
+    
+    def pause_sys_timer(self):
+        """暂停/重启模型定时器"""
+        
+        if self.sys_timer.IsRunning():
+            self.sys_timer.Stop()
+        else:
+            self.sys_timer.Start(self.interval)
+    
+    def get_font_list(self):
+        """返回当前系统可用字体列表"""
+        
+        return self.fm.get_font_list
+    
+    def get_default_font(self):
+        """返回默认字体"""
+        
+        return self.fm.default_font
+    
+    def set_default_font(self, font_name):
+        """设置默认字体"""
+        
+        self.fm.set_default_font(font_name)
+    
+    def get_color_list(self):
+        """返回预设的颜色列表"""
+        
+        return self.cm.color_list
+    
+    def get_cmap_list(self):
+        """返回预设的调色板列表"""
+        
+        return self.cm.cmap_list
+    
+    def get_cmap_help(self):
+        """返回预设的调色板分类列表"""
+        
+        return self.cm.cmap_help()
+    
+    def add_region(self, box, fixed=False, proj=None):
         """添加视区
         
         box         - 四元组，元素值域[0,1]。四个元素分别表示视区左下角坐标、宽度、高度
-        fixed       - 是否锁定旋转缩放
+        fixed       - 布尔型，是否锁定旋转缩放
+        proj        - 投影模式
+                        None        - 使用场景对象的投影模式
+                        'ortho'     - 平行投影
+                        'cone'      - 透视投影
         """
         
-        rid = uuid.uuid1().hex
-        reg = region.WxGLRegion(self, rid, box, fixed=fixed)
-        self.regions.update({rid: reg})
+        if proj is None:
+            proj = self.proj
+        
+        reg = region.WxGLRegion(self, box, fixed, proj)
+        self.regions.append(reg)
         
         return reg
     
-    def add_axes(self, pos, padding=(20,20,20,20)):
-        """添加子图
-        
-        pos         - 三个数字组成的字符串或四元组，表示子图在场景中的位置和大小
-        padding     - 四元组，上、右、下、左四个方向距离边缘的留白像素
-        """
-        
-        return axes.WxAxes(self, pos, padding=padding)
-    
-    def auto_rotate(self, rotation='h+', **kwds):
-        """自动旋转
-        
-        rotation    - 旋转模式
-                        'h+'        - 水平顺时针旋转（默认方式）
-                        'h-'        - 水平逆时针旋转
-                        'v+'        - 垂直前翻旋转
-                        'v-'        - 垂直后翻旋转
-        kwds        - 关键字参数
-                        elevation   - 初始仰角，以度（°）为单位，默认值为0
-                        azimuth     - 初始方位角以度（°）为单位，默认值为0
-                        step        - 帧增量，以度（°）为单位，默认值为5
-                        interval    - 帧间隔，以ms为单位，默认值为20
-        """
-        
-        assert rotation in ['h+', 'h-', 'v+', 'v-'], '期望参数rotation是"h+"/"h-"/"v+"/"v-"中的一项'
-        
-        for key in kwds:
-            if key not in ['elevation', 'azimuth', 'step', 'interval']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        elevation = kwds.get('elevation', 0)
-        azimuth = kwds.get('azimuth', 0)
-        step = kwds.get('step', 1)
-        interval = kwds.get('interval', 10)
-        
-        self.rotate_mode = rotation
-        self.rotate_step = step/180
-        
-        self.set_posture(elevation=elevation, azimuth=azimuth, save=False)
-        self.rotate_timer.Start(interval)
-    
-    def stop_rotate(self):
-        """停止旋转"""
-        
-        self.rotate_timer.Stop()
-    
-    def add_slide_page(self, reg, page):
-        """增加动画帧"""
-        
-        if page not in self.pages:
-            self.pages.append((reg, page))
-    
-    def start_slide(self):
-        """开始动画"""
-        
-        if len(self.pages):
-            self.slide_timer.Start(self.interval)
-
         
