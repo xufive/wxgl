@@ -22,20 +22,27 @@ setuptools.setup(
     ],
     data_files = [
         ('lib/site-packages/wxgl/res', [
-            'wxgl/res/tb_args.png', 
-            'wxgl/res/tb_axes.png', 
-            'wxgl/res/tb_grid.png', 
-            'wxgl/res/tb_restore.png', 
-            'wxgl/res/tb_save.png',
-            'wxgl/res/wxgl.ico'
+            'wxgl/res/black_16.png', 
+            'wxgl/res/blue_16.png', 
+            'wxgl/res/gray_16.png', 
+            'wxgl/res/white_16.png', 
+            'wxgl/res/tb_hide_32.png', 
+            'wxgl/res/tb_show_32.png', 
+            'wxgl/res/tb_play_32.png', 
+            'wxgl/res/tb_stop_32.png', 
+            'wxgl/res/tb_restore_32.png', 
+            'wxgl/res/tb_save_32.png', 
+            'wxgl/res/tb_style_32.png',
+            'wxgl/res/wxplot.ico'
         ])
     ],
-    install_requires = [
-        'numpy>=1.18.2', 
-        'scipy>=1.4.1',
-        'freetype-py>=2.1.0.post1', 
+    install_requires = [ 
+        'pyopengl>=3.1.5',
+        'numpy>=1.20.2', 
+        'scipy>=1.4.1', 
         'matplotlib>=3.1.2', 
-        'wxpython>=4.0.7.post2', 
-        'pyopengl>=3.1.3b2'
+        'wxpython>=4.0.7.post2',
+        'pillow>=8.2.0',
+        'freetype-py>=2.1.0.post1'
     ]
 )
