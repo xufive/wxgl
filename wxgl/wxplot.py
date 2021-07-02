@@ -85,7 +85,7 @@ def current_axes(func):
 
 @current_axes
 def axis(**kwds):
-    fig.curr_ax.xlabel(**kwds)
+    fig.curr_ax.axis(**kwds)
 
 @current_axes
 def xlabel(xlabel):

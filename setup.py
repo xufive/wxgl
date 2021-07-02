@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf8") as fh:
 
 setuptools.setup(
     name="wxgl",
-    version="0.7.1",
+    version="0.7.2",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",

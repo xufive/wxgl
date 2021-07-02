@@ -37,6 +37,8 @@ import uuid
 import wx
 import wx.lib.agw.aui as aui
 import numpy as np
+#from imageio import mimsave
+#from PIL import Image
 
 from . import scene
 from . import axes
@@ -128,13 +130,19 @@ class WxGLFrame(wx.Frame):
         
         if self.f < self.fs:
             if self.scene.sys_n != self.last and self.scene.sys_n%self.mod == 0:
-                fn = os.path.join(self.folder, '%d_%d.png'%(self.f, self.scene.sys_n))
+                fn = os.path.join(self.folder, '%03d_%d.png'%(self.f, self.scene.sys_n))
                 self.scene.repaint()
                 self.scene.save_scene(fn, alpha=True)
                 self.last = self.scene.sys_n
                 self.f += 1
         else:
             self.once_timer.Stop()
+            
+            #fns = os.listdir(self.folder)
+            #fns.sort()
+            #ims = [Image.open(os.path.join(self.folder,fn)) for fn in fns]
+            #mimsave('out.gif', ims, format='GIF', fps=10, loop=0)
+            
             self.Destroy()
     
     def on_color(self, evt):

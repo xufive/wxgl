@@ -93,6 +93,9 @@ class WxGLAxes:
             if self.scene.mode == '2D':
                 h2d_offset = -0.1 if self.axis_is_show else 0
                 self.scene.set_posture(oecs=(h2d_offset,0,0), save=True)
+        
+        if not kwds.get('grid', True):
+            self.grid_is_show = False
     
     def xlabel(self, xlabel):
         """设置x轴名称，text为文本字符串"""
@@ -854,7 +857,7 @@ class WxGLAxes:
         self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, 'Q', **kwds)
     
-    def sphere(self, center, radius, color=None, texture=None, slices=90, **kwds):
+    def sphere(self, center, radius, color=None, texture=None, slices=360, **kwds):
         """绘制球体
         
         center      - 球心坐标，元组、列表或numpy数组
@@ -900,7 +903,7 @@ class WxGLAxes:
         self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
     
-    def cone(self, center, spire, radius, color=None, slices=90, bottom=True, **kwds):
+    def cone(self, center, spire, radius, color=None, slices=360, bottom=True, **kwds):
         """绘制圆锥体
         
         center      - 锥底圆心坐标，元组、列表或numpy数组
@@ -963,7 +966,7 @@ class WxGLAxes:
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_ground, texture, texcoord_ground, 'P', **kwds)
     
-    def cylinder(self, center, radius, color=None, slices=90, bottom=True, **kwds):
+    def cylinder(self, center, radius, color=None, slices=360, bottom=True, **kwds):
         """绘制圆柱体
         
         center      - 圆柱上下端面圆心坐标，元组、列表或numpy数组，每个元素表示一个端面的圆心坐标
