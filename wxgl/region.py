@@ -101,6 +101,11 @@ class WxGLRegion:
         else:
             raise ValueError('参数img既不是纹理图片文件，也不是以numpy数组表示的图像数据')
         
+        if im.mode == 'L':
+            im = np.array(im)
+            im = np.dstack((im,im,im))
+            im = Image.fromarray(im)
+        
         ix, iy, image = im.size[0], im.size[1], im.tobytes('raw', im.mode, 0, -1)
         mode = GL_RGBA if im.mode=='RGBA' else GL_RGB
         

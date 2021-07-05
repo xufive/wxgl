@@ -37,8 +37,8 @@ import uuid
 import wx
 import wx.lib.agw.aui as aui
 import numpy as np
-#from imageio import mimsave
-#from PIL import Image
+import imageio
+from PIL import Image
 
 from . import scene
 from . import axes
@@ -107,6 +107,8 @@ class WxGLFrame(wx.Frame):
         
         self.folder = None
         self.fs = None
+        self.fps = None
+        self.format =None
         self.mod = None
         self.f = None
         self.last =None
@@ -132,16 +134,23 @@ class WxGLFrame(wx.Frame):
             if self.scene.sys_n != self.last and self.scene.sys_n%self.mod == 0:
                 fn = os.path.join(self.folder, '%03d_%d.png'%(self.f, self.scene.sys_n))
                 self.scene.repaint()
-                self.scene.save_scene(fn, alpha=True)
+                self.scene.save_scene(fn, alpha=True, crop=True)
                 self.last = self.scene.sys_n
                 self.f += 1
         else:
             self.once_timer.Stop()
             
-            #fns = os.listdir(self.folder)
-            #fns.sort()
-            #ims = [Image.open(os.path.join(self.folder,fn)) for fn in fns]
-            #mimsave('out.gif', ims, format='GIF', fps=10, loop=0)
+            fns = os.listdir(self.folder)
+            fns.sort()
+            
+            if self.format.lower() == 'gif':
+                ims = [Image.open(os.path.join(self.folder,fn)) for fn in fns]
+                imageio.mimsave(os.path.join(self.folder, 'out.gif'), ims, format='GIF', fps=self.fps, loop=0)
+            elif self.format.lower() == 'mp4':
+                writer = imageio.get_writer(os.path.join(self.folder, 'out.mp4'), fps=self.fps)
+                for fn in fns:
+                    writer.append_data(imageio.imread(os.path.join(self.folder,fn)))
+                writer.close()
             
             self.Destroy()
     
@@ -270,7 +279,7 @@ def single_figure(cls):
 
     def _single_figure(**kwds):
         for key in kwds:
-            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth']:
+            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if cls not in _instance:
@@ -290,6 +299,8 @@ def single_figure(cls):
                 _instance[cls].kwds.update({'elevation': kwds['elevation']})
             if 'azimuth' in kwds:
                 _instance[cls].kwds.update({'azimuth': kwds['azimuth']})
+            if 'zoom' in kwds:
+                _instance[cls].kwds.update({'zoom': kwds['zoom']})
         
         return _instance[cls]
 
@@ -311,17 +322,19 @@ class WxGLFigure:
                         view        - 视景体
                         elevation   - 仰角
                         azimuth     - 方位角
+                        zoom        - 视口缩放因子
         """
         
         dist = kwds.get('dist', 5)
         view = kwds.get('view', [-1, 1, -1, 1, 2.6, 1000])
         elevation = kwds.get('elevation', 5)
-        azimuth = kwds.get('azimuth', 30)
+        azimuth = kwds.get('azimuth', 25)
+        zoom = kwds.get('zoom', 1.0)
         
         self.size = kwds.get('size', (1280,960))
         self.style2d = kwds.get('style2d', 'white')
         self.style3d = kwds.get('style3d', 'blue')
-        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth}
+        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom}
         
         self.app = None
         self.ff = None
@@ -429,8 +442,17 @@ class WxGLFigure:
         finally:
             self._destroy_frame()
     
-    def capture(self, folder, fs, mod=5, rotate=None):
-        """连续保存缓冲区为图片文件"""
+    def capture(self, folder, fs=50, fps=10, format='gif', fi=0, mod=5, rotate=None):
+        """连续保存缓冲区为图片文件
+        
+        folder      - 图片文件保存路径
+        fs          - 总帧数
+        fps         - 每秒帧数
+        format      - 输出格式，支持GIF和MP4两种格式
+        fi          - 计数器初值
+        mod         - 计数器有效计数的间隔数
+        rotate      - 视点坐标系旋转
+        """
         
         assert os.path.isdir(folder), '%s不是一个合法的路径或该路径不存在'%folder
         
@@ -444,8 +466,12 @@ class WxGLFigure:
             
             self.ff.folder = folder
             self.ff.fs = fs
+            self.ff.fps = fps
+            self.ff.format = format
             self.ff.mod = mod
             self.ff.f = 0
+            
+            self.ff.scene.sys_n = fi
             self.ff.last = self.ff.scene.sys_n
             self.ff.once_timer.Start(10)
             

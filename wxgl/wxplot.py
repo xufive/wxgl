@@ -56,6 +56,7 @@ def figure(**kwds):
                     view        - 视景体
                     elevation   - 仰角
                     azimuth     - 方位角
+                    zoom        - 视口缩放因子
     """
     
     global fig

@@ -624,12 +624,13 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.set_posture(**self.store)
         
-    def save_scene(self, fn, alpha=True, buffer='FRONT'):
+    def save_scene(self, fn, alpha=True, buffer='FRONT', crop=False):
         """保存场景为图像文件
         
         fn          - 保存的文件名
         alpha       - 是否使用透明通道
         buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
+        crop        - 是否将宽高裁切为16的倍数
         """
         
         if alpha:
@@ -645,9 +646,17 @@ class WxGLScene(glcanvas.GLCanvas):
             glReadBuffer(GL_BACK)
         
         data = glReadPixels(0, 0, self.size[0], self.size[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
-        img = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
-        img = img.transpose(Image.FLIP_TOP_BOTTOM)
-        img.save(fn)
+        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
+        im = im.transpose(Image.FLIP_TOP_BOTTOM)
+        
+        if crop:
+            w, h = im.size
+            nw, nh = 16*(w//16), 16*(h//16)
+            x0, y0 = (w-nw)//2, (h-nh)//2
+            x1, y1 = x0+nw, y0+nh
+            im = im.crop((x0, y0, x1, y1))
+        
+        im.save(fn)
         
     def start_sys_timer(self):
         """启动模型几何变换定时器"""

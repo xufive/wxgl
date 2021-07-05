@@ -358,12 +358,13 @@ class WxGLAxes:
         
         self.widgets.append({'cm':None})
     
-    def plot(self, xs, ys, zs=None, color=None, cm=None, size=None, width=1.0, style='solid', **kwds):
+    def plot(self, xs, ys, zs=None, color=None, cm=None, drange=None, size=None, width=1.0, style='solid', **kwds):
         """绘制点和线
         
         xs/ys/sz    - 点的x/y/z坐标集，等长的一维元组、列表或数组。若zs为None，则自动切换为2D模式
         color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
         cm          - 颜色映射表，仅当参数color为每个点对应的数据时有效
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
         size        - 点的大小，若为0或None，则表示不绘制点，只绘制线
         width       - 线宽，0.0~10.0之间的浮点数。若为0或None，则表示不绘制线，只绘制点
         style       - 线型
@@ -416,6 +417,11 @@ class WxGLAxes:
         
         vs = np.stack((xs, ys, zs), axis=1)
         
+        if drange is None:
+            dmin, dmax = None, None
+        else:
+            dmin, dmax = drange
+        
         # color参数处理
         if cm is None:
             if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
@@ -430,7 +436,7 @@ class WxGLAxes:
             assert isinstance(color, np.ndarray) and color.shape == xs.shape, '参数cmap有效时，期望参数color是和x或y等长的元组、列表或一维数组'
             
             self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-            color = self.cm.cmap(color, cm)
+            color = self.cm.cmap(color, cm, dmin=None, dmax=None)
         
         # 添加到部件库
         if not width is None and width > 0:
@@ -438,12 +444,13 @@ class WxGLAxes:
         if not size is None and size > 0:
             self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
     
-    def scatter(self, vs, color=None, cm=None, size=3.0, **kwds):
+    def scatter(self, vs, color=None, cm=None, drange=None, size=3.0, **kwds):
         """绘制散点图
         
         vs          - 点坐标集，二维元组、列表或numpy数组
         color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
         cm          - 颜色映射表，仅当参数color为每个点对应的数据时有效
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
         size        - 点或每个点的大小
         kwds        - 关键字参数
                         name        - 模型名
@@ -472,6 +479,11 @@ class WxGLAxes:
             vs = np.hstack((vs,z))
             self.set_2d_mode()
         
+        if drange is None:
+            dmin, dmax = None, None
+        else:
+            dmin, dmax = drange
+        
         # color参数处理
         if cm is None:
             if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
@@ -486,7 +498,7 @@ class WxGLAxes:
             assert isinstance(color, np.ndarray) and color.shape == vs.shape[:-1], '参数cm有效时，期望参数color是和vs等长的一维元组、列表或数组'
             
             self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-            color = self.cm.cmap(color, cm)
+            color = self.cm.cmap(color, cm, dmin=None, dmax=None)
         
         # size参数处理
         if isinstance(size, (float, int)):
@@ -595,10 +607,15 @@ class WxGLAxes:
             ys = np.array(ys)
         assert isinstance(ys, np.ndarray) and ys.shape == (rows, cols), '期望参数ys为None或与data结构相同的二维元组、列表或数组'
         
+        if drange is None:
+            dmin, dmax = None, None
+        else:
+            dmin, dmax = drange
+        
         self.set_2d_mode()
         kwds.update({'light':0})
         zs = np.zeros((rows, cols))
-        c = self.cm.cmap(data, cm)
+        c = self.cm.cmap(data, cm, dmin=None, dmax=None)
         texture = np.uint8(c*255)
         self.widgets.append({'cm':cm, 'drange':(np.nanmin(data), np.nanmax(data))})
         
@@ -661,12 +678,13 @@ class WxGLAxes:
         
         pass
     
-    def mesh(self, xs, ys, zs=None, color=None, cm='jet', texture=None, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm='jet', drange=None, texture=None, **kwds):
         """绘制网格
         
         xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
         color       - 颜色，或每个点对应的数据。texture为None时该参数有效
         cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
         texture     - 纹理图片文件或numpy数组形式的图像数据
         kwds        - 关键字参数
                         name        - 模型名
@@ -710,6 +728,11 @@ class WxGLAxes:
         assert isinstance(zs, np.ndarray) and zs.ndim == 2, '期望参数zs是类二维数组'
         assert xs.shape == ys.shape == zs.shape, '期望参数xs/ys/zs结构相同'
         
+        if drange is None:
+            dmin, dmax = None, None
+        else:
+            dmin, dmax = drange
+        
         # color参数处理
         if texture is None:
             if color is None:
@@ -728,7 +751,7 @@ class WxGLAxes:
                     c = self.cm.color2c(color, size=(2,2))
                 elif color.ndim == 2 and not cm is None:
                     self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-                    c = self.cm.cmap(color, cm)
+                    c = self.cm.cmap(color, cm, dmin=None, dmax=None)
                 else:
                     raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
             texture = np.uint8(c*255)
@@ -790,7 +813,7 @@ class WxGLAxes:
             vs = np.hstack((vs,z))
         
         if method == 'P':
-            assert not color is None, '绘制多边形必须要指定颜色'
+            assert texture is None and texcoord is None, '绘制多边形不支持texture参数和texcoord参数'
         
         if texture is None or texcoord is None:
             if color is None:
