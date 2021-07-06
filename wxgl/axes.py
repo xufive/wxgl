@@ -436,7 +436,7 @@ class WxGLAxes:
             assert isinstance(color, np.ndarray) and color.shape == xs.shape, '参数cmap有效时，期望参数color是和x或y等长的元组、列表或一维数组'
             
             self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-            color = self.cm.cmap(color, cm, dmin=None, dmax=None)
+            color = self.cm.cmap(color, cm, dmin=dmin, dmax=dmax)
         
         # 添加到部件库
         if not width is None and width > 0:
@@ -498,7 +498,7 @@ class WxGLAxes:
             assert isinstance(color, np.ndarray) and color.shape == vs.shape[:-1], '参数cm有效时，期望参数color是和vs等长的一维元组、列表或数组'
             
             self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-            color = self.cm.cmap(color, cm, dmin=None, dmax=None)
+            color = self.cm.cmap(color, cm, dmin=dmin, dmax=dmax)
         
         # size参数处理
         if isinstance(size, (float, int)):
@@ -565,12 +565,13 @@ class WxGLAxes:
                 self.plot(item[:,0], item[:,1], color=c)
                 self.text('%0.2f'%d, size=32, pos=(*item[0],0.1))
     
-    def hot(self, data, xs=None, ys=None, cm='jet', smooth=True, **kwds):
+    def hot(self, data, xs=None, ys=None, cm='jet', drange=None, smooth=True, **kwds):
         """热力图
         
         data        - 数据，二维元组、列表或数组
         xs/ys       - 点的x/y坐标集，None或与data结构相同的二维元组、列表或数组
         cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
         smooth      - 是否使用3x3的卷积平滑，默认True
         kwds        - 关键字参数
                         name        - 模型名
@@ -615,7 +616,7 @@ class WxGLAxes:
         self.set_2d_mode()
         kwds.update({'light':0})
         zs = np.zeros((rows, cols))
-        c = self.cm.cmap(data, cm, dmin=None, dmax=None)
+        c = self.cm.cmap(data, cm, dmin=dmin, dmax=dmax)
         texture = np.uint8(c*255)
         self.widgets.append({'cm':cm, 'drange':(np.nanmin(data), np.nanmax(data))})
         
@@ -751,7 +752,7 @@ class WxGLAxes:
                     c = self.cm.color2c(color, size=(2,2))
                 elif color.ndim == 2 and not cm is None:
                     self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
-                    c = self.cm.cmap(color, cm, dmin=None, dmax=None)
+                    c = self.cm.cmap(color, cm, dmin=dmin, dmax=dmax)
                 else:
                     raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
             texture = np.uint8(c*255)

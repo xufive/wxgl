@@ -91,7 +91,7 @@ class WxGLScene(glcanvas.GLCanvas):
         self.elevation = kwds.get('elevation', 0)                           # 仰角，默认0°
         self.view = np.array(kwds.get('view', [-1,1,-1,1,2.6,1000]))        # 视景体
         self.zoom = kwds.get('zoom', 1.0 if self.proj=='cone' else 1.5)     # 视口缩放因子，默认1
-        self.interval = kwds.get('interval', 30)                            # 定时器间隔，默认30毫秒
+        self.interval = kwds.get('interval', 25)                            # 定时器间隔，默认25毫秒
         self.light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))               # 光源0的位置
         self.light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))              # 光源1的位置
         self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
