@@ -679,7 +679,7 @@ class WxGLAxes:
         
         pass
     
-    def mesh(self, xs, ys, zs=None, color=None, cm='jet', drange=None, texture=None, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, drange=None, texture=None, **kwds):
         """绘制网格
         
         xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
@@ -826,6 +826,205 @@ class WxGLAxes:
         
         self.widgets.append({'cm':None})
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
+    
+    def _qtf(self, method, vs, color, cm, drange, texture, texcoord, **kwds):
+        """绘制四角面、三角面和扇面"""
+        
+        # vs参数处理
+        if isinstance(vs, (tuple,list)):
+            vs = np.array(vs)
+        
+        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的元组、列表或numpy数组'
+        
+        if vs.shape[-1] == 2:
+            self.set_2d_mode()
+            kwds.update({'light':0})
+            z = np.zeros((vs.shape[0],1))
+            vs = np.hstack((vs,z))
+        
+        if drange is None:
+            dmin, dmax = None, None
+        else:
+            dmin, dmax = drange
+        
+        # color参数处理
+        if texture is None:
+            if color is None:
+                color = self.get_color() # 顺序选择默认的颜色
+            
+            if isinstance(color, str):
+                self.widgets.append({'cm':None})
+                c = self.cm.color2c(color, size=(2,2))
+                texture = np.uint8(c*255)
+                texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
+            else:
+                if isinstance(color, (tuple,list)):
+                    color = np.array(color)
+                assert isinstance(color, np.ndarray), '期望参数color是类数组'
+                
+                if color.ndim == 1:
+                    self.widgets.append({'cm':None})
+                    c = self.cm.color2c(color, size=(2,2))
+                    texture = np.uint8(c*255)
+                    texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
+                elif color.ndim == 2 and not cm is None and  not texcoord is None:
+                    self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
+                    c = self.cm.cmap(color, cm, dmin=dmin, dmax=dmax)
+                    texture = np.uint8(c*255)
+                else:
+                    raise ValueError("期望参数color是单个颜色或二维数据（此种情况下参数cm和texcoord均不能为None）")
+        else:
+            self.widgets.append({'cm':None})
+        
+        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
+    
+    def quad(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+        """绘制一个或多个四角面（每个四角面的四个顶点通常在一个平面上）
+        
+        vs          - 点坐标集，二维元组、列表或numpy数组
+        color       - 颜色，或二维数据。texture为None时该参数有效
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        self._qtf('Q', vs, color, cm, drange, texture, texcoord, **kwds)
+    
+    def triangle(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+        """绘制一个或多个三角面
+        
+        vs          - 点坐标集，二维元组、列表或numpy数组
+        color       - 颜色，或二维数据。texture为None时该参数有效
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        self._qtf('T', vs, color, cm, drange, texture, texcoord, **kwds)
+    
+    def fan(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+        """绘制绘制扇面
+        
+        vs          - 点坐标集，二维元组、列表或numpy数组
+        color       - 颜色，或二维数据。texture为None时该参数有效
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        self._qtf('F', vs, color, cm, drange, texture, texcoord, **kwds)
+    
+    def polygon(self, vs, color=None, **kwds):
+        """绘制多边形
+        
+        vs          - 点坐标集，二维元组、列表或numpy数组
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        # vs参数处理
+        if isinstance(vs, (tuple,list)):
+            vs = np.array(vs)
+        
+        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的元组、列表或numpy数组'
+        
+        if vs.shape[-1] == 2:
+            self.set_2d_mode()
+            kwds.update({'light':0})
+            z = np.zeros((vs.shape[0],1))
+            vs = np.hstack((vs,z))
+        
+        if color is None:
+            color = self.get_color() # 顺序选择默认的颜色
+        
+        c = self.cm.color2c(color, size=(2,2))
+        texture = np.uint8(c*255)
+        texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
+        self.widgets.append({'cm':None})
+        
+        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, 'P', **kwds)
     
     def cube(self, center, side, color=None, **kwds):
         """绘制六面体

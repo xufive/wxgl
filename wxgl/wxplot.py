@@ -165,6 +165,22 @@ def surface(*args, **kwds):
     fig.curr_ax.surface(*args, **kwds)
 
 @current_axes
+def quad(*args, **kwds):
+    fig.curr_ax.quad(*args, **kwds)
+
+@current_axes
+def triangle(*args, **kwds):
+    fig.curr_ax.triangle(*args, **kwds)
+
+@current_axes
+def fan(*args, **kwds):
+    fig.curr_ax.fan(*args, **kwds)
+
+@current_axes
+def polygon(*args, **kwds):
+    fig.curr_ax.polygon(*args, **kwds)
+
+@current_axes
 def cube(*args, **kwds):
     fig.curr_ax.cube(*args, **kwds)
 
