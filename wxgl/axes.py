@@ -79,11 +79,12 @@ class WxGLAxes:
         """设置scene为2D模式"""
         
         h2d_offset = -0.1 if self.axis_is_show else 0
+        zoom = 1.5 if self.scene.zoom == 1 else self.scene.zoom
         
         self.scene.set_proj('ortho')
         self.scene.set_mode('2D')
         self.scene.set_style(self.fig.style2d)
-        self.scene.set_posture(zoom=1.5, oecs=(h2d_offset,0,0), dist=5, azimuth=0, elevation=0, save=True)
+        self.scene.set_posture(zoom=zoom, oecs=(h2d_offset,0,0), dist=5, azimuth=0, elevation=0, save=True)
     
     def axis(self, **kwds):
         """设置坐标轴"""
@@ -358,7 +359,7 @@ class WxGLAxes:
         
         self.widgets.append({'cm':None})
     
-    def plot(self, xs, ys, zs=None, color=None, cm=None, drange=None, size=None, width=1.0, style='solid', **kwds):
+    def plot(self, xs, ys, zs=None, color=None, cm=None, drange=None, size=0, width=1, style='solid', **kwds):
         """绘制点和线
         
         xs/ys/sz    - 点的x/y/z坐标集，等长的一维元组、列表或数组。若zs为None，则自动切换为2D模式
@@ -443,8 +444,58 @@ class WxGLAxes:
             self.fig.add_widget(self.reg_main, 'line', vs, color, width=width, stipple=stipple, method='SINGLE', **kwds)
         if not size is None and size > 0:
             self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
+        
+    def line(self, vs, color, width=1, style='solid', **kwds):
+        """绘制线段
+        
+        vs          - 点坐标集，二维元组、列表或numpy数组
+        color       - 顶点或顶点集颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        width       - 线宽，0.0~10.0之间，None表示使用当前设置
+        style       - 线型
+                        'solid'     - 实线 
+                        'dashed'    - 虚线
+                        'dotted'    - 点线
+                        'dash-dot'  - 虚点线
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        # vs参数处理
+        if isinstance(vs, (tuple,list)):
+            vs = np.array(vs)
+        
+        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的元组、列表或numpy数组'
+        
+        if vs.shape[-1] == 2:
+            z = np.zeros((vs.shape[0],1))
+            vs = np.hstack((vs,z))
+            self.set_2d_mode()
+        
+        # color参数处理
+        if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
+            color = self.get_color()
+        self.widgets.append({'cm':None})
+        
+        # style参数处理
+        assert style in ('solid', 'dashed', 'dotted','dash-dot'), '期望参数style是solid|dashed|dotted|dash-dot之一'
+        stipple = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
+        
+        # 添加到部件库
+        self.fig.add_widget(self.reg_main, 'line', vs, color, method='MULTI', width=width, stipple=stipple, **kwds)
     
-    def scatter(self, vs, color=None, cm=None, drange=None, size=3.0, **kwds):
+    def scatter(self, vs, color=None, cm=None, drange=None, size=1.0, **kwds):
         """绘制散点图
         
         vs          - 点坐标集，二维元组、列表或numpy数组
@@ -828,7 +879,7 @@ class WxGLAxes:
         self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
     
     def _qtf(self, method, vs, color, cm, drange, texture, texcoord, **kwds):
-        """绘制四角面、三角面和扇面"""
+        """绘制四角面、三角面和扇面的底层公用函数"""
         
         # vs参数处理
         if isinstance(vs, (tuple,list)):
@@ -1189,7 +1240,7 @@ class WxGLAxes:
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_ground, texture, texcoord_ground, 'P', **kwds)
     
-    def cylinder(self, center, radius, color=None, slices=360, bottom=True, **kwds):
+    def cylinder_bak(self, center, radius, color=None, slices=360, bottom=True, **kwds):
         """绘制圆柱体
         
         center      - 圆柱上下端面圆心坐标，元组、列表或numpy数组，每个元素表示一个端面的圆心坐标
@@ -1252,4 +1303,150 @@ class WxGLAxes:
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_b, texture, texcoord_end, 'P', **kwds)
             self.fig.add_widget(self.reg_main, '_surface', vs_t, texture, texcoord_end, 'P', **kwds)
+    
+    def cylinder(self, otop, obottom, radius, color=None, cm=None, drange=None, slices=360, top=True, bottom=True, **kwds):
+        """绘制圆柱体
+        
+        otop        - 圆柱上端面圆心坐标，元组、列表或numpy数组
+        obottom     - 圆柱下端面圆心坐标，元组、列表或numpy数组
+        radius      - 圆柱半径，浮点型
+        color       - 颜色，或一维数据
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        slices      - 分片数，整型 默认90
+        top         - 是否显示上端面，布尔型，默认True
+        bottom      - 是否显示下端面，布尔型，默认True
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        if not isinstance(otop, np.ndarray):
+            otop = np.array(otop)
+        
+        if not isinstance(obottom, np.ndarray):
+            obottom = np.array(obottom)
+        
+        if color is None:
+            color = self.get_color()
+        
+        if cm is None:
+            k = 2
+            c = self.cm.color2c(color, size=(2,2))
+            texture = np.uint8(c*255)
+            texture_t = texture
+            texture_b = texture
+            
+            self.widgets.append({'cm':None})
+        else:
+            if drange is None:
+                dmin, dmax = None, None
+            else:
+                dmin, dmax = drange
+            
+            if isinstance(color, (tuple,list)):
+                color = np.array(color)
+            
+            k = color.shape[0]
+            c = self.cm.cmap(color, cm, dmin=dmin, dmax=dmax)
+            c = np.rollaxis(np.tile(c, (4,1)).reshape(4,k,3), 1, 0)
+            texture = np.uint8(c*255)
+            texture_t = np.uint8(c[0].reshape(2,2,-1)*255)
+            texture_b = np.uint8(c[-1].reshape(2,2,-1)*255)
+            
+            self.widgets.append({'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))})
+        
+        vh = otop - obottom
+        h = np.linalg.norm(vh)
+        rotator = self.reg_main.z2v(vh)
+        
+        theta = np.linspace(0, 2*np.pi, slices)
+        xs = radius * np.cos(theta)
+        ys = radius * np.sin(theta)
+        zs_b = np.zeros_like(theta)
+        zs_t = np.ones_like(theta) * h
+        vs_b = np.stack((xs,ys,zs_b), axis=1)
+        vs_t = np.stack((xs,ys,zs_t), axis=1)
+        
+        vs_b = rotator.apply(vs_b) + obottom
+        vs_t = rotator.apply(vs_t) + obottom
+        texcoord_end = np.tile(np.zeros(2), (slices,1))
+        
+        xs = np.tile(xs, (k,1))
+        ys = np.tile(ys, (k,1))
+        zs = np.repeat(np.linspace(h, 0, k), slices).reshape(k, -1)
+        vs = rotator.apply(np.dstack((xs,ys,zs)).reshape(-1,3)).reshape(k,-1,3) + obottom
+        
+        self.fig.add_widget(self.reg_main, '_mesh', vs[:,:,0], vs[:,:,1], vs[:,:,2], texture, **kwds)
+        if top:
+            self.fig.add_widget(self.reg_main, '_surface', vs_t[:-1], texture_t, texcoord_end[:-1], 'P', **kwds)
+        if bottom:
+            self.fig.add_widget(self.reg_main, '_surface', vs_b[:-1], texture_b, texcoord_end[:-1], 'P', **kwds)
+    
+    def flow(self, vs, uvw, k=1, color='#00EFEF', width=1, fs=10, speed=2):
+        """绘制动态矢量图
+        
+        vs          - 点坐标集，类二维（散点）或三维（网格）元组、列表或numpy数组
+        uvw         - 与点坐标集对应的矢量集，类二维（散点）或三维（网格）元组、列表或数组
+        k           - 矢量缩放因子，浮点型
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        width       - 矢量线宽度
+        fs          - 动态变化的帧数，整型
+        speed       - 动态变化的速度因子，整型。该数值越大，变化速度越慢
+        """
+        
+        if not isinstance(vs, np.ndarray):
+            vs = np.array(vs)
+        
+        if not isinstance(uvw, np.ndarray):
+            uvw = np.array(uvw)
+        
+        assert vs.shape == uvw.shape, '期望参数vs和uvw的结构相同'
+        
+        if vs.shape[-1] == 2:
+            self.set_2d_mode()
+            x, y = vs[..., 0], vs[..., 1]
+            z = np.zeros(x.shape)
+            u, v = uvw[..., 0], uvw[..., 1]
+            w = np.zeros(u.shape)
+        else:
+            x, y, z = vs[..., 0], vs[..., 1], vs[..., 2]
+            u, v, w = uvw[..., 0], uvw[..., 1], uvw[..., 2]
+        
+        u, v, w = u*k, v*k, w*k
+        du, dv, dw = u/fs, v/fs, w/fs
+        offset = np.random.randint(0, fs , u.shape)
+        
+        def s_creator(i):
+            def slide(n):
+                return (n//speed)%fs == i
+            return slide
+
+        for i in range(fs):
+            j = (offset+i)%fs
+            xx = np.stack((x+j*du, x+j*du+u), axis=1).ravel()
+            yy = np.stack((y+j*dv, y+j*dv+v), axis=1).ravel()
+            zz = np.stack((z+j*dw, z+j*dw+w), axis=1).ravel()
+            vs = np.stack((xx,yy,zz), axis=1)
+            
+            slide = s_creator(i)
+            self.line(vs, color=color, width=width, slide=slide)
+        
     

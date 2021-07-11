@@ -132,7 +132,7 @@ class WxGLFrame(wx.Frame):
         
         if self.f < self.fs:
             if self.scene.sys_n != self.last and self.scene.sys_n%self.mod == 0:
-                fn = os.path.join(self.folder, '%03d_%d.png'%(self.f, self.scene.sys_n))
+                fn = os.path.join(self.folder, '%04d_%d.png'%(self.f, self.scene.sys_n))
                 self.scene.repaint()
                 self.scene.save_scene(fn, alpha=True, crop=True)
                 self.last = self.scene.sys_n
@@ -212,6 +212,8 @@ class WxGLFrame(wx.Frame):
         self.scene.tscale = (self.csize[0]/self.scene.osize[0], self.csize[1]/self.scene.osize[1])
         
         self.parent.redraw()
+        
+        self.update_model_visible()
         self.scene.update_grid()
         self.scene.Refresh(False)
         
@@ -233,14 +235,8 @@ class WxGLFrame(wx.Frame):
             self.tb.SetToolBitmap(self.ID_GRID, self.bmp_show)
             self.tb.SetToolShortHelp(self.ID_GRID, '显示网格')
         
-        for ax in self.scene.subgraphs:
-            for key in ax.reg_main.grid:
-                if ax.grid_is_show and self.scene.grid_is_show:
-                    ax.reg_main.show_model(ax.reg_main.grid[key])
-                else:
-                    ax.reg_main.hide_model(ax.reg_main.grid[key])
-        
         self.tb.Realize()
+        self.update_model_visible()
         self.scene.update_grid()
         self.scene.Refresh(False)
     
@@ -270,6 +266,16 @@ class WxGLFrame(wx.Frame):
             self.scene.save_scene(fn, alpha=alpha)
         
         dlg.Destroy()
+    
+    def update_model_visible(self):
+        """同步模型的显示属性"""
+        
+        for ax in self.scene.subgraphs:
+            for key in ax.reg_main.grid:
+                if ax.grid_is_show and self.scene.grid_is_show:
+                    ax.reg_main.show_model(ax.reg_main.grid[key])
+                else:
+                    ax.reg_main.hide_model(ax.reg_main.grid[key])
 
 
 def single_figure(cls):
@@ -279,7 +285,7 @@ def single_figure(cls):
 
     def _single_figure(**kwds):
         for key in kwds:
-            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom']:
+            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom', 'light0', 'light1']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if cls not in _instance:
@@ -301,6 +307,10 @@ def single_figure(cls):
                 _instance[cls].kwds.update({'azimuth': kwds['azimuth']})
             if 'zoom' in kwds:
                 _instance[cls].kwds.update({'zoom': kwds['zoom']})
+            if 'light0' in kwds:
+                _instance[cls].kwds.update({'light0': kwds['light0']})
+            if 'light1' in kwds:
+                _instance[cls].kwds.update({'light1': kwds['light1']})
         
         return _instance[cls]
 
@@ -323,6 +333,8 @@ class WxGLFigure:
                         elevation   - 仰角
                         azimuth     - 方位角
                         zoom        - 视口缩放因子
+                        light0      - 光源0的位置
+                        light1      - 光源1的位置
         """
         
         dist = kwds.get('dist', 5)
@@ -330,11 +342,13 @@ class WxGLFigure:
         elevation = kwds.get('elevation', 5)
         azimuth = kwds.get('azimuth', 25)
         zoom = kwds.get('zoom', 1.0)
+        light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))
+        light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))
         
         self.size = kwds.get('size', (1280,960))
         self.style2d = kwds.get('style2d', 'white')
         self.style3d = kwds.get('style3d', 'blue')
-        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom}
+        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom, 'light0':light0, 'light1':light1}
         
         self.app = None
         self.ff = None
@@ -389,9 +403,9 @@ class WxGLFigure:
                 w, h = w/d, h/d
                 
                 if ch < 1 and h < 1:
-                    self.ff.scene.set_posture(zoom=1.5*max(ch, h), save=True)
+                    self.ff.scene.set_posture(zoom=self.ff.scene.zoom*max(ch, h), save=True)
                 elif cw < 1 and w < 1:
-                    self.ff.scene.set_posture(zoom=1.5*max(ch, h), save=True)
+                    self.ff.scene.set_posture(zoom=self.ff.scene.zoom*max(ch, h), save=True)
             else:
                 if ax.grid_is_show:
                     ax.reg_main.ticks3d(

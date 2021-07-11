@@ -145,6 +145,10 @@ def plot(*args, **kwds):
     fig.curr_ax.plot(*args, **kwds)
 
 @current_axes
+def line(*args, **kwds):
+    fig.curr_ax.line(*args, **kwds)
+
+@current_axes
 def scatter(*args, **kwds):
     fig.curr_ax.scatter(*args, **kwds)
 
@@ -195,6 +199,10 @@ def cone(*args, **kwds):
 @current_axes
 def cylinder(*args, **kwds):
     fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def flow(*args, **kwds):
+    fig.curr_ax.flow(*args, **kwds)
 
 @current_axes
 def colors():

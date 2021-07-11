@@ -519,15 +519,16 @@ class WxGLScene(glcanvas.GLCanvas):
                             if 'light' in item or 'fill' in item:
                                 glPushAttrib(GL_ALL_ATTRIB_BITS)
                                 if 'light' in item:
-                                    f = 1 + np.log(reg.scale) if reg.scale > 1 else pow(reg.scale, 1/3)
+                                    f1 = 1 + np.log(pow(reg.scale, 1/4)) if reg.scale > 1 else pow(reg.scale, 1/3)
+                                    f2 = 1 + np.log(pow(reg.scale, 2)) if reg.scale > 1 else pow(reg.scale, 1/1.1)
                                     
-                                    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8*f,0.8*f,0.8*f,1.0))
-                                    glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8*f,0.8*f,0.8*f,1.0))
-                                    glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2*f,0.2*f,0.2*f,1.0))
+                                    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8*f1, 0.8*f1, 0.8*f1, 1.0))
+                                    glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8*f2, 0.8*f2, 0.8*f2, 1.0))
+                                    glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
-                                    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5*f,0.5*f,0.5*f,1.0))
-                                    glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3*f,0.3*f,0.3*f,1.0))
-                                    glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2*f,0.2*f,0.2*f,1.0))
+                                    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
+                                    glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
                                     glEnable(GL_LIGHTING)
                                     if item['light'] in (1,3):
@@ -584,8 +585,8 @@ class WxGLScene(glcanvas.GLCanvas):
         """设置2D/3D模式"""
         
         self.mode = mode
-        self._set_eye_and_up(save=True)
-        self.update_grid()
+        #self._set_eye_and_up(save=True)
+        #self.update_grid()
     
     def set_style(self, style):
         """设置风格（背景和文本颜色）"""
