@@ -1400,16 +1400,19 @@ class WxGLAxes:
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_b[:-1], texture_b, texcoord_end[:-1], 'P', **kwds)
     
-    def flow(self, vs, uvw, k=1, color='#00EFEF', width=1, fs=10, speed=2):
+    def flow(self, vs, uvw, color='#00EFEF', cm='jet', drange=None, k=1, width=0.3, fs=10, speed=2, cdeep=16):
         """绘制动态矢量图
         
-        vs          - 点坐标集，类二维（散点）或三维（网格）元组、列表或numpy数组
-        uvw         - 与点坐标集对应的矢量集，类二维（散点）或三维（网格）元组、列表或数组
+        vs          - 点坐标集，类二维元组、列表或numpy数组
+        uvw         - 与点坐标集对应的矢量集，类二维元组、列表或数组
+        color       - 颜色，或与矢量集对应的数据
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
         k           - 矢量缩放因子，浮点型
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
         width       - 矢量线宽度
         fs          - 动态变化的帧数，整型
         speed       - 动态变化的速度因子，整型。该数值越大，变化速度越慢
+        cdeep       - 颜色分段数，默认分为16段
         """
         
         if not isinstance(vs, np.ndarray):
@@ -1418,7 +1421,7 @@ class WxGLAxes:
         if not isinstance(uvw, np.ndarray):
             uvw = np.array(uvw)
         
-        assert vs.shape == uvw.shape, '期望参数vs和uvw的结构相同'
+        assert vs.shape == uvw.shape and vs.ndim == 2, '期望参数vs和uvw的结构相同'
         
         if vs.shape[-1] == 2:
             self.set_2d_mode()
@@ -1438,15 +1441,40 @@ class WxGLAxes:
             def slide(n):
                 return (n//speed)%fs == i
             return slide
-
-        for i in range(fs):
-            j = (offset+i)%fs
-            xx = np.stack((x+j*du, x+j*du+u), axis=1).ravel()
-            yy = np.stack((y+j*dv, y+j*dv+v), axis=1).ravel()
-            zz = np.stack((z+j*dw, z+j*dw+w), axis=1).ravel()
-            vs = np.stack((xx,yy,zz), axis=1)
+        
+        if isinstance(color, (tuple, list)):
+            color = np.array(color)
+            assert color.shape[0] == uvw.shape[0], '期望参数color和uvw的长度相同'
+        
+        if isinstance(color, np.ndarray):
+            if drange is None:
+                dmin, dmax = np.nanmin(color), np.nanmax(color)
+            else:
+                dmin, dmax = drange
             
-            slide = s_creator(i)
-            self.line(vs, color=color, width=width, slide=slide)
+            color = np.uint8((cdeep-1)*(color-dmin)/(dmax-dmin))
+            for c in range(cdeep):
+                cc = self.cm.cmap(np.array([c]), cm, dmin=0, dmax=cdeep-1)
+                part = np.where(color==c)
+                for i in range(fs):
+                    j = (offset+i)%fs
+                    xx = np.stack((x[part]+j[part]*du[part], x[part]+j[part]*du[part]+u[part]), axis=1).ravel()
+                    yy = np.stack((y[part]+j[part]*dv[part], y[part]+j[part]*dv[part]+v[part]), axis=1).ravel()
+                    zz = np.stack((z[part]+j[part]*dw[part], z[part]+j[part]*dw[part]+w[part]), axis=1).ravel()
+                    vs = np.stack((xx,yy,zz), axis=1)
+                    
+                    if vs.shape[0]:
+                        slide = s_creator(i)
+                        self.line(vs, color=cc[0], width=width, slide=slide)
+        else:
+            for i in range(fs):
+                j = (offset+i)%fs
+                xx = np.stack((x+j*du, x+j*du+u), axis=1).ravel()
+                yy = np.stack((y+j*dv, y+j*dv+v), axis=1).ravel()
+                zz = np.stack((z+j*dw, z+j*dw+w), axis=1).ravel()
+                vs = np.stack((xx,yy,zz), axis=1)
+                
+                slide = s_creator(i)
+                self.line(vs, color=color, width=width, slide=slide)
         
     
