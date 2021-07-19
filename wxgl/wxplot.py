@@ -141,6 +141,10 @@ def text(*args, **kwds):
     fig.curr_ax.text(*args, **kwds)
 
 @current_axes
+def text3d(*args, **kwds):
+    fig.curr_ax.text3d(*args, **kwds)
+
+@current_axes
 def plot(*args, **kwds):
     fig.curr_ax.plot(*args, **kwds)
 
@@ -203,6 +207,14 @@ def cylinder(*args, **kwds):
 @current_axes
 def flow(*args, **kwds):
     fig.curr_ax.flow(*args, **kwds)
+
+@current_axes
+def volume(*args, **kwds):
+    fig.curr_ax.volume(*args, **kwds)
+
+@current_axes
+def capsule(*args, **kwds):
+    fig.curr_ax.capsule(*args, **kwds)
 
 @current_axes
 def colors():

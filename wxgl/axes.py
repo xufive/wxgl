@@ -291,7 +291,7 @@ class WxGLAxes:
         text        - 文本字符串
         size        - 文字大小，整形，默认40
         color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
-        pos         - 文本位置，list或numpy.ndarray类型
+        pos         - 文本位置，元组、列表或numpy数组
         align       - 对齐方式
                         None            - 2D模式默认'left-bottom'，3D模式默认横排文字
                         'left-top'      - 以pos为左上角（仅2D模式有效）
@@ -351,13 +351,57 @@ class WxGLAxes:
                 align = 'left-bottom'
             
             kwds.update({'light':0})
-            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, align=align, **kwds)
+            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, family=family, weight=weight, align=align, **kwds)
         else:
             if align not in ('VR', 'VL'):
                 align = None
-            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, align=align, **kwds)
+            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, family=family, weight=weight, align=align, **kwds)
         
         self.widgets.append({'cm':None})
+    
+    def text3d(self, text, pos, size=32, color=None, family=None, weight='normal', align=None, **kwds):
+        """绘制3D文字
+        
+        text        - 文本字符串
+        pos         - 文本显式区域的左上、左下、右下、右上4个点的坐标，浮点型元组、列表或numpy数组
+        size        - 文字大小，整型
+        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        family      - （系统支持的）字体，None表示当前默认的字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        align       - 对齐方式
+                        None            - 自动填充box（默认）
+                        'left-top'      - 水平左对齐，垂直上对齐
+                        'left-middle'   - 水平左对齐，垂直居中对齐
+                        'left-bottom'   - 水平左对齐，垂直下对齐
+                        'right-top'     - 水平右对齐，垂直上对齐
+                        'right-middle'  - 水平右对齐，垂直居中对齐
+                        'right-bottom'  - 水平右对齐，垂直下对齐
+                        'center-top'    - 水平居中对齐，垂直上对齐
+                        'center-middle' - 水平居中对齐，垂直居中对齐
+                        'center-bottom' - 水平居中对齐，垂直下对齐
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否更新数据动态范围
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        kwds.update({'light':0})
+        self.fig.add_widget(self.reg_main, 'text3d', text, pos, size=size, color=color, family=family, weight=weight, align=align, **kwds)
     
     def plot(self, xs, ys, zs=None, color=None, cm=None, drange=None, size=0, width=1, style='solid', **kwds):
         """绘制点和线
@@ -1400,7 +1444,7 @@ class WxGLAxes:
         if bottom:
             self.fig.add_widget(self.reg_main, '_surface', vs_b[:-1], texture_b, texcoord_end[:-1], 'P', **kwds)
     
-    def flow(self, vs, uvw, color='#00EFEF', cm='jet', drange=None, k=1, width=0.3, fs=10, speed=2, cdeep=16):
+    def flow(self, vs, uvw, color='#00EFEF', cm='jet', drange=None, k=1, width=0.3, fs=10, speed=2, cdeep=16, **kwds):
         """绘制动态矢量图
         
         vs          - 点坐标集，类二维元组、列表或numpy数组
@@ -1413,6 +1457,20 @@ class WxGLAxes:
         fs          - 动态变化的帧数，整型
         speed       - 动态变化的速度因子，整型。该数值越大，变化速度越慢
         cdeep       - 颜色分段数，默认分为16段
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
         """
         
         if not isinstance(vs, np.ndarray):
@@ -1453,6 +1511,7 @@ class WxGLAxes:
                 dmin, dmax = drange
             
             color = np.uint8((cdeep-1)*(color-dmin)/(dmax-dmin))
+            self.widgets.append({'cm':cm, 'drange':(dmin,dmax)})
             for c in range(cdeep):
                 cc = self.cm.cmap(np.array([c]), cm, dmin=0, dmax=cdeep-1)
                 part = np.where(color==c)
@@ -1465,8 +1524,9 @@ class WxGLAxes:
                     
                     if vs.shape[0]:
                         slide = s_creator(i)
-                        self.line(vs, color=cc[0], width=width, slide=slide)
+                        self.line(vs, color=cc[0], width=width, slide=slide, **kwds)
         else:
+            self.widgets.append({'cm':None})
             for i in range(fs):
                 j = (offset+i)%fs
                 xx = np.stack((x+j*du, x+j*du+u), axis=1).ravel()
@@ -1475,6 +1535,148 @@ class WxGLAxes:
                 vs = np.stack((xx,yy,zz), axis=1)
                 
                 slide = s_creator(i)
-                self.line(vs, color=color, width=width, slide=slide)
+                self.line(vs, color=color, width=width, slide=slide, **kwds)
+    
+    def volume(self, data, x=None, y=None, z=None, cm=None, drange=None, **kwds):
+        """绘制体数据
         
+        data        - 数据，三维或四维数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴，若存在第3轴，对应每个点的RGBA通道
+        x/y/z       - 等长的一维元组、列表或数组。若为None，则使用data的索引
+        cm          - 颜色映射表
+        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        assert isinstance(data, np.ndarray) and data.ndim in (3,4), '期望参数data是一个numpy.ndarray类型的三维或四维数组'
+        if data.ndim == 4:
+            assert data.shape[-1] == 4 and data.dtype == np.uint8, '期望参数data表示的颜色包含RGBA四个通道且是8位的无符号整型'
+            self.widgets.append({'cm':None})
+        else:
+            assert not cm is None, '当参数data是一个三维数组时，参数cm不能为None'
+            
+            if drange is None:
+                dmin, dmax = None, None
+            else:
+                dmin, dmax = drange
+            
+            self.widgets.append({'cm':cm, 'drange':(dmin,dmax)})
+            data = self.cm.cmap(data, cm, dmin=dmin, dmax=dmax, alpha=True)
+        
+        zn, yn, xn = data.shape[:3]
+        
+        if x is None:
+            x = np.arange(data.shape[2])
+        elif isinstance(x, (tuple, list)):
+            x =  np.array(x)
+        assert isinstance(x, np.ndarray) and x.ndim == 1 and x.size == xn, '期望参数x是一个长度为%d一维数组'%xn
+        
+        if y is None:
+            y = np.arange(data.shape[1])
+        elif isinstance(y, (tuple, list)):
+            y =  np.array(y)
+        assert isinstance(y, np.ndarray) and y.ndim == 1 and y.size == yn, '期望参数y是一个长度为%d一维数组'%yn
+        
+        if z is None:
+            z = np.arange(data.shape[0])
+        elif isinstance(z, (tuple, list)):
+            z =  np.array(z)
+        assert isinstance(z, np.ndarray) and z.ndim == 1 and z.size == zn, '期望参数z是一个长度为%d一维数组'%zn
+        
+        for i in range(zn):
+            vs = np.array([[x[0],y[0],z[i]], [x[0],y[-1],z[i]], [x[-1],y[-1],z[i]], [x[-1],y[0],z[i]]])
+            self.quad(vs, texture=data[i], texcoord=((0,1),(0,0),(1,0),(1,1)), **kwds)
+        
+        for i in range(yn):
+            vs = np.array([[x[0],y[i],z[0]], [x[0],y[i],z[-1]], [x[-1],y[i],z[-1]], [x[-1],y[i],z[0]]])
+            self.quad(vs, texture=data[:,i,:], texcoord=((0,1),(0,0),(1,0),(1,1)), **kwds)
+        
+        for i in range(xn):
+            vs = np.array([[x[i],y[0],z[0]], [x[i],y[0],z[-1]], [x[i],y[-1],z[-1]], [x[i],y[-1],z[0]]])
+            self.quad(vs, texture=data[:,:,i], texcoord=((0,1),(0,0),(1,0),(1,1)), **kwds)
+    
+    def capsule(self, data, x=None, y=None, z=None, level=None, color=None, **kwds):
+        """绘制囊性结构
+        
+        data        - 数据集，三维数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴
+        x/y/z       - 等长的一维元组、列表或数组。若为None，则使用data的索引
+        level       - 阈值，浮点型
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            3           - 开启前后光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        if level is None:
+            level = np.nanmax(data)/2
+        
+        if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
+            color = self.get_color()
+        
+        self.widgets.append({'cm':None})
+        color = self.cm.color2c(color)
+        
+        vs, ids = util.find_capsule(data, level)
+        xs, ys, zs = vs[:,0], vs[:,1], vs[:,2]
+        
+        if not x is None:
+            if isinstance(x, (tuple, list)):
+                x =  np.array(x)
+            x_min, x_max = np.nanmin(x), np.nanmax(x)
+            xs_min, xs_max = 0, data.shape[2]
+            xs = x_min + (x_max-x_min)*(xs-xs_min)/(xs_max-xs_min)
+        
+        if not y is None:
+            if isinstance(y, (tuple, list)):
+                y =  np.array(y)
+            y_min, y_max = np.nanmin(y), np.nanmax(y)
+            ys_min, ys_max = 0, data.shape[1]
+            ys = y_min + (y_max-y_min)*(ys-ys_min)/(ys_max-ys_min)
+        
+        if not z is None:
+            if isinstance(z, (tuple, list)):
+                z =  np.array(z)
+            z_min, z_max = np.nanmin(z), np.nanmax(z)
+            zs_min, zs_max = 0, data.shape[0]
+            zs = z_min + (z_max-z_min)*(zs-zs_min)/(zs_max-zs_min)
+        
+        vs = np.stack((xs, ys, zs), axis=1)
+        vs = vs[ids.ravel()]
+        
+        self._qtf('T', vs, color, None, None, None, None, **kwds)
     

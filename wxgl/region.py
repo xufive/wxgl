@@ -403,7 +403,7 @@ class WxGLRegion:
         """
         
         k = np.linalg.norm(vs, axis=1)
-        k[k==0] = 1e-300
+        k[k==0] = 1e-30
         vs = vs.T/k
         
         return vs.T
