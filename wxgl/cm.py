@@ -34,13 +34,13 @@ class ColorManager:
     
     @property    
     def color_list(self):
-        """预设的颜色列表"""
+        """颜色列表"""
         
         return list(self._colors.keys())
     
     @property
     def cmap_list(self):
-        """预设的调色板列表"""
+        """调色板列表"""
         
         return self._cmaps
     
@@ -123,44 +123,44 @@ class ColorManager:
             color = np.array(color, dtype=np.float64)
         
         if not isinstance(color, np.ndarray):
-            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+            raise ValueError('未定义的或不符合规则的颜色')
         if color.shape[-1] not in (3,4) or np.nanmin(color) < 0 or np.nanmax(color) > 255:
-            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+            raise ValueError('未定义的或不符合规则的颜色')
         
         if isinstance(size, int):
             if color.ndim == 1:
                 color = np.tile(color, (size,1))
             elif color.ndim == 2:
                 if color.shape[0] != size:
-                    raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+                    raise ValueError('未定义的或不符合规则的颜色')
             else:
-                raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+                raise ValueError('未定义的或不符合规则的颜色')
         elif isinstance(size, (tuple, list)) and len(size) == 2:
             if color.ndim == 1:
                 color = np.tile(color, (*size,1))
             elif color.ndim == 3:
                 if color.shape[:-1] != size:
-                    raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+                    raise ValueError('未定义的或不符合规则的颜色')
             else:
-                raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+                raise ValueError('未定义的或不符合规则的颜色')
         elif not size is None:
-            raise ValueError('未定义的或不符合规则的颜色：%s'%str(color))
+            raise ValueError('未定义的或不符合规则的颜色')
         
         if drop and color.shape[-1] == 4:
             color = color[..., :-1]
         
         return color
     
-    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], dmin=None, dmax=None, alpha=None):
+    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], drange=None, alpha=None, drop=False):
         """数值映射到颜色
         
         data        - 数据
         cm          - 调色板
         invalid     - 无效数据的标识
         invalid_c   - 无效数据的颜色
-        dmin        - 数据最小值，默认为None
-        dmax        - 数据最大值，默认为None
-        alpha       - 透明度，None表示返回RGB格式
+        drange      - 数据动态范围，None表示使用data的动态范围
+        alpha       - 透明度，None表示不改变当前透明度
+        drop        - 舍弃alpha通道
         """
         
         assert cm in self._cmaps, '未定义的调色板%s'%cm
@@ -171,15 +171,12 @@ class ColorManager:
         
         if not np.isnan(invalid):
             data[data==invalid] = np.nan
-        invalid_pos = np.where(data==np.nan) # 记录无效数据位置
+        invalid_pos = np.isnan(data) # 记录无效数据位置
         
-        if dmin is None:
-            dmin = np.nanmin(data)
-        if dmax is None:
-            dmax = np.nanmax(data)
-        if dmin > dmax:
-            raise ValueError('数据最小值%f大于数据最大值%f'%(dmax, dmin))
-        
+        if drange is None:
+            dmin, dmax = np.nanmin(data), np.nanmax(data)
+        else:
+            dmin, dmax = drange
         
         data[data<dmin] = dmin
         data[data>dmax] = dmax
@@ -196,14 +193,15 @@ class ColorManager:
         color = cmap[data]
         color[invalid_pos] = invalid_c
         
-        if alpha is None:
-            color = color.reshape(-1,4)
-            color = color[:,:-1]
-            color = color.reshape(*data.shape, 3)
-        elif alpha < 1:
+        if isinstance(alpha, (int, float)) and 0 <= alpha <= 1:
             color = color.reshape(-1,4)
             color[:,3] = alpha
             color = color.reshape(*data.shape, 4)
+        
+        if drop:
+            color = color.reshape(-1,4)
+            color = color[:,:-1]
+            color = color.reshape(*data.shape, 3)
         
         return color
 

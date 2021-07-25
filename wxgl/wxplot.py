@@ -85,8 +85,12 @@ def current_axes(func):
     return wrapper
 
 @current_axes
-def axis(**kwds):
-    fig.curr_ax.axis(**kwds)
+def axis(visible):
+    fig.curr_ax.axis(visible)
+
+@current_axes
+def grid(visible):
+    fig.curr_ax.grid(visible)
 
 @current_axes
 def xlabel(xlabel):
@@ -157,14 +161,6 @@ def scatter(*args, **kwds):
     fig.curr_ax.scatter(*args, **kwds)
 
 @current_axes
-def hot(*args, **kwds):
-    fig.curr_ax.hot(*args, **kwds)
-
-@current_axes
-def contour(*args, **kwds):
-    fig.curr_ax.contour(*args, **kwds)
-
-@current_axes
 def mesh(*args, **kwds):
     fig.curr_ax.mesh(*args, **kwds)
 
@@ -193,6 +189,10 @@ def cube(*args, **kwds):
     fig.curr_ax.cube(*args, **kwds)
 
 @current_axes
+def circle(*args, **kwds):
+    fig.curr_ax.circle(*args, **kwds)
+
+@current_axes
 def sphere(*args, **kwds):
     fig.curr_ax.sphere(*args, **kwds)
 
@@ -203,6 +203,10 @@ def cone(*args, **kwds):
 @current_axes
 def cylinder(*args, **kwds):
     fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def pipe(*args, **kwds):
+    fig.curr_ax.pipe(*args, **kwds)
 
 @current_axes
 def flow(*args, **kwds):
@@ -217,54 +221,13 @@ def capsule(*args, **kwds):
     fig.curr_ax.capsule(*args, **kwds)
 
 @current_axes
-def colors():
-    """绘制可用的颜色及其对应的中英文名称"""
-    
-    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
-    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
-    
-    colors = fig.cm.color_help()
-    for i in range(len(colors)):
-        row, col = i//6, i%6
-        x, y = 2.2+col*5, -row*0.5
-        cen, ccn = colors[i]
-        c = fig.cm.color2c(cen)
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
-        fig.curr_ax.surface(vs, color=c, method='Q')
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
-        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
-        
-        fig.curr_ax.text(ccn, size=28, pos=(x-0.15,y), align='right-middle')
-        fig.curr_ax.text('(%s)'%cen, size=28, pos=(x+0.15,y), align='left-middle')
-    
-    fig.curr_ax.axis(visible=False)
-    show()
+def hot(*args, **kwds):
+    fig.curr_ax.hot(*args, **kwds)
 
 @current_axes
-def cmaps():
-    """绘制可用的颜色映射表"""
-    
-    vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
-    fig.curr_ax.surface(vs, color='#F0F0F0', method='Q')
-    
-    cms = fig.cm.cmap_help()
-    for i in range(len(colors)):
-        row, col = i//6, i%6
-        x, y = 2.2+col*5, -row*0.5
-        cen, ccn = colors[i]
-        c = fig.cm.color2c(cen)
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
-        fig.curr_ax.surface(vs, color=c, method='Q')
-        
-        vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
-        fig.curr_ax.plot(vs[:,0], vs[:,1], color='black', width=0.5)
-        
-        fig.curr_ax.text(ccn, size=32, pos=(x-0.15,y), align='right-middle')
-        fig.curr_ax.text('(%s)'%cen, size=32, pos=(x+0.15,y), align='left-middle')
-    
-    fig.curr_ax.axis(visible=False)
-    show()
+def contour(*args, **kwds):
+    fig.curr_ax.contour(*args, **kwds)
 
+@current_axes
+def colors():
+    fig.curr_ax.colors()

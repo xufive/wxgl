@@ -9,6 +9,14 @@ import uuid
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 
+from . import util
+
+
+LIGHT_FRONT = 1
+LIGHT_REAR = 2
+LIGHT_LEFT = 4
+LIGHT_RIGHT = 8
+
 
 class WxGLRegion:
     """GL视区类"""
@@ -39,11 +47,6 @@ class WxGLRegion:
         self.scale = 1.0                                        # 模型缩放比例
         self.translate = np.array([0.0,0.0,0.0])                # 模型位移量
     
-    def reset_box(self, box):
-        """重置视区大小"""
-        
-        self.box = box
-    
     def reset(self):
         """视区复位"""
         
@@ -59,6 +62,148 @@ class WxGLRegion:
         self.r_z = [1e10, -1e10]
         self.scale = 1.0
         self.translate = np.array([0.0,0.0,0.0])
+    
+    def reset_box(self, box):
+        """重置视区大小"""
+        
+        self.box = box
+    
+    def refresh(self):
+        """更新视区显示"""
+        
+        wx.CallAfter(self.scene.update_grid)
+        wx.CallAfter(self.scene.Refresh, False)
+    
+    def show_model(self, name):
+        """显示模型
+        
+        name        - 模型名
+        """
+        
+        if name in self.models:
+            self.models[name]['display'] = True
+    
+    def hide_model(self, name):
+        """隐藏模型
+        
+        name        - 模型名
+        """
+        
+        if name in self.models:
+            self.models[name]['display'] = False
+    
+    def drop_model(self, name):
+        """删除模型"""
+        
+        if name in self.models:
+            for item in self.models[name]['component']:
+                self.buffers[item['args'][0]].delete()
+                if item['genre'] in ['line', 'point', 'surface', 'mesh']:
+                    self.buffers[item['args'][1]].delete()
+                if item['genre'] == 'surface' or item['genre'] == 'mesh':
+                    self.delete_texture(item['args'][4])
+            del self.models[name]
+    
+    def set_data_range(self, r_x=None, r_y=None, r_z=None):
+        """设置坐标轴范围
+        
+        r_x         - 二元组，x坐标轴范围
+        r_y         - 二元组，y坐标轴范围
+        r_z         - 二元组，z坐标轴范围
+        """
+        
+        if r_x and r_x[0] < self.r_x[0]:
+            self.r_x[0] = r_x[0]
+        if r_x and r_x[1] > self.r_x[1]:
+            self.r_x[1] = r_x[1]
+        
+        if r_y and r_y[0] < self.r_y[0]:
+            self.r_y[0] = r_y[0]
+        if r_y and r_y[1] > self.r_y[1]:
+            self.r_y[1] = r_y[1]
+        
+        if r_z and r_z[0] < self.r_z[0]:
+            self.r_z[0] = r_z[0]
+        if r_z and r_z[1] > self.r_z[1]:
+            self.r_z[1] = r_z[1]
+    
+    def reset_scale_translate(self):
+        """重新计算scale和translate"""
+        
+        dist_max = max(self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0])
+        if dist_max > 0:
+            self.scale = 2/dist_max
+        self.translate = (-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2)
+    
+    @staticmethod
+    def normalize2d(vs):
+        """二维数组正则化（基于L2范数）
+        
+        vs          - 顶点坐标集，numpy数组，shape=(n,3)
+        """
+        
+        k = np.linalg.norm(vs, axis=1)
+        k[k==0] = 1e-30
+        vs = vs.T/k
+        
+        return vs.T
+    
+    @staticmethod
+    def transform(vs, *args):
+        """对顶点集实施几何变换
+        
+        vs          - 顶点坐标集，numpy数组，shape=(n,3)
+        args        - 可变参数，参数类型为列表或元组
+                      若参数长度为2，声明旋转变换，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
+                      若参数长度为3，声明位移变换，3个元素（浮点型）分别对应xyz轴方向的位移量
+        """
+        
+        for item in args:
+            if len(item) == 2: # 旋转
+                vec = np.array(item[1])
+                rotvec = np.radians(item[0])*vec/np.linalg.norm(vec)
+                r = sstr.from_rotvec(rotvec)
+                vs = r.apply(vs)
+            elif len(item) == 3: # 位移
+                vs = vs + np.array(item)
+        
+        return vs
+    
+    @staticmethod
+    def rotate_merge(av1, av2):
+        """将两个轴角旋转合并为一个
+        
+        av1         - 元组，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
+        av2         - 元组，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
+        """
+        
+        a1, v1 = av1
+        a2, v2 = av2
+        v1, v2 = np.array(v1), np.array(v2)
+        
+        r1 = sstr.from_rotvec(np.radians(a1)*v1/np.linalg.norm(v1))
+        r2 = sstr.from_rotvec(np.radians(a2)*v2/np.linalg.norm(v2))
+        
+        m = np.dot(r1.as_matrix(), r2.as_matrix())
+        r = sstr.from_matrix(m)
+        vec = r.as_rotvec()
+        phi = np.degrees(np.linalg.norm(vec))
+        
+        return phi, vec
+
+    @staticmethod
+    def z2v(v):
+        """返回z轴正方向到向量v的空间旋转器"""
+        
+        h =  np.linalg.norm(v)
+        a_y = np.arccos(v[2]/h)
+        
+        if v[0] == 0:
+            a_z = np.pi/2 if v[1] > 0 else -np.pi/2
+        else:
+            a_z = np.arctan(v[1]/v[0]) + (np.pi if v[0] < 0 else 0)
+        
+        return sstr.from_euler('xyz', [0, a_y, a_z], degrees=False)
     
     def _create_vbo(self, vertices):
         """创建顶点缓冲区对象"""
@@ -94,12 +239,13 @@ class WxGLRegion:
         """
         
         if isinstance(img, str):
-            assert os.path.exists(img), '%s指向的纹理图片文件不存在'%img
+            if not os.path.exists(img):
+                raise ValueError('%s指向的纹理图片文件不存在'%img)
             im = Image.open(img)
         elif isinstance(img, np.ndarray) and img.dtype is np.dtype('uint8'):
             im = Image.fromarray(img)
         else:
-            raise ValueError('参数img既不是纹理图片文件，也不是以numpy数组表示的图像数据')
+            raise ValueError('期望参数img是纹理图片文件，或是numpy数组形式的图像数据')
         
         if im.mode == 'L':
             im = np.array(im)
@@ -120,7 +266,7 @@ class WxGLRegion:
         
         return texture
     
-    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8):
+    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=True):
         """返回合适的Colorbar标注值
         
         v_min       - 数据最小值
@@ -128,6 +274,7 @@ class WxGLRegion:
         ks          - 分段选项
         s_min       - 分段数最小值
         s_max       - 分段数最大值
+        extend      - 是否外延一个标注单位
         """
         
         r = v_max - v_min
@@ -144,42 +291,17 @@ class WxGLRegion:
             v += step
         
         if result[0] > v_min:
-            result.insert(0, v_min)
+            if extend:
+                result.insert(0, 2*result[0]-result[1])
+            else:
+                result.insert(0, v_min)
         if result[-1] < v_max:
-            result.append(v_max)
+            if extend:
+                result.append(2*result[-1]-result[-2])
+            else:
+                result.append(v_max)
         
         return result
-    
-    def set_data_range(self, r_x=None, r_y=None, r_z=None):
-        """设置坐标轴范围
-        
-        r_x         - 二元组，x坐标轴范围
-        r_y         - 二元组，y坐标轴范围
-        r_z         - 二元组，z坐标轴范围
-        """
-        
-        if r_x and r_x[0] < self.r_x[0]:
-            self.r_x[0] = r_x[0]
-        if r_x and r_x[1] > self.r_x[1]:
-            self.r_x[1] = r_x[1]
-        
-        if r_y and r_y[0] < self.r_y[0]:
-            self.r_y[0] = r_y[0]
-        if r_y and r_y[1] > self.r_y[1]:
-            self.r_y[1] = r_y[1]
-        
-        if r_z and r_z[0] < self.r_z[0]:
-            self.r_z[0] = r_z[0]
-        if r_z and r_z[1] > self.r_z[1]:
-            self.r_z[1] = r_z[1]
-    
-    def reset_scale_translate(self):
-        """重新计算scale和translate"""
-        
-        dist_max = max(self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0])
-        if dist_max > 0:
-            self.scale = 2/dist_max
-        self.translate = (-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2)
     
     def _add_model(self, name, visible, slide, genre, vars, **kwds):
         """增加模型"""
@@ -211,7 +333,7 @@ class WxGLRegion:
         
         self.refresh()
     
-    def _surface(self, vs, texture, texcoord, method, **kwds):
+    def _surface(self, vs, texture, texcoord, method, series=None, **kwds):
         """绘制面
         
         vs          - 顶点坐标集，numpy.ndarray类型，shape=(n,3)
@@ -228,6 +350,7 @@ class WxGLRegion:
                                           1    4
                         'F'         - 扇形
                         'P'         - 多边形
+        series      - 顶点索引集，None或numpy.ndarray类型
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
@@ -238,7 +361,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -250,18 +375,19 @@ class WxGLRegion:
                             'TR'        - 先位移后旋转
         """
         
-        assert method in ('Q','T','F','P'), '期望参数method是以下选项至一："Q"、"T"、"F"、"P"'
-        
         for key in kwds:
             if key not in ['name', 'visible', 'slide', 'inside', 'fill', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
+        
+        if not method in ('Q','T','F','P'):
+            raise ValueError('不支持的方法选项：%s'%method)
         
         name = kwds.get('name', uuid.uuid1().hex)
         visible = kwds.get('visible', True)
         slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         fill = kwds.get('fill', True)
-        light = kwds.get('light', 3)
+        light = kwds.get('light', 15)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
         translate = kwds.get('translate', None)
@@ -300,7 +426,10 @@ class WxGLRegion:
         vertices = np.hstack((texcoord, normal, vs)).astype(np.float32)
         vid = self._create_vbo(vertices)
         
-        indices = np.array(list(range(vs.shape[0])), dtype=np.int32)
+        if series is None:
+            indices = np.arange(vs.shape[0], dtype=np.int32)
+        else:
+            indices = np.int32(series)
         eid = self._create_ebo(indices)
         
         v_type = GL_T2F_N3F_V3F
@@ -327,7 +456,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -349,7 +480,7 @@ class WxGLRegion:
         slide = kwds.get('slide', None)
         inside = kwds.get('inside', True)
         fill = kwds.get('fill', True)
-        light = kwds.get('light', 3)
+        light = kwds.get('light', 15)
         regulate = kwds.get('regulate', None)
         rotate = kwds.get('rotate', None)
         translate = kwds.get('translate', None)
@@ -396,108 +527,6 @@ class WxGLRegion:
         
         self._add_model(name, visible, slide, 'mesh', [vid, eid, v_type, gl_type, texture], **kwds)
     
-    def normalize2d(self, vs):
-        """二维数组正则化（基于L2范数）
-        
-        vs          - 顶点坐标集，numpy数组，shape=(n,3)
-        """
-        
-        k = np.linalg.norm(vs, axis=1)
-        k[k==0] = 1e-30
-        vs = vs.T/k
-        
-        return vs.T
-    
-    def transform(self, vs, *args):
-        """对顶点集实施几何变换
-        
-        vs          - 顶点坐标集，numpy数组，shape=(n,3)
-        args        - 可变参数，参数类型为列表或元组
-                      若参数长度为2，声明旋转变换，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
-                      若参数长度为3，声明位移变换，3个元素（浮点型）分别对应xyz轴方向的位移量
-        """
-        
-        for item in args:
-            if len(item) == 2: # 旋转
-                vec = np.array(item[1])
-                rotvec = np.radians(item[0])*vec/np.linalg.norm(vec)
-                r = sstr.from_rotvec(rotvec)
-                vs = r.apply(vs)
-            elif len(item) == 3: # 位移
-                vs = vs + np.array(item)
-        
-        return vs
-    
-    def rotate_merge(self, av1, av2):
-        """将两个轴角旋转合并为一个
-        
-        av1         - 元组，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
-        av2         - 元组，首元素（浮点型）为旋转角度（逆时针为正，右手定则），尾元素（列表或元组）为旋转向量
-        """
-        
-        a1, v1 = av1
-        a2, v2 = av2
-        v1, v2 = np.array(v1), np.array(v2)
-        
-        r1 = sstr.from_rotvec(np.radians(a1)*v1/np.linalg.norm(v1))
-        r2 = sstr.from_rotvec(np.radians(a2)*v2/np.linalg.norm(v2))
-        
-        m = np.dot(r1.as_matrix(), r2.as_matrix())
-        r = sstr.from_matrix(m)
-        vec = r.as_rotvec()
-        phi = np.degrees(np.linalg.norm(vec))
-        
-        return phi, vec
-
-    def z2v(self, v):
-        """返回z轴正方向到向量v的空间旋转器"""
-        
-        h =  np.linalg.norm(v)
-        a_y = np.arccos(v[2]/h)
-        
-        if v[0] == 0:
-            a_z = np.pi/2 if v[1] > 0 else -np.pi/2
-        else:
-            a_z = np.arctan(v[1]/v[0]) + (np.pi if v[0] < 0 else 0)
-        
-        return sstr.from_euler('xyz', [0, a_y, a_z], degrees=False)
-    
-    def refresh(self):
-        """更新视区显示"""
-        
-        wx.CallAfter(self.scene.update_grid)
-        wx.CallAfter(self.scene.Refresh, False)
-    
-    def show_model(self, name):
-        """显示模型
-        
-        name        - 模型名
-        """
-        
-        if name in self.models:
-            self.models[name]['display'] = True
-    
-    def hide_model(self, name):
-        """隐藏模型
-        
-        name        - 模型名
-        """
-        
-        if name in self.models:
-            self.models[name]['display'] = False
-    
-    def drop_model(self, name):
-        """删除模型"""
-        
-        if name in self.models:
-            for item in self.models[name]['component']:
-                self.buffers[item['args'][0]].delete()
-                if item['genre'] in ['line', 'point', 'surface', 'mesh']:
-                    self.buffers[item['args'][1]].delete()
-                if item['genre'] == 'surface' or item['genre'] == 'mesh':
-                    self.delete_texture(item['args'][4])
-            del self.models[name]
-    
     def text(self, text, pos, size=32, color=None, family=None, weight='normal', align=None, **kwds):
         """绘制2D文字
         
@@ -540,9 +569,8 @@ class WxGLRegion:
         translate = kwds.get('translate', None)
         order = kwds.get('order', None)
         
-        if isinstance(pos, (tuple, list)) and len(pos) == 3:
-            pos = np.array(pos, dtype=np.float64)
-        if not isinstance(pos, np.ndarray) or pos.shape != (3,):
+        pos = np.array(pos, dtype=np.float64)
+        if not isinstance(pos, np.ndarray) or not pos.shape == (3,):
             raise ValueError('期望参数pos是一个长度为3的元组、列表或numpy数组')
         
         if color is None:
@@ -571,7 +599,7 @@ class WxGLRegion:
         pid = self._create_pbo(pixels)
         
         kwds = {'rotate':rotate, 'translate':translate, 'order':order}
-        self._add_model(name, visible, slide, 'text', [pid, rows, cols, pos])
+        self._add_model(name, visible, slide, 'text', [pid, rows, cols, pos], **kwds)
     
     def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, **kwds):
         """绘制3D文字
@@ -602,7 +630,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -618,9 +648,8 @@ class WxGLRegion:
             if key not in ['name', 'inside', 'visible', 'slide', 'light', 'regulate', 'rotate', 'translate', 'order']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        if isinstance(box, (tuple, list)) and len(box) == 4:
-            box = np.array(box, dtype=np.float64)
-        if not isinstance(box, np.ndarray) or box.shape != (4,3):
+        box = np.array(box, dtype=np.float64)
+        if not isinstance(box, np.ndarray) or not box.shape == (4,3):
             raise ValueError('期望参数vs是4个点的坐标组成的元组、列表或numpy数组')
         
         if color is None:
@@ -629,7 +658,7 @@ class WxGLRegion:
             color = self.cm.color2c(color)
         
         texcoord =  np.array([[0,1],[0,0],[1,0],[1,1]])
-        texture = self.fm.text2img(text, size, color, family, weight)
+        texture = self.fm.text2img(text, size+16, color, family, weight)
         
         cw0, ch0 = self.scene.osize[0]*self.box[2], self.scene.osize[1]*self.box[3]
         cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
@@ -768,7 +797,7 @@ class WxGLRegion:
         
         self._add_model(name, visible, slide, 'point', [vid, eid, v_type, gl_type, size], **kwds)
         
-    def line(self, vs, color, method='SINGLE', width=None, stipple=None, **kwds):
+    def line(self, vs, color,  width=None, method='SINGLE',stipple=None, **kwds):
         """绘制线段
         
         vs          - 顶点坐标集，numpy数组，shape=(n,3)
@@ -777,8 +806,8 @@ class WxGLRegion:
                         'MULTI'     - 线段
                         'SINGLE'    - 连续线段
                         'LOOP'      - 闭合线段
-        width       - 线宽，0.0~10.0之间，None表示使用当前设置
-        stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None表示使用当前设置
+        width       - 线宽，0.0~10.0之间，None使用默认设置
+        stipple     - 线型，整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
         kwds        - 关键字参数
                         name        - 模型名
                         visible     - 是否可见，默认可见
@@ -844,7 +873,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -855,8 +886,6 @@ class WxGLRegion:
                             'RT'        - 先旋转后位移
                             'TR'        - 先位移后旋转
         """
-        
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2 and vs.shape[-1] == 3, '期望参数vs是n个顶点坐标组成的numpy数组，n为4的整数倍'
         
         if not color is None:
             c = self.cm.color2c(color, size=(2,2))
@@ -884,7 +913,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -922,7 +953,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -958,7 +991,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1004,7 +1039,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1016,8 +1053,8 @@ class WxGLRegion:
                             'TR'        - 先位移后旋转
         """
         
-        if method == 'P':
-            assert not color is None, '绘制多边形必须要指定颜色'
+        if method == 'P' and color is None:
+            raise ValueError('绘制多边形时参数color不能为None')
         
         if not color is None:
             c = self.cm.color2c(color, size=(2,2))
@@ -1046,7 +1083,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1067,8 +1106,121 @@ class WxGLRegion:
         
         self._mesh(xs, ys, zs, texture, **kwds)
     
-    def sphere(self, center, radius, color=None, texture=None, slices=90, **kwds):
-        """绘制球体
+    def cube(self, center, side, color=None, texture=None, **kwds):
+        """绘制六面体
+        
+        center      - 中心坐标，元组、列表或numpy数组
+        side        - 棱长，整型、浮点型，或长度为3的元组、列表、numpy数组
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+        """
+        
+        center = np.array(center)
+        
+        if isinstance(side, (tuple, list, np.ndarray)):
+            x, y, z = side
+        else:
+            x, y, z = side, side, side
+        
+        if not color is None:
+            c = self.cm.color2c(color, size=(2,2))
+            texture = np.uint8(c*255)
+        elif texture is None:
+            raise ValueError('参数color和texture不能同时为None')
+        
+        vs_front = np.array(((x/2,-y/2,-z/2),(x/2,-y/2,z/2),(x/2,y/2,z/2),(x/2,y/2,-z/2))) + center
+        vs_back = np.array(((-x/2,y/2,-z/2),(-x/2,y/2,z/2),(-x/2,-y/2,z/2),(-x/2,-y/2,-z/2))) + center
+        vs_top = np.array(((-x/2,y/2,z/2),(x/2,y/2,z/2),(x/2,-y/2,z/2),(-x/2,-y/2,z/2))) + center
+        vs_bottom = np.array(((-x/2,-y/2,-z/2),(x/2,-y/2,-z/2),(x/2,y/2,-z/2),(-x/2,y/2,-z/2))) + center
+        vs_left = np.array(((x/2,-y/2,z/2),(x/2,-y/2,-z/2),(-x/2,-y/2,-z/2),(-x/2,-y/2,z/2))) + center
+        vs_right = np.array(((-x/2,y/2,z/2),(-x/2,y/2,-z/2),(x/2,y/2,-z/2),(x/2,y/2,z/2))) + center
+        
+        vs = np.vstack((vs_front, vs_back, vs_top, vs_bottom, vs_left, vs_right))
+        texcoord = np.tile([(0,1),(0,0),(1,0),(1,1)], (6,1))
+        
+        self._surface(vs, texture, texcoord, 'Q', **kwds)
+    
+    def circle(self, center, radius, normal, color=None, texture=None, slices=360, **kwds):
+        """绘制圆面
+        
+        center      - 球心坐标，元组、列表或numpy数组
+        radius      - 半径，浮点型
+        normal      - 圆面法向量
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
+        slices      - 分片数，整型
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转
+                        
+        """
+        
+        center = np.array(center)
+        normal = np.array(normal)
+        rotator = self.z2v(normal)
+        
+        theta = np.linspace(0, 2*np.pi, slices+1)
+        xs = radius * np.cos(theta)
+        ys = radius * np.sin(theta)
+        zs = np.zeros_like(theta)
+        
+        vs = np.stack((xs,ys,zs), axis=1)
+        vs = rotator.apply(np.vstack((np.array([[0,0,0]]), vs))) + center
+        
+        if not color is None:
+            c = self.cm.color2c(color, size=(100,100))
+            texture = np.uint8(c*255)
+        elif texture is None:
+            raise ValueError('参数color和texture不能同时为None')
+        
+        texcoord = np.stack((np.cos(theta)*0.5+0.5, np.sin(theta)*0.5+0.5), axis=1)
+        texcoord = np.vstack((np.array([0.5,0.5]), texcoord))
+        
+        self._surface(vs, texture, texcoord, 'F', **kwds)
+    
+    def sphere(self, center, radius, color=None, texture=None, slices=360, **kwds):
+        """绘制球面
         
         center      - 球心坐标，元组、列表或numpy数组
         radius      - 半径，浮点型
@@ -1085,7 +1237,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1098,26 +1252,30 @@ class WxGLRegion:
                         
         """
         
+        center = np.array(center)
+        
         if not color is None:
             c = self.cm.color2c(color, size=(2,2))
             texture = np.uint8(c*255)
         elif texture is None:
             raise ValueError('参数color和texture不能同时为None')
         
-        lats, lons = np.mgrid[np.pi/2:-np.pi/2:complex(0,slices), 0:2*np.pi:complex(0,2*slices)]
+        lats, lons = np.mgrid[np.pi/2:-np.pi/2:complex(0,slices//2+1), 0:2*np.pi:complex(0,slices+1)]
         xs = radius * np.cos(lats)*np.cos(lons) + center[0]
         ys = radius * np.cos(lats)*np.sin(lons) + center[1]
         zs = radius * np.sin(lats) + center[2]
         
         self._mesh(xs, ys, zs, texture, **kwds)
     
-    def cone(self, center, spire, radius, color, slices=90, **kwds):
-        """绘制圆锥体
+    def cone(self, center, spire, radius, color=None, texture=None, base=None, slices=360, **kwds):
+        """绘制圆锥面
         
         center      - 锥底圆心坐标，元组、列表或numpy数组
         spire       - 锥尖坐标，元组、列表或numpy数组
         radius      - 锥底半径，浮点型
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 锥面颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
+        base        - 锥底颜色，None表示无锥底
         slices      - 分片数，整型
         kwds        - 关键字参数
                         name        - 模型名
@@ -1129,7 +1287,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1141,11 +1301,8 @@ class WxGLRegion:
                             'TR'        - 先位移后旋转
         """
         
-        if not isinstance(center, np.ndarray):
-            center = np.array(center)
-        
-        if not isinstance(spire, np.ndarray):
-            spire = np.array(spire)
+        center = np.array(center)
+        spire = np.array(spire)
         
         theta = np.linspace(0, 2*np.pi, slices+1)
         xs = radius * np.cos(theta)
@@ -1157,73 +1314,33 @@ class WxGLRegion:
         h = np.linalg.norm(vh)
         rotator = self.z2v(vh)
         
+        if not color is None:
+            c = self.cm.color2c(color, size=(100,100))
+            texture = np.uint8(c*255)
+        elif texture is None:
+            raise ValueError('参数color和texture不能同时为None')
+        
         vs_cone = rotator.apply(np.vstack((np.array([[0,0,h]]), vs))) + center
-        vs_ground = rotator.apply(vs[:-1]) + center
+        vs_base = rotator.apply(np.vstack((np.array([[0,0,0]]), vs))) + center
         
-        c = self.cm.color2c(color, size=(2,2))
-        texture = np.uint8(c*255)
-        texcoord_cone = np.tile(np.zeros(2), (vs_cone.shape[0],1))
-        texcoord_ground = np.tile(np.zeros(2), (vs_ground.shape[0],1))
+        texcoord = np.stack((np.cos(theta)*0.5+0.5, np.sin(theta)*0.5+0.5), axis=1)
+        texcoord = np.vstack((np.array([0.5,0.5]), texcoord))
         
-        self._surface(vs_cone, texture, texcoord_cone, 'F', **kwds)
-        self._surface(vs_ground, texture, texcoord_ground, 'P', **kwds)
+        self._surface(vs_cone, texture, texcoord, 'F', **kwds)
+        if not base is None:
+            c = self.cm.color2c(base, size=(100,100))
+            texture = np.uint8(c*255)
+            self._surface(vs_base, texture, texcoord, 'F', **kwds)
     
-    def cube(self, center, side, color, **kwds):
-        """绘制六面体
-        
-        center      - 中心坐标，元组、列表或numpy数组
-        side        - 棱长，整型、浮点型，或长度为3的元组、列表、numpy数组
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            3           - 开启前后光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if not isinstance(center, np.ndarray):
-            center = np.array(center)
-        
-        if isinstance(side, (tuple, list, np.ndarray)):
-            x, y, z = side
-        else:
-            x, y, z = side, side, side
-        
-        vs_front = np.array(((x/2,-y/2,-z/2),(x/2,-y/2,z/2),(x/2,y/2,z/2),(x/2,y/2,-z/2))) + center
-        vs_back = np.array(((-x/2,y/2,-z/2),(-x/2,y/2,z/2),(-x/2,-y/2,z/2),(-x/2,-y/2,-z/2))) + center
-        vs_top = np.array(((-x/2,y/2,z/2),(x/2,y/2,z/2),(x/2,-y/2,z/2),(-x/2,-y/2,z/2))) + center
-        vs_bottom = np.array(((-x/2,-y/2,-z/2),(x/2,-y/2,-z/2),(x/2,y/2,-z/2),(-x/2,y/2,-z/2))) + center
-        vs_left = np.array(((x/2,-y/2,z/2),(x/2,-y/2,-z/2),(-x/2,-y/2,-z/2),(-x/2,-y/2,z/2))) + center
-        vs_right = np.array(((-x/2,y/2,z/2),(-x/2,y/2,-z/2),(x/2,y/2,-z/2),(x/2,y/2,z/2))) + center
-        
-        vs = np.vstack((vs_front, vs_back, vs_top, vs_bottom, vs_left, vs_right))
-        c = self.cm.color2c(color, size=(2,2))
-        texture = np.uint8(c*255)
-        texcoord = np.tile(np.zeros(2), (24,1))
-        
-        self._surface(vs, texture, texcoord, 'Q', **kwds)
-    
-    def cylinder(self, center, radius, color, slices=90, **kwds):
+    def cylinder(self, center, radius, color=None, texture=None, top=None, base=None, slices=360, **kwds):
         """绘制圆柱体
         
         center      - 圆柱上下端面圆心坐标，元组、列表或numpy数组，每个元素表示一个端面的圆心坐标
-        radius      - 圆柱半径，浮点型
+        radius      - 圆柱上下端面半径，浮点型或元组、列表或numpy数组，每个元素表示一个端面的半径
         color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
+        top         - 上端面颜色，None表示无上端面
+        base        - 下端面颜色，None表示无下端面
         slices      - 分片数，整型
         kwds        - 关键字参数
                         name        - 模型名
@@ -1235,7 +1352,9 @@ class WxGLRegion:
                             0           - 仅使用环境光
                             1           - 开启前光源
                             2           - 开启后光源
-                            3           - 开启前后光源（默认）
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
                         regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
                         rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
                         translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
@@ -1247,34 +1366,213 @@ class WxGLRegion:
                             'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
         """
         
-        if not isinstance(center, np.ndarray):
-            center = np.array(center)
+        center = np.array(center)
         
-        c = self.cm.color2c(color, size=(2,2))
-        texture = np.uint8(c*255)
+        if isinstance(radius, (float, int)):
+            r_top, r_base = radius, radius
+        else:
+            r_top, r_base = radius[0], radius[1]
         
-        vh = center[1] - center[0]
+        if not color is None:
+            c = self.cm.color2c(color, size=(100,100))
+            texture = np.uint8(c*255)
+        elif texture is None:
+            raise ValueError('参数color和texture不能同时为None')
+        
+        vh = center[0] - center[1]
         h = np.linalg.norm(vh)
         rotator = self.z2v(vh)
         
-        theta = np.linspace(0, 2*np.pi, slices, endpoint=False)
-        xs = radius * np.cos(theta)
-        ys = radius * np.sin(theta)
-        zs_b = np.zeros_like(theta)
+        theta = np.linspace(0, 2*np.pi, slices+1)
+        x = np.cos(theta)
+        y = np.sin(theta)
         zs_t = np.ones_like(theta) * h
-        vs_b = np.stack((xs,ys,zs_b), axis=1)
-        vs_t = np.stack((xs,ys,zs_t), axis=1)
+        zs_b = np.zeros_like(theta)
+        vs_t = np.stack((x*r_top, y*r_top, zs_t), axis=1)
+        vs_b = np.stack((x*r_base, y*r_base, zs_b), axis=1)
         
-        vs_b = rotator.apply(vs_b) + center[0]
-        vs_t = rotator.apply(vs_t) + center[0]
-        texcoord_end = np.tile(np.zeros(2), (slices,1))
+        vs_t = rotator.apply(vs_t) + center[1]
+        vs_b = rotator.apply(vs_b) + center[1]
         
-        vs = np.stack((vs_t, vs_b, np.vstack((vs_b[1:],vs_b[:1])), np.vstack((vs_t[1:],vs_t[:1]))), axis=1).reshape(-1,3)
+        x_t, y_t, z_t = vs_t[:,0], vs_t[:,1], vs_t[:,2]
+        x_b, y_b, z_b = vs_b[:,0], vs_b[:,1], vs_b[:,2]
+        
+        xs = np.stack((x_t, x_b))
+        ys = np.stack((y_t, y_b))
+        zs = np.stack((z_t, z_b))
+        
+        self._mesh(xs, ys, zs, texture, **kwds)
+        
+        if not top is None:
+            c = self.cm.color2c(top, size=(2,2))
+            texture = np.uint8(c*255)
+            texcoord = np.tile(np.zeros(2), (slices,1))
+            self._surface(vs_t[:-1], texture, texcoord, 'P', **kwds)
+        
+        if not base is None:
+            c = self.cm.color2c(base, size=(2,2))
+            texture = np.uint8(c*255)
+            texcoord = np.tile(np.zeros(2), (slices,1))
+            self._surface(vs_b[:-1], texture, texcoord, 'P', **kwds)
+    
+    def pipe(self, vs, radius, color, slices=90, **kwds):
+        """绘制圆管
+        
+        vs          - 顶点坐标集，numpy数组，shape=(n,3)
+        radius      - 圆管半径，浮点型
+        color       - 顶点或顶点集颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        slices      - 圆管面分片数（数值越大越精细）
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        cs = self.cm.color2c(color, size=vs.shape[0], drop=True)
+        cs = np.uint8(cs*255)
+        
+        theta = np.linspace(0, 2*np.pi, slices+1)
+        x = np.cos(theta) * radius
+        y = np.sin(theta) * radius
+        vs_base = np.stack((x,y,np.zeros(slices+1)), axis=1)
+        
+        for i in range(vs.shape[0]-1):
+            vh = vs[i+1] - vs[i]
+            h = np.linalg.norm(vh)
+            rotator = self.z2v(vh)
+            vs_top = np.stack((x,y,np.ones(slices+1)*h), axis=1)
+            
+            if i == 0:
+                 base = rotator.apply(vs_base) + vs[i]
+            curr = rotator.apply(vs_top) + vs[i]
+            
+            xs = np.vstack((base[:,0], curr[:,0]))
+            ys = np.vstack((base[:,1], curr[:,1]))
+            zs = np.vstack((base[:,2], curr[:,2]))
+            
+            c0 = np.tile(cs[i], (slices+1,1))
+            c1 = np.tile(cs[i+1], (slices+1,1))
+            texture = np.stack((c0, c1), axis=0)
+            
+            self._mesh(xs, ys, zs, texture, **kwds)
+            base = curr
+    
+    def volume(self, x, y, z, data, **kwds):
+        """绘制体数据
+        
+        x/y/z       - 一维元组、列表或数组
+        data        - 数据，四维numpy数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴，第3轴对应每个点的RGBA通道（单字节无符号整型）
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        for i in range(data.shape[0]):
+            vs = np.array([[x[0],y[0],z[i]], [x[0],y[-1],z[i]], [x[-1],y[-1],z[i]], [x[-1],y[0],z[i]]])
+            self._surface(vs, data[i], ((0,1),(0,0),(1,0),(1,1)), 'Q', **kwds)
+        
+        for i in range(data.shape[1]):
+            vs = np.array([[x[0],y[i],z[0]], [x[0],y[i],z[-1]], [x[-1],y[i],z[-1]], [x[-1],y[i],z[0]]])
+            self._surface(vs, data[:,i,:], ((0,1),(0,0),(1,0),(1,1)), 'Q', **kwds)
+        
+        for i in range(data.shape[2]):
+            vs = np.array([[x[i],y[0],z[0]], [x[i],y[0],z[-1]], [x[i],y[-1],z[-1]], [x[i],y[-1],z[0]]])
+            self._surface(vs, data[:,:,i], ((0,1),(0,0),(1,0),(1,1)), 'Q', **kwds)
+    
+    def capsule(self, x, y, z, data, level, color, **kwds):
+        """绘制囊性结构
+        
+        x/y/z       - 一维元组、列表或数组
+        data        - 数据集，三维数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴
+        level       - 阈值，浮点型。data数据集中小于level的点将被忽略
+        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
+        kwds        - 关键字参数
+                        name        - 模型名
+                        visible     - 是否可见，默认可见
+                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
+                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
+                        fill        - 是否填充颜色，默认填充
+                        light       - 光照效果
+                            0           - 仅使用环境光
+                            1           - 开启前光源
+                            2           - 开启后光源
+                            4           - 开启左光源
+                            8           - 开启右光源
+                            15          - 开启全部光源（默认）
+                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
+                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
+                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
+                        order       - 几何变换的顺序
+                            None        - 无变换（默认）
+                            'R'         - 仅旋转变换
+                            'T'         - 仅位移变换
+                            'RT'        - 先旋转后位移
+                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
+        """
+        
+        vs, ids = util.find_capsule(data, level)
+        xs, ys, zs = vs[:,0], vs[:,1], vs[:,2]
+        
+        x =  np.array(x)
+        x_min, x_max = np.nanmin(x), np.nanmax(x)
+        xs_min, xs_max = 0, data.shape[2]
+        xs = x_min + (x_max-x_min)*(xs-xs_min)/(xs_max-xs_min)
+        
+        y =  np.array(y)
+        y_min, y_max = np.nanmin(y), np.nanmax(y)
+        ys_min, ys_max = 0, data.shape[1]
+        ys = y_min + (y_max-y_min)*(ys-ys_min)/(ys_max-ys_min)
+        
+        z =  np.array(z)
+        z_min, z_max = np.nanmin(z), np.nanmax(z)
+        zs_min, zs_max = 0, data.shape[0]
+        zs = z_min + (z_max-z_min)*(zs-zs_min)/(zs_max-zs_min)
+        
+        vs = np.stack((xs, ys, zs), axis=1)
+        vs = vs[ids.ravel()]
+        
+        c = self.cm.color2c(color, size=(2,2))
+        texture = np.uint8(c*255)
         texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
         
-        self._surface(vs_b, texture, texcoord_end, 'P', **kwds)
-        self._surface(vs_t, texture, texcoord_end, 'P', **kwds)
-        self._surface(vs, texture, texcoord, 'Q', **kwds)
+        self._surface(vs, texture, texcoord, 'T', **kwds)
     
     def colorbar(self, drange, cm, mode, **kwds):
         """绘制colorBar 
@@ -1291,15 +1589,15 @@ class WxGLRegion:
                         endpoint        - 刻度是否包含值域范围的两个端点值
         """
         
-        assert isinstance(drange, (tuple, list)) and len(drange) > 1, '期望参数drange是长度大于1的元组或列表'
-        assert mode in ('H','h','VR','vr','VL','vl','V','v'), '期望参数mode为"H"、"VR"或"VL"的一个'
-        
-        if mode.upper() == 'V':
-            mode = 'VR'
-        
         for key in kwds:
             if key not in ['subject', 'subject_size', 'tick_size', 'tick_format', 'density', 'endpoint']:
                 raise KeyError('不支持的关键字参数：%s'%key)
+        
+        if not mode in ('H','h','VR','vr','VL','vl','V','v'):
+            raise ValueError('不支持的选项：%s'%mode)
+        
+        if mode.upper() == 'V':
+            mode = 'VR'
         
         subject = kwds.get('subject', None)
         subject_size = kwds.get('subject_size', 44)
@@ -1312,7 +1610,7 @@ class WxGLRegion:
         if len(drange) > 2:
             ticks = drange
         else:
-            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
+            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max, extend=False)
        
         if endpoint:
             if (ticks[1]-ticks[0])/(ticks[2]-ticks[1]) < 0.2:
@@ -1324,10 +1622,11 @@ class WxGLRegion:
         
         texcoord = ((0,1),(0,0),(1,0),(1,1))
         colors = self.cm.cmap(np.linspace(dmin, dmax, 256), cm)
+        
         if mode.upper() == 'H':
-            texture = np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,3))
+            texture = np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,-1))
         else:
-            texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,3))
+            texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1))
         
         cw, ch = self.scene.size[0]*self.box[2], self.scene.size[1]*self.box[3]
         side = max(cw, ch)/min(cw, ch)
@@ -1454,6 +1753,10 @@ class WxGLRegion:
         xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd)
         yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd)
         zz = self._get_tick_label(z_min, z_max, s_min=3+zd, s_max=6+zd)
+        
+        x_min, x_max = xx[0], xx[-1]
+        y_min, y_max = yy[0], yy[-1]
+        z_min, z_max = zz[0], zz[-1]
         
         grid_top = uuid.uuid1().hex
         grid_bottom = uuid.uuid1().hex
@@ -1653,8 +1956,11 @@ class WxGLRegion:
         x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
         y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
         
-        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd)
-        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd)
+        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd, extend=False)
+        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd, extend=False)
+        
+        x_min, x_max = xx[0], xx[-1]
+        y_min, y_max = yy[0], yy[-1]
         
         self.line(np.array([[x_min,y_min,0],[x_max,y_min,0]]), lc, width=lw, inside=False)
         self.line(np.array([[x_min,y_min,0],[x_min,y_max,0]]), lc, width=lw, inside=False)

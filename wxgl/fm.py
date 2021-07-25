@@ -44,6 +44,8 @@ class FontManager:
         
         if font_name in self.fonts:
             self.default_font = font_name
+        else:
+            raise ValueError('字体%s不在当前系统可用字体列表中'%font_name)
     
     def get_font_file(self, family=None, weight='normal'):
         """返回字体文件"""

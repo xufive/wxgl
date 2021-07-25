@@ -285,7 +285,7 @@ def single_figure(cls):
 
     def _single_figure(**kwds):
         for key in kwds:
-            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom', 'light0', 'light1']:
+            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if cls not in _instance:
@@ -307,10 +307,6 @@ def single_figure(cls):
                 _instance[cls].kwds.update({'azimuth': kwds['azimuth']})
             if 'zoom' in kwds:
                 _instance[cls].kwds.update({'zoom': kwds['zoom']})
-            if 'light0' in kwds:
-                _instance[cls].kwds.update({'light0': kwds['light0']})
-            if 'light1' in kwds:
-                _instance[cls].kwds.update({'light1': kwds['light1']})
         
         return _instance[cls]
 
@@ -333,8 +329,6 @@ class WxGLFigure:
                         elevation   - 仰角
                         azimuth     - 方位角
                         zoom        - 视口缩放因子
-                        light0      - 光源0的位置
-                        light1      - 光源1的位置
         """
         
         dist = kwds.get('dist', 5)
@@ -348,7 +342,7 @@ class WxGLFigure:
         self.size = kwds.get('size', (1280,960))
         self.style2d = kwds.get('style2d', 'white')
         self.style3d = kwds.get('style3d', 'blue')
-        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom, 'light0':light0, 'light1':light1}
+        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom}
         
         self.app = None
         self.ff = None
@@ -468,7 +462,8 @@ class WxGLFigure:
         rotate      - 视点坐标系旋转
         """
         
-        assert os.path.isdir(folder), '%s不是一个合法的路径或该路径不存在'%folder
+        if not os.path.isdir(folder):
+            raise ValueError('%s不是一个合法的路径或该路径不存在'%folder)
         
         if not rotate is None:
             self.ff.scene.rotate = rotate

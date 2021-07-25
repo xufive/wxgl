@@ -65,8 +65,6 @@ class WxGLScene(glcanvas.GLCanvas):
                         view        - 视景体
                         zoom        - 视口缩放因子
                         interval    - 定时器间隔（毫秒）
-                        light0      - 光源0的位置
-                        light1      - 光源1的位置
                         style       - 场景风格
                             'white'     - 珍珠白
                             'black'     - 石墨黑
@@ -76,7 +74,7 @@ class WxGLScene(glcanvas.GLCanvas):
         """
         
         for key in kwds:
-            if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'light0', 'light1', 'style']:
+            if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         self.parent = parent                                                # 父级窗口对象
@@ -92,8 +90,6 @@ class WxGLScene(glcanvas.GLCanvas):
         self.view = np.array(kwds.get('view', [-1,1,-1,1,2.6,1000]))        # 视景体
         self.zoom = kwds.get('zoom', 1.0 if self.proj=='cone' else 1.5)     # 视口缩放因子，默认1
         self.interval = kwds.get('interval', 25)                            # 定时器间隔，默认25毫秒
-        self.light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))               # 光源0的位置
-        self.light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))              # 光源1的位置
         self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
         
         self.eye = None                                                     # 眼睛的位置
@@ -139,7 +135,8 @@ class WxGLScene(glcanvas.GLCanvas):
     def _set_style(self, style):
         """设置风格"""
         
-        assert style in ('black', 'white', 'gray', 'blue'), '期望参数style是black/white/gray/blue/royal其中之一'
+        if not style in ('black', 'white', 'gray', 'blue', 'royal'):
+            raise ValueError('不支持的风格选项：%s'%style)
         
         if style == 'black':
             return (0.0, 0.0, 0.0, 1.0), (0.9, 0.9, 0.9)
@@ -447,15 +444,11 @@ class WxGLScene(glcanvas.GLCanvas):
         glEnable(GL_POINT_SMOOTH)                                           # 开启点反走样
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)                             # 最高质量点反走样
         
-        glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8,0.8,0.8,1.0))                 # 光源中的环境光
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8,0.8,0.8,1.0))                 # 光源中的散射光
-        glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
-        glLightfv(GL_LIGHT0, GL_POSITION, self.light0)                      # 光源位置
+        glLightfv(GL_LIGHT0, GL_POSITION, (2.0,-20.0,5.0,1.0))              # 光源位置（front）
+        glLightfv(GL_LIGHT1, GL_POSITION, (-2.0,20.0,-5.0,1.0))             # 光源位置（rear）
+        glLightfv(GL_LIGHT2, GL_POSITION, (-20.0,-2.0,0.0,1.0))             # 光源位置（left）
+        glLightfv(GL_LIGHT3, GL_POSITION, (20.0,2.0,0.0,1.0))               # 光源位置（right）
         
-        glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5,0.5,0.5,1.0))                 # 光源中的环境光
-        glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3,0.3,0.3,1.0))                 # 光源中的散射光
-        glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2,0.2,0.2,1.0))                # 光源中的反射光
-        glLightfv(GL_LIGHT1, GL_POSITION, self.light1)                      # 光源位置
         
         glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)                     # 启用双面渲染
         
@@ -473,10 +466,6 @@ class WxGLScene(glcanvas.GLCanvas):
             
             if reg.fixed:
                 zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
-                #if self.mode == '2D':
-                #    zoom, lookat = reg.zoom, (0,0,5,0,0,0,0,1,0)
-                #else:
-                #    zoom, lookat = reg.zoom, (0,-5,0,0,0,0,0,0,1)
             else:
                 zoom, lookat = self.zoom, (*self.eye, *self.oecs, *self.up)
             
@@ -522,19 +511,31 @@ class WxGLScene(glcanvas.GLCanvas):
                                     f1 = 1 + np.log(pow(reg.scale, 1/4)) if reg.scale > 1 else pow(reg.scale, 1/3)
                                     f2 = 1 + np.log(pow(reg.scale, 2)) if reg.scale > 1 else pow(reg.scale, 1/1.1)
                                     
-                                    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.8*f1, 0.8*f1, 0.8*f1, 1.0))
-                                    glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.8*f2, 0.8*f2, 0.8*f2, 1.0))
+                                    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.7*f1, 0.7*f1, 0.7*f1, 1.0))
+                                    glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.7*f2, 0.7*f2, 0.7*f2, 1.0))
                                     glLightfv(GL_LIGHT0, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
-                                    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.4*f1, 0.4*f1, 0.4*f1, 1.0))
                                     glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
                                     glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
+                                    glLightfv(GL_LIGHT2, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT2, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
+                                    glLightfv(GL_LIGHT2, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
+                                    
+                                    glLightfv(GL_LIGHT3, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT3, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
+                                    glLightfv(GL_LIGHT3, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
+                                    
                                     glEnable(GL_LIGHTING)
-                                    if item['light'] in (1,3):
+                                    if item['light']%2 == 1:
                                         glEnable(GL_LIGHT0)
-                                    if item['light'] in (2,3):
+                                    if (item['light']>>1)%2 == 1:
                                         glEnable(GL_LIGHT1)
+                                    if (item['light']>>2)%2 == 1:
+                                        glEnable(GL_LIGHT2)
+                                    if (item['light']>>3)%2 == 1:
+                                        glEnable(GL_LIGHT3)
                                 if 'fill' in item:
                                     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
                             self._wxglDrawElements(reg, (vid, eid, v_type, gl_type, texture))
@@ -585,8 +586,6 @@ class WxGLScene(glcanvas.GLCanvas):
         """设置2D/3D模式"""
         
         self.mode = mode
-        #self._set_eye_and_up(save=True)
-        #self.update_grid()
     
     def set_style(self, style):
         """设置风格（背景和文本颜色）"""
@@ -690,17 +689,22 @@ class WxGLScene(glcanvas.GLCanvas):
         self.fm.set_default_font(font_name)
     
     def get_color_list(self):
-        """返回预设的颜色列表"""
+        """返回颜色列表"""
         
         return self.cm.color_list
     
     def get_cmap_list(self):
-        """返回预设的调色板列表"""
+        """返回调色板列表"""
         
         return self.cm.cmap_list
     
+    def get_color_help(self):
+        """返回颜色中英文对照表"""
+        
+        return self.cm.color_help()
+    
     def get_cmap_help(self):
-        """返回预设的调色板分类列表"""
+        """返回调色板分类列表"""
         
         return self.cm.cmap_help()
     
