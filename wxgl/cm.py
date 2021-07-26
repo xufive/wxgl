@@ -151,7 +151,7 @@ class ColorManager:
         
         return color
     
-    def cmap(self, data, cm, invalid=np.nan, invalid_c=[0,0,0,0], drange=None, alpha=None, drop=False):
+    def cmap(self, data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False):
         """数值映射到颜色
         
         data        - 数据

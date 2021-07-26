@@ -519,11 +519,11 @@ class WxGLScene(glcanvas.GLCanvas):
                                     glLightfv(GL_LIGHT1, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
                                     glLightfv(GL_LIGHT1, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
-                                    glLightfv(GL_LIGHT2, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT2, GL_AMBIENT, (0.4*f1, 0.4*f1, 0.4*f1, 1.0))
                                     glLightfv(GL_LIGHT2, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
                                     glLightfv(GL_LIGHT2, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     
-                                    glLightfv(GL_LIGHT3, GL_AMBIENT, (0.5*f1, 0.5*f1, 0.5*f1, 1.0))
+                                    glLightfv(GL_LIGHT3, GL_AMBIENT, (0.4*f1, 0.4*f1, 0.4*f1, 1.0))
                                     glLightfv(GL_LIGHT3, GL_DIFFUSE, (0.3*f2, 0.3*f2, 0.3*f2, 1.0))
                                     glLightfv(GL_LIGHT3, GL_SPECULAR, (0.2*f1, 0.2*f1, 0.2*f1, 1.0))
                                     

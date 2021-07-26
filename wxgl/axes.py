@@ -629,13 +629,14 @@ class WxGLAxes:
         # ColorBar参数
         self.cbargs = cbargs
     
-    def mesh(self, xs, ys, zs=None, color=None, cm=None, drange=None, texture=None, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, **kwds):
         """绘制网格
         
         xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
         color       - 颜色，或每个点对应的数据。texture为None时该参数有效
         cm          - 颜色映射表
         drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        nanfill     - nan数据的填充色，默认透明
         texture     - 纹理图片文件或numpy数组形式的图像数据
         kwds        - 关键字参数
                         name        - 模型名
@@ -703,7 +704,7 @@ class WxGLAxes:
                     else:
                         cbargs = {'cm':cm, 'drange':drange}
                     
-                    c = self.cm.cmap(color, cm, drange=drange)
+                    c = self.cm.cmap(color, cm, drange=drange, invalid_c=nanfill)
                 else:
                     raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
             texture = np.uint8(c*255)
@@ -786,7 +787,7 @@ class WxGLAxes:
         # ColorBar参数
         self.cbargs = None
     
-    def _qtf(self, method, vs, color, cm, drange, texture, texcoord, **kwds):
+    def _qtf(self, method, vs, color, cm, drange, nanfill, texture, texcoord, **kwds):
         """绘制四角面、三角面和扇面的底层公用函数"""
         
         # vs参数处理
@@ -826,7 +827,7 @@ class WxGLAxes:
                     else:
                         cbargs = {'cm':cm, 'drange':drange}
                     
-                    c = self.cm.cmap(color, cm, drange=drange)
+                    c = self.cm.cmap(color, cm, drange=drange, invalid_c=nanfill)
                     texture = np.uint8(c*255)
                 else:
                     raise ValueError("期望参数color是单个颜色或二维数据（此种情况下参数cm和texcoord均不能为None）")
@@ -839,13 +840,14 @@ class WxGLAxes:
         # ColorBar参数
         self.cbargs = cbargs
     
-    def quad(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+    def quad(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
         """绘制一个或多个四角面（每个四角面的四个顶点通常在一个平面上）
         
         vs          - 点坐标集，二维元组、列表或numpy数组
         color       - 颜色，或二维数据。texture为None时该参数有效
         cm          - 颜色映射表
         drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        nanfill     - nan数据的填充色，默认透明
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -872,15 +874,16 @@ class WxGLAxes:
                             'TR'        - 先位移后旋转
         """
         
-        self._qtf('Q', vs, color, cm, drange, texture, texcoord, **kwds)
+        self._qtf('Q', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
     
-    def triangle(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+    def triangle(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
         """绘制一个或多个三角面
         
         vs          - 点坐标集，二维元组、列表或numpy数组
         color       - 颜色，或二维数据。texture为None时该参数有效
         cm          - 颜色映射表
         drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        nanfill     - nan数据的填充色，默认透明
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -907,15 +910,16 @@ class WxGLAxes:
                             'TR'        - 先位移后旋转
         """
         
-        self._qtf('T', vs, color, cm, drange, texture, texcoord, **kwds)
+        self._qtf('T', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
     
-    def fan(self, vs, color=None, cm=None, drange=None, texture=None, texcoord=None, **kwds):
+    def fan(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
         """绘制绘制扇面
         
         vs          - 点坐标集，二维元组、列表或numpy数组
         color       - 颜色，或二维数据。texture为None时该参数有效
         cm          - 颜色映射表
         drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
+        nanfill     - nan数据的填充色，默认透明
         texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         kwds        - 关键字参数
@@ -942,7 +946,7 @@ class WxGLAxes:
                             'TR'        - 先位移后旋转
         """
         
-        self._qtf('F', vs, color, cm, drange, texture, texcoord, **kwds)
+        self._qtf('F', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
     
     def polygon(self, vs, color=None, **kwds):
         """绘制多边形
