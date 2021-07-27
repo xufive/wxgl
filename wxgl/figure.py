@@ -39,11 +39,13 @@ import wx.lib.agw.aui as aui
 import numpy as np
 import imageio
 from PIL import Image
+import queue
+import threading
 
 from . import scene
 from . import axes
 from . import cm
-
+from . import fm
 
 BASE_PATH = os.path.dirname(__file__)
 
@@ -105,13 +107,17 @@ class WxGLFrame(wx.Frame):
         self.once_timer = wx.Timer() # 单次定时器
         self.once_timer.Bind(wx.EVT_TIMER, self.on_once_timer)
         
-        self.folder = None
-        self.fs = None
-        self.fps = None
-        self.format =None
-        self.mod = None
-        self.f = None
-        self.last =None
+        self.th = None              # 生成gif或mp4文件的线程
+        self.q = queue.Queue()      # PIL对象数据队列
+        self.out_file = None        # 输出文件名（可带路径，仅支持gif和mp4格式）
+        self.ext = None             # 文件格式
+        self.fs = None              # 总帧数
+        self.fps = None             # 帧率
+        self.loop = None            # 是否循环（仅gif有效）
+        self.mod = None             # 帧间隔
+        self.offset = None          # 帧偏移
+        self.f = None               # 已完成帧数
+        self.last = None            # 上一次截图的计数周期
         
         self.scene.Bind(wx.EVT_SIZE, self.on_resize)
         self.Bind(aui.EVT_AUITOOLBAR_TOOL_DROPDOWN, self.on_style, id=self.ID_STYLE)
@@ -131,28 +137,40 @@ class WxGLFrame(wx.Frame):
         """单次定时器函数"""
         
         if self.f < self.fs:
-            if self.scene.sys_n != self.last and self.scene.sys_n%self.mod == 0:
-                fn = os.path.join(self.folder, '%04d_%d.png'%(self.f, self.scene.sys_n))
-                self.scene.repaint()
-                self.scene.save_scene(fn, alpha=True, crop=True)
-                self.last = self.scene.sys_n
-                self.f += 1
+            if self.scene.sys_n != self.last and self.scene.sys_n%self.mod == self.offset:
+                if not self.q.full():
+                    self.scene.repaint()
+                    im = self.scene.get_scene_buffer(alpha=True, crop=True)
+                    self.q.put(im)
+                    self.last = self.scene.sys_n
+                    self.f += 1
         else:
             self.once_timer.Stop()
-            
-            fns = os.listdir(self.folder)
-            fns.sort()
-            
-            if self.format.lower() == 'gif':
-                ims = [Image.open(os.path.join(self.folder,fn)) for fn in fns]
-                imageio.mimsave(os.path.join(self.folder, 'out.gif'), ims, format='GIF', fps=self.fps, loop=0)
-            elif self.format.lower() == 'mp4':
-                writer = imageio.get_writer(os.path.join(self.folder, 'out.mp4'), fps=self.fps)
-                for fn in fns:
-                    writer.append_data(imageio.imread(os.path.join(self.folder,fn)))
-                writer.close()
-            
+            self.th.join()
             self.Destroy()
+    
+    def create_gif_or_mp4(self):
+        """生成gif或mp4文件"""
+        
+        if self.ext == '.mp4':
+            writer = imageio.get_writer(self.out_file, fps=self.fps)
+        else:
+            writer = imageio.get_writer(self.out_file, fps=self.fps, loop=self.loop)
+        
+        n = 0
+        while n < self.fs:
+            im = np.array(self.q.get())
+            writer.append_data(im)
+            n += 1
+        
+        writer.close()
+    
+    def start_recorder(self):
+        """以线程方式启动生成gif或mp4文件的函数"""
+        
+        self.th = threading.Thread(target=self.create_gif_or_mp4)
+        self.th.setDaemon(True)
+        self.th.start()
     
     def on_color(self, evt):
         """选择风格"""
@@ -347,6 +365,7 @@ class WxGLFigure:
         self.app = None
         self.ff = None
         self.cm = cm.ColorManager()
+        self.fm = fm.FontManager()
         self.curr_ax = None
         self.assembly = list()
     
@@ -450,20 +469,26 @@ class WxGLFigure:
         finally:
             self._destroy_frame()
     
-    def capture(self, folder, fs=50, fps=10, format='gif', fi=0, mod=5, rotate=None):
-        """连续保存缓冲区为图片文件
+    def capture(self, out_file, fs=50, fps=10, loop=0, fi=0, mod=10, offset=None, rotate=None):
+        """生成mp4或gif文件
         
-        folder      - 图片文件保存路径
+        out_file    - 输出文件名，可带路径，仅支持gif和mp4两种格式
         fs          - 总帧数
         fps         - 每秒帧数
-        format      - 输出格式，支持GIF和MP4两种格式
+        loop        - 循环播放次数（仅gif格式有效，0表示无限循环）
         fi          - 计数器初值
-        mod         - 计数器有效计数的间隔数
+        mod         - 帧间隔（计数器计数值）
+        offset      - 帧偏移（计数器计数值）
         rotate      - 视点坐标系旋转
         """
         
-        if not os.path.isdir(folder):
-            raise ValueError('%s不是一个合法的路径或该路径不存在'%folder)
+        ext = os.path.splitext(out_file)[1].lower()
+        if not ext in ('.mp4', '.gif'):
+            raise ValueError('不支持的文件格式：%s'%ext)
+        
+        folder = os.path.split(out_file)[0]
+        if folder and not os.path.isdir(folder):
+            raise ValueError('路径不存在：%s'%folder)
         
         if not rotate is None:
             self.ff.scene.rotate = rotate
@@ -473,16 +498,19 @@ class WxGLFigure:
             self._draw()
             self.ff.scene.start_sys_timer()
             
-            self.ff.folder = folder
+            self.ff.out_file = out_file
+            self.ff.ext = ext
             self.ff.fs = fs
             self.ff.fps = fps
-            self.ff.format = format
+            self.ff.loop = loop
             self.ff.mod = mod
+            self.ff.offset = mod-1 if offset is None else offset
             self.ff.f = 0
             
             self.ff.scene.sys_n = fi
             self.ff.last = self.ff.scene.sys_n
             self.ff.once_timer.Start(10)
+            self.ff.start_recorder()
             
             self.app.MainLoop()
         except:

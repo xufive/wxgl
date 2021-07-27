@@ -45,6 +45,28 @@ capture = fig.capture
 
 cmap = fig.cm.cmap
 
+def font_list():
+    """返回可用字体列表"""
+    
+    for i, item in enumerate(fig.fm.get_font_list()):
+        print(i+1, item)
+
+def color_list():
+    """返回颜色列表"""
+    
+    for i, item in enumerate(fig.cm.color_help()):
+        print(i+1, item[0], item[1])
+
+def cmap_list():
+    """返回颜色列表"""
+    
+    cmaps = fig.cm.cmap_help()
+    for i, key in enumerate(cmaps.keys()):
+        print(i+1, key)
+        for j, item in enumerate(cmaps[key]):
+            print('  %d-%d'%(i+1, j+1), item)
+        print()
+
 def figure(**kwds):
     """初始化画布
     

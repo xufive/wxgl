@@ -624,10 +624,9 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.set_posture(**self.store)
         
-    def save_scene(self, fn, alpha=True, buffer='FRONT', crop=False):
-        """保存场景为图像文件
+    def get_scene_buffer(self, alpha=True, buffer='FRONT', crop=False):
+        """以PIL对象的格式返回场景缓冲区数据
         
-        fn          - 保存的文件名
         alpha       - 是否使用透明通道
         buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
         crop        - 是否将宽高裁切为16的倍数
@@ -656,6 +655,18 @@ class WxGLScene(glcanvas.GLCanvas):
             x1, y1 = x0+nw, y0+nh
             im = im.crop((x0, y0, x1, y1))
         
+        return im
+        
+    def save_scene(self, fn, alpha=True, buffer='FRONT', crop=False):
+        """保存场景为图像文件
+        
+        fn          - 保存的文件名
+        alpha       - 是否使用透明通道
+        buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
+        crop        - 是否将宽高裁切为16的倍数
+        """
+        
+        im = self.get_scene_buffer(alpha=alpha, buffer=buffer, crop=crop)
         im.save(fn)
         
     def start_sys_timer(self):
