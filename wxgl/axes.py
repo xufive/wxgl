@@ -41,8 +41,10 @@ class WxGLAxes:
         
         self.reg_main = self.scene.add_region(box)      # 主视区
         self.reg_title = None                           # 标题视区
-        self.reg_cb_r = None                            # 右侧色条视区
-        self.reg_cb_l = None                            # 左侧色条视区
+        self.reg_cb_r1 = None                           # 右侧色条视区
+        self.reg_cb_r2 = None                           # 右侧色条视区
+        self.reg_cb_l1 = None                           # 左侧色条视区
+        self.reg_cb_l2 = None                           # 左侧色条视区
         self.reg_cb_b = None                            # 底部色条视区
         self.reg_cb_br = None                           # 底部右侧色条视区
         self.reg_cb_bl = None                           # 底部左侧色条视区
@@ -178,16 +180,27 @@ class WxGLAxes:
             x, w = a0, a2
             self.reg_main.reset_box((a0, a1, a2, a3*(1-k)))
             
-            if not self.reg_cb_r is None:
-                b0, b1, b2, b3 = self.reg_cb_r.box
+            if not self.reg_cb_r1 is None:
+                b0, b1, b2, b3 = self.reg_cb_r1.box
                 w += b2
-                self.reg_cb_r.reset_box((b0, b1, b2, b3*(1-k)))
+                self.reg_cb_r1.reset_box((b0, b1, b2, b3*(1-k)))
             
-            if not self.reg_cb_l is None:
-                c0, c1, c2, c3 = self.reg_cb_l.box
+            if not self.reg_cb_r2 is None:
+                b0, b1, b2, b3 = self.reg_cb_r2.box
+                w += b2
+                self.reg_cb_r2.reset_box((b0, b1, b2, b3*(1-k)))
+            
+            if not self.reg_cb_l1 is None:
+                c0, c1, c2, c3 = self.reg_cb_l1.box
                 x = c0
                 w += c2
-                self.reg_cb_l.reset_box((c0, c1, c2, c3*(1-k)))
+                self.reg_cb_l1.reset_box((c0, c1, c2, c3*(1-k)))
+            
+            if not self.reg_cb_l2 is None:
+                c0, c1, c2, c3 = self.reg_cb_l2.box
+                x = c0
+                w += c2
+                self.reg_cb_l2.reset_box((c0, c1, c2, c3*(1-k)))
             
             box = (x, a1+a3*(1-k), w, a3*k)
             self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
@@ -231,26 +244,60 @@ class WxGLAxes:
             raise ValueError('不支持的位置选项：%s'%loc)
         
         if loc == 'right':
-            if self.reg_cb_r is None:
-                k = 0.15 if self.reg_cb_l is None else 0.17647
+            if not self.reg_cb_l1 is None or not self.reg_cb_l2 is None:
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
+            
+            if self.reg_cb_r1 is None:
+                k = 0.15
                 a0, a1, a2, a3 = self.reg_main.box
                 self.reg_main.reset_box((a0, a1, a2*(1-k), a3))
                 
                 box = (a0+a2*(1-k), a1, a2*k, a3)
-                self.reg_cb_r = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.reg_cb_r1 = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_r1, 'colorbar', drange, cm, mode='VR', **kwds)
+            elif self.reg_cb_r2 is None:
+                k = 0.17647
+                a0, a1, a2, a3 = self.reg_main.box
+                self.reg_main.reset_box((a0, a1, a2*(1-k), a3))
+                
+                box = (a0+a2*(1-k), a1, a2*k, a3)
+                self.reg_cb_r2 = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_r2, 'colorbar', drange, cm, mode='VR', **kwds)
+            else:
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
             
-            self.fig.add_widget(self.reg_cb_r, 'colorbar', drange, cm, mode='VR', **kwds)
         elif loc == 'left':
-            if self.reg_cb_l is None:
-                k = 0.15 if self.reg_cb_r is None else 0.17647
+            if not self.reg_cb_r1 is None or not self.reg_cb_r2 is None:
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
+            
+            if self.reg_cb_l1 is None:
+                k = 0.15
                 a0, a1, a2, a3 = self.reg_main.box
                 self.reg_main.reset_box((a0+a2*k, a1, a2*(1-k), a3))
                 
                 box = (a0, a1, a2*k, a3)
-                self.reg_cb_l = self.scene.add_region(box, fixed=True, proj='ortho')
-            
-            self.fig.add_widget(self.reg_cb_l, 'colorbar', drange, cm, mode='VL', **kwds)
+                self.reg_cb_l1 = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_l1, 'colorbar', drange, cm, mode='VL', **kwds)
+            elif self.reg_cb_l2 is None:
+                k = 0.17647
+                a0, a1, a2, a3 = self.reg_main.box
+                self.reg_main.reset_box((a0+a2*k, a1, a2*(1-k), a3))
+                
+                box = (a0, a1, a2*k, a3)
+                self.reg_cb_l2 = self.scene.add_region(box, fixed=True, proj='ortho')
+                self.fig.add_widget(self.reg_cb_l2, 'colorbar', drange, cm, mode='VL', **kwds)
+            else:
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
         else:
+            if loc == 'bottom' and (not self.reg_cb_b is None or not self.reg_cb_bl is None or not self.reg_cb_br is None):
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
+            
+            if loc == 'bottom-left' and (not self.reg_cb_bl is None or not self.reg_cb_b is None):
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
+            
+            if loc == 'bottom-right' and (not self.reg_cb_br is None or not self.reg_cb_b is None):
+                raise ValueError('位置选项已被使用或禁用：%s'%loc)
+            
             if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
                 k = 0.15 if self.reg_title is None else 0.17647
                 h = self.reg_main.box[-1]*k
@@ -258,13 +305,21 @@ class WxGLAxes:
                 a0, a1, a2, a3 = self.reg_main.box
                 self.reg_main.reset_box((a0, a1+a3*k, a2, a3*(1-k)))
                 
-                if not self.reg_cb_r is None:
-                    b0, b1, b2, b3 = self.reg_cb_r.box
-                    self.reg_cb_r.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
+                if not self.reg_cb_r1 is None:
+                    b0, b1, b2, b3 = self.reg_cb_r1.box
+                    self.reg_cb_r1.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
                 
-                if not self.reg_cb_l is None:
-                    c0, c1, c2, c3 = self.reg_cb_l.box
-                    self.reg_cb_l.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
+                if not self.reg_cb_r2 is None:
+                    b0, b1, b2, b3 = self.reg_cb_r2.box
+                    self.reg_cb_r2.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
+                
+                if not self.reg_cb_l1 is None:
+                    c0, c1, c2, c3 = self.reg_cb_l1.box
+                    self.reg_cb_l1.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
+                
+                if not self.reg_cb_l2 is None:
+                    c0, c1, c2, c3 = self.reg_cb_l2.box
+                    self.reg_cb_l2.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
             elif self.reg_title is None:
                 h = 0.17647*self.reg_main.box[-1]
             else:
