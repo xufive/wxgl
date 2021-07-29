@@ -109,7 +109,7 @@ class WxGLFrame(wx.Frame):
         
         self.th = None              # 生成gif或mp4文件的线程
         self.q = queue.Queue()      # PIL对象数据队列
-        self.out_file = None        # 输出文件名（可带路径，仅支持gif和mp4格式）
+        self.out_file = None        # 输出文件名
         self.ext = None             # 文件格式
         self.fs = None              # 总帧数
         self.fps = None             # 帧率
@@ -152,10 +152,10 @@ class WxGLFrame(wx.Frame):
     def create_gif_or_mp4(self):
         """生成gif或mp4文件"""
         
-        if self.ext == '.mp4':
-            writer = imageio.get_writer(self.out_file, fps=self.fps)
-        else:
+        if self.ext == '.gif':
             writer = imageio.get_writer(self.out_file, fps=self.fps, loop=self.loop)
+        else:
+            writer = imageio.get_writer(self.out_file, fps=self.fps)
         
         n = 0
         while n < self.fs:
@@ -303,7 +303,7 @@ def single_figure(cls):
 
     def _single_figure(**kwds):
         for key in kwds:
-            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'zoom']:
+            if key not in ['size', 'style2d', 'style3d', 'dist', 'view', 'elevation', 'azimuth', 'proj', 'zoom']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if cls not in _instance:
@@ -323,6 +323,8 @@ def single_figure(cls):
                 _instance[cls].kwds.update({'elevation': kwds['elevation']})
             if 'azimuth' in kwds:
                 _instance[cls].kwds.update({'azimuth': kwds['azimuth']})
+            if 'proj' in kwds:
+                _instance[cls].kwds.update({'proj': kwds['proj']})
             if 'zoom' in kwds:
                 _instance[cls].kwds.update({'zoom': kwds['zoom']})
         
@@ -353,14 +355,13 @@ class WxGLFigure:
         view = kwds.get('view', [-1, 1, -1, 1, 2.6, 1000])
         elevation = kwds.get('elevation', 5)
         azimuth = kwds.get('azimuth', 25)
-        zoom = kwds.get('zoom', 1.0)
-        light0 = kwds.get('light0', (2.0,-20.0,3.0,1.0))
-        light1 = kwds.get('light1', (-2.0,20.0,-2.0,1.0))
+        proj = kwds.get('proj', 'cone')
+        zoom = kwds.get('zoom', 1.0 if proj=='cone' else 1.5)
         
         self.size = kwds.get('size', (1280,960))
         self.style2d = kwds.get('style2d', 'white')
         self.style3d = kwds.get('style3d', 'blue')
-        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'zoom':zoom}
+        self.kwds = {'dist':dist, 'view':view, 'elevation':elevation, 'azimuth':azimuth, 'proj':proj, 'zoom':zoom}
         
         self.app = None
         self.ff = None
@@ -472,7 +473,7 @@ class WxGLFigure:
     def capture(self, out_file, fs=50, fps=10, loop=0, fi=0, mod=10, offset=None, rotate=None):
         """生成mp4或gif文件
         
-        out_file    - 输出文件名，可带路径，仅支持gif和mp4两种格式
+        out_file    - 输出文件名，可带路径，支持gif和mp4、avi、wmv等格式
         fs          - 总帧数
         fps         - 每秒帧数
         loop        - 循环播放次数（仅gif格式有效，0表示无限循环）
@@ -483,7 +484,7 @@ class WxGLFigure:
         """
         
         ext = os.path.splitext(out_file)[1].lower()
-        if not ext in ('.mp4', '.gif'):
+        if not ext in ('.gif', '.mp4', '.avi', 'wmv'):
             raise ValueError('不支持的文件格式：%s'%ext)
         
         folder = os.path.split(out_file)[0]

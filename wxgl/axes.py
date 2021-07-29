@@ -151,12 +151,16 @@ class WxGLAxes:
         
         self.rotatex = True
     
-    def title(self, text, size=64, color=None, **kwds):
+    def title(self, text, size=64, color=None, align='middle', **kwds):
         """绘制标题
         
         text        - 文本字符串
         size        - 文字大小，整形，默认64
         color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
+        align       - 垂直对齐方式
+                        'top'       - 顶部对齐
+                        'middle'    - 居中对齐（默认）
+                        'bottom'    - 底部对齐
         kwds        - 关键字参数
                         family      - （系统支持的）字体，None表示当前默认的字体
                         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
@@ -166,9 +170,12 @@ class WxGLAxes:
             if key not in ['family', 'weight']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
+        if not align in ('top','middle','bottom'):
+            raise ValueError('不支持的对齐方式：%s'%align)
+        
         family = kwds.get('family', None)
         weight = kwds.get('weight', 'bold')
-        kwds = {'family':family, 'weight':weight, 'align':'center-middle', 'inside':False, 'light':0}
+        kwds = {'family':family, 'weight':weight, 'align':'center-%s'%align, 'inside':False, 'light':0}
         
         if self.reg_title is None:
             if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
@@ -205,7 +212,7 @@ class WxGLAxes:
             box = (x, a1+a3*(1-k), w, a3*k)
             self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
         
-        box = np.array([[-1,0,0],[-1,-0.3,0],[1,-0.3,0],[1,0,0]])
+        box = np.array([[-1,0.8,0],[-1,-0.8,0],[1,-0.8,0],[1,0.8,0]])
         self.fig.add_widget(self.reg_title, 'text3d', text, box, size=size, color=color, **kwds)
         
     def colorbar(self, drange=None, cm=None, loc='right', **kwds):

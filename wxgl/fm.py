@@ -168,6 +168,7 @@ class FontManager:
             r, g, b, a = im.split()
             r, g, b = 255-np.array(r), 255-np.array(g), 255-np.array(b)
             a = r/3 + g/3 + b/3
+            
             r, g, b = r*color[0], g*color[1], b*color[2]
             im = np.dstack((r,g,b,a)).astype(np.uint8)
         else:
