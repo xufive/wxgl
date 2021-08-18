@@ -25,11 +25,11 @@ class mainFrame(wx.Frame):
         # 创建场景，并设置视区
         # -----------------------------------------------------------
         self.scene = WxGLScene(self, elevation=10, azimuth=30)
-        self.cm = self.scene.cm
-        self.cm_list = list(self.cm.cms.keys())     # 系统支持的调色板列表
-        self.cm_curr = 'hsv'                        # 当前选中的调色板
-        self.render = 'FCBC'                        # 渲染方式
-        self.cm_is_show = False                     # ColorBar显示开关
+        #self.cm = self.scene.cm
+        #self.cm_list = list(self.cm.cms.keys())     # 系统支持的调色板列表
+        #self.cm_curr = 'hsv'                        # 当前选中的调色板
+        #self.render = 'FCBC'                        # 渲染方式
+        #self.cm_is_show = False                     # ColorBar显示开关
         self.model_curr = '球和六面体'              # 当前选中的模型。默认正弦波
         
         # 创建master视区

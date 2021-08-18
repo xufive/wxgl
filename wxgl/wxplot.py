@@ -127,6 +127,18 @@ def zlabel(zlabel):
     fig.curr_ax.zlabel(zlabel)
 
 @current_axes
+def xrange(xrange):
+    fig.curr_ax.xrange(xrange)
+
+@current_axes
+def yrange(yrange):
+    fig.curr_ax.yrange(yrange)
+
+@current_axes
+def zrange(zrange):
+    fig.curr_ax.zrange(zrange)
+
+@current_axes
 def xrotate():
     fig.curr_ax.xrotate()
 

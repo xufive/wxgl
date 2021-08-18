@@ -242,7 +242,7 @@ class WxGLRegion:
             if not os.path.exists(img):
                 raise ValueError('%s指向的纹理图片文件不存在'%img)
             im = Image.open(img)
-        elif isinstance(img, np.ndarray) and img.dtype is np.dtype('uint8'):
+        elif isinstance(img, np.ndarray) and img.dtype == np.dtype('uint8'):
             im = Image.fromarray(img)
         else:
             raise ValueError('期望参数img是纹理图片文件，或是numpy数组形式的图像数据')

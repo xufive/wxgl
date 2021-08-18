@@ -60,6 +60,9 @@ class WxGLAxes:
         self.labelx = 'X'                               # x轴名称
         self.labely = 'Y'                               # y轴名称
         self.labelz = 'Z'                               # z轴名称
+        self.xr = None                                  # x轴范围
+        self.yr = None                                  # y轴范围
+        self.zr = None                                  # z轴范围
         self.xf = str                                   # x轴标注格式化函数
         self.yf = str                                   # y轴标注格式化函数
         self.zf = str                                   # z轴标注格式化函数
@@ -89,7 +92,7 @@ class WxGLAxes:
         self.scene.set_posture(zoom=zoom, oecs=(h2d_offset,0,0), dist=5, azimuth=0, elevation=0, save=True)
     
     def xlabel(self, xlabel):
-        """设置x轴名称，text为文本字符串"""
+        """设置x轴名称"""
         
         self.labelx = xlabel
     
@@ -102,6 +105,21 @@ class WxGLAxes:
         """设置z轴名称"""
         
         self.labelz = zlabel
+    
+    def xrange(self, xrange):
+        """设置x轴范围"""
+        
+        self.xr = xrange
+    
+    def yrange(self, yrange):
+        """设置y轴范围"""
+        
+        self.yr = yrange
+    
+    def zrange(self, zrange):
+        """设置z轴范围"""
+        
+        self.zr = zrange
     
     def xformat(self, xf):
         """格式化x轴的标注"""

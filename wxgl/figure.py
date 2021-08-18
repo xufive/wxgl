@@ -403,6 +403,7 @@ class WxGLFigure:
                 if ax.axis_is_show:
                     ax.reg_main.ticks2d(
                         xlabel=ax.labelx, ylabel=ax.labely, 
+                        xr=ax.xr, yr=ax.yr, 
                         xf=ax.xf, yf=ax.yf, 
                         xd=ax.xd, yd=ax.yd, 
                         xrotate=ax.rotatex,
@@ -424,6 +425,7 @@ class WxGLFigure:
                 if ax.grid_is_show:
                     ax.reg_main.ticks3d(
                         xlabel=ax.labelx, ylabel=ax.labely, zlabel=ax.labelz, 
+                        xr=ax.xr, yr=ax.yr, zr=ax.zr, 
                         xf=ax.xf, yf=ax.yf, zf=ax.zf, 
                         xd=ax.xd, yd=ax.yd, zd=ax.zd, 
                         bg=(0.9,1.0,0.6,0.1)

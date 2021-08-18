@@ -77,10 +77,7 @@ class WxGLScene(glcanvas.GLCanvas):
             if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        self.parent = parent                                                # 父级窗口对象
-        while not isinstance(self.parent, wx.Frame):
-            self.parent = self.parent.parent
-        
+        self.mf = wx.GetApp().Frame                                         # wxFrame窗口对象
         self.proj = kwds.get('proj', 'cone')                                # 投影模式，默认透视投影
         self.mode = kwds.get('mode', '3D').upper()                          # 设置2D/3D模式，默认3D模式
         self.oecs = np.array(kwds.get('oecs', [0.0,0.0,0.0]))               # ECS原点，默认与OCS（目标坐标系）原点重合
@@ -118,7 +115,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self._init_gl()                                                     # 画布初始化
         
-        self.parent.Bind(wx.EVT_CLOSE, self.on_close)
+        self.mf.Bind(wx.EVT_CLOSE, self.on_close)
         self.sys_timer.Bind(wx.EVT_TIMER, self.on_sys_timer)
         
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
