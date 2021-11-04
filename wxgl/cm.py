@@ -4,7 +4,7 @@ import re
 import numpy as np
 import matplotlib
 from matplotlib import cm as mcm
-
+#from scipy.ndimage import filters
 
 class ColorManager:
     """颜色管理类"""
@@ -194,15 +194,16 @@ class ColorManager:
         color[invalid_pos] = invalid_c
         
         if isinstance(alpha, (int, float)) and 0 <= alpha <= 1:
-            color = color.reshape(-1,4)
-            color[:,3] = alpha
-            color = color.reshape(*data.shape, 4)
+            color[..., 3] = alpha
         
         if drop:
-            color = color.reshape(-1,4)
-            color = color[:,:-1]
-            color = color.reshape(*data.shape, 3)
-        
+            color = color[..., :-1]
+        #else:
+        #    if color.ndim == 3:
+        #        a = np.uint8(color[..., -1]*255)
+        #        a = filters.gaussian_filter(a, 0.5)
+        #        color[..., -1] = np.float64(a)/255
+        #
         return color
 
 if __name__  == '__main__':

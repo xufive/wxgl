@@ -77,7 +77,10 @@ class WxGLScene(glcanvas.GLCanvas):
             if key not in ['proj', 'mode', 'oecs', 'dist', 'azimuth', 'elevation', 'view', 'zoom', 'interval', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        self.mf = wx.GetApp().Frame                                         # wxFrame窗口对象
+        self.parent = parent                                                # 父级窗口对象
+        while not isinstance(self.parent, wx.Frame):
+            self.parent = self.parent.GetParent()
+        
         self.proj = kwds.get('proj', 'cone')                                # 投影模式，默认透视投影
         self.mode = kwds.get('mode', '3D').upper()                          # 设置2D/3D模式，默认3D模式
         self.oecs = np.array(kwds.get('oecs', [0.0,0.0,0.0]))               # ECS原点，默认与OCS（目标坐标系）原点重合
@@ -115,7 +118,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self._init_gl()                                                     # 画布初始化
         
-        self.mf.Bind(wx.EVT_CLOSE, self.on_close)
+        self.parent.Bind(wx.EVT_CLOSE, self.on_close)
         self.sys_timer.Bind(wx.EVT_TIMER, self.on_sys_timer)
         
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
@@ -160,7 +163,7 @@ class WxGLScene(glcanvas.GLCanvas):
             x = d * np.sin(np.radians(self.azimuth))
             y = -d * np.cos(np.radians(self.azimuth))
             z = self.dist * np.sin(np.radians(self.elevation))
-            self.eye = np.array([x, y, z], dtype=np.float)
+            self.eye = np.array([x, y, z], dtype=np.float) + self.oecs
             
             if -90 < self.elevation < 90:
                 self.up = np.array([0,0,1], dtype=np.float)
@@ -187,7 +190,7 @@ class WxGLScene(glcanvas.GLCanvas):
         
         self.sys_timer.Stop()
         
-        for reg in self.regions:
+        for reg, fixed in self.regions:
             for id in reg.buffers:
                 reg.buffers[id].delete()
         
@@ -292,102 +295,111 @@ class WxGLScene(glcanvas.GLCanvas):
         if self.mode == '2D' or not self.grid_is_show:
             return
         
-        for ax in self.subgraphs:
-            reg = ax.reg_main
-            if not ax.grid_is_show or not reg.grid:
-                continue
-            
-            if self.elevation > 0:
-                reg.hide_model(reg.grid['top'])
-                reg.show_model(reg.grid['bottom'])
-                reg.hide_model(reg.grid['x_ymin_zmax'])
-                reg.hide_model(reg.grid['x_ymax_zmax'])
-                reg.hide_model(reg.grid['y_xmin_zmax'])
-                reg.hide_model(reg.grid['y_xmax_zmax'])
-                
-                if 0 <= self.azimuth < 90:
-                    reg.show_model(reg.grid['x_ymin_zmin'])
-                    reg.hide_model(reg.grid['x_ymax_zmin'])
-                    reg.show_model(reg.grid['y_xmax_zmin'])
-                    reg.hide_model(reg.grid['y_xmin_zmin'])
-                elif 90 <= self.azimuth < 180:
-                    reg.hide_model(reg.grid['x_ymin_zmin'])
-                    reg.show_model(reg.grid['x_ymax_zmin'])
-                    reg.show_model(reg.grid['y_xmax_zmin'])
-                    reg.hide_model(reg.grid['y_xmin_zmin'])
-                elif 180 <= self.azimuth < 270:
-                    reg.hide_model(reg.grid['x_ymin_zmin'])
-                    reg.show_model(reg.grid['x_ymax_zmin'])
-                    reg.hide_model(reg.grid['y_xmax_zmin'])
-                    reg.show_model(reg.grid['y_xmin_zmin'])
-                else:
-                    reg.show_model(reg.grid['x_ymin_zmin'])
-                    reg.hide_model(reg.grid['x_ymax_zmin'])
-                    reg.hide_model(reg.grid['y_xmax_zmin'])
-                    reg.show_model(reg.grid['y_xmin_zmin'])
-            else:
-                reg.show_model(reg.grid['top'])
-                reg.hide_model(reg.grid['bottom'])
-                reg.hide_model(reg.grid['x_ymin_zmin'])
-                reg.hide_model(reg.grid['x_ymax_zmin'])
-                reg.hide_model(reg.grid['y_xmin_zmin'])
-                reg.hide_model(reg.grid['y_xmax_zmin'])
-                
-                if 0 <= self.azimuth < 90:
-                    reg.show_model(reg.grid['x_ymin_zmax'])
-                    reg.hide_model(reg.grid['x_ymax_zmax'])
-                    reg.show_model(reg.grid['y_xmax_zmax'])
-                    reg.hide_model(reg.grid['y_xmin_zmax'])
-                elif 90 <= self.azimuth < 180:
-                    reg.hide_model(reg.grid['x_ymin_zmax'])
-                    reg.show_model(reg.grid['x_ymax_zmax'])
-                    reg.show_model(reg.grid['y_xmax_zmax'])
-                    reg.hide_model(reg.grid['y_xmin_zmax'])
-                elif 180 <= self.azimuth < 270:
-                    reg.hide_model(reg.grid['x_ymin_zmax'])
-                    reg.show_model(reg.grid['x_ymax_zmax'])
-                    reg.hide_model(reg.grid['y_xmax_zmax'])
-                    reg.show_model(reg.grid['y_xmin_zmax'])
-                else:
-                    reg.show_model(reg.grid['x_ymin_zmax'])
-                    reg.hide_model(reg.grid['x_ymax_zmax'])
-                    reg.hide_model(reg.grid['y_xmax_zmax'])
-                    reg.show_model(reg.grid['y_xmin_zmax'])
-            
-            if 90 <= self.azimuth < 270:
-                reg.show_model(reg.grid['front'])
-                reg.hide_model(reg.grid['back'])
-            else:
-                reg.show_model(reg.grid['back'])
-                reg.hide_model(reg.grid['front'])
-            
-            if 0 <= self.azimuth < 180:
-                reg.show_model(reg.grid['left'])
-                reg.hide_model(reg.grid['right'])
-            else:
-                reg.show_model(reg.grid['right'])
-                reg.hide_model(reg.grid['left'])
+        if self.subgraphs:
+            for ax in self.subgraphs:
+                reg = ax.reg_main
+                if not ax.grid_is_show or not reg.grid:
+                    continue
+                self._update_grid(reg)
+        else:
+            for reg, fixed in self.regions:
+                if not fixed and reg.grid:
+                    self._update_grid(reg)
+    
+    def _update_grid(self, reg):
+        """刷新坐标轴网格"""
+        
+        if self.elevation > 0:
+            reg.hide_model(reg.grid['top'])
+            reg.show_model(reg.grid['bottom'])
+            reg.hide_model(reg.grid['x_ymin_zmax'])
+            reg.hide_model(reg.grid['x_ymax_zmax'])
+            reg.hide_model(reg.grid['y_xmin_zmax'])
+            reg.hide_model(reg.grid['y_xmax_zmax'])
             
             if 0 <= self.azimuth < 90:
-                reg.show_model(reg.grid['z_xmax_ymax'])
-                reg.hide_model(reg.grid['z_xmin_ymax']) 
-                reg.hide_model(reg.grid['z_xmin_ymin']) 
-                reg.hide_model(reg.grid['z_xmax_ymin']) 
+                reg.show_model(reg.grid['x_ymin_zmin'])
+                reg.hide_model(reg.grid['x_ymax_zmin'])
+                reg.show_model(reg.grid['y_xmax_zmin'])
+                reg.hide_model(reg.grid['y_xmin_zmin'])
             elif 90 <= self.azimuth < 180:
-                reg.hide_model(reg.grid['z_xmax_ymax'])
-                reg.show_model(reg.grid['z_xmin_ymax']) 
-                reg.hide_model(reg.grid['z_xmin_ymin']) 
-                reg.hide_model(reg.grid['z_xmax_ymin']) 
+                reg.hide_model(reg.grid['x_ymin_zmin'])
+                reg.show_model(reg.grid['x_ymax_zmin'])
+                reg.show_model(reg.grid['y_xmax_zmin'])
+                reg.hide_model(reg.grid['y_xmin_zmin'])
             elif 180 <= self.azimuth < 270:
-                reg.hide_model(reg.grid['z_xmax_ymax'])
-                reg.hide_model(reg.grid['z_xmin_ymax']) 
-                reg.show_model(reg.grid['z_xmin_ymin']) 
-                reg.hide_model(reg.grid['z_xmax_ymin']) 
+                reg.hide_model(reg.grid['x_ymin_zmin'])
+                reg.show_model(reg.grid['x_ymax_zmin'])
+                reg.hide_model(reg.grid['y_xmax_zmin'])
+                reg.show_model(reg.grid['y_xmin_zmin'])
             else:
-                reg.hide_model(reg.grid['z_xmax_ymax'])
-                reg.hide_model(reg.grid['z_xmin_ymax']) 
-                reg.hide_model(reg.grid['z_xmin_ymin']) 
-                reg.show_model(reg.grid['z_xmax_ymin']) 
+                reg.show_model(reg.grid['x_ymin_zmin'])
+                reg.hide_model(reg.grid['x_ymax_zmin'])
+                reg.hide_model(reg.grid['y_xmax_zmin'])
+                reg.show_model(reg.grid['y_xmin_zmin'])
+        else:
+            reg.show_model(reg.grid['top'])
+            reg.hide_model(reg.grid['bottom'])
+            reg.hide_model(reg.grid['x_ymin_zmin'])
+            reg.hide_model(reg.grid['x_ymax_zmin'])
+            reg.hide_model(reg.grid['y_xmin_zmin'])
+            reg.hide_model(reg.grid['y_xmax_zmin'])
+            
+            if 0 <= self.azimuth < 90:
+                reg.show_model(reg.grid['x_ymin_zmax'])
+                reg.hide_model(reg.grid['x_ymax_zmax'])
+                reg.show_model(reg.grid['y_xmax_zmax'])
+                reg.hide_model(reg.grid['y_xmin_zmax'])
+            elif 90 <= self.azimuth < 180:
+                reg.hide_model(reg.grid['x_ymin_zmax'])
+                reg.show_model(reg.grid['x_ymax_zmax'])
+                reg.show_model(reg.grid['y_xmax_zmax'])
+                reg.hide_model(reg.grid['y_xmin_zmax'])
+            elif 180 <= self.azimuth < 270:
+                reg.hide_model(reg.grid['x_ymin_zmax'])
+                reg.show_model(reg.grid['x_ymax_zmax'])
+                reg.hide_model(reg.grid['y_xmax_zmax'])
+                reg.show_model(reg.grid['y_xmin_zmax'])
+            else:
+                reg.show_model(reg.grid['x_ymin_zmax'])
+                reg.hide_model(reg.grid['x_ymax_zmax'])
+                reg.hide_model(reg.grid['y_xmax_zmax'])
+                reg.show_model(reg.grid['y_xmin_zmax'])
+        
+        if 90 <= self.azimuth < 270:
+            reg.show_model(reg.grid['front'])
+            reg.hide_model(reg.grid['back'])
+        else:
+            reg.show_model(reg.grid['back'])
+            reg.hide_model(reg.grid['front'])
+        
+        if 0 <= self.azimuth < 180:
+            reg.show_model(reg.grid['left'])
+            reg.hide_model(reg.grid['right'])
+        else:
+            reg.show_model(reg.grid['right'])
+            reg.hide_model(reg.grid['left'])
+        
+        if 0 <= self.azimuth < 90:
+            reg.show_model(reg.grid['z_xmax_ymax'])
+            reg.hide_model(reg.grid['z_xmin_ymax']) 
+            reg.hide_model(reg.grid['z_xmin_ymin']) 
+            reg.hide_model(reg.grid['z_xmax_ymin']) 
+        elif 90 <= self.azimuth < 180:
+            reg.hide_model(reg.grid['z_xmax_ymax'])
+            reg.show_model(reg.grid['z_xmin_ymax']) 
+            reg.hide_model(reg.grid['z_xmin_ymin']) 
+            reg.hide_model(reg.grid['z_xmax_ymin']) 
+        elif 180 <= self.azimuth < 270:
+            reg.hide_model(reg.grid['z_xmax_ymax'])
+            reg.hide_model(reg.grid['z_xmin_ymax']) 
+            reg.show_model(reg.grid['z_xmin_ymin']) 
+            reg.hide_model(reg.grid['z_xmax_ymin']) 
+        else:
+            reg.hide_model(reg.grid['z_xmax_ymax'])
+            reg.hide_model(reg.grid['z_xmin_ymax']) 
+            reg.hide_model(reg.grid['z_xmin_ymin']) 
+            reg.show_model(reg.grid['z_xmax_ymin']) 
     
     def _wxglDrawElements(self, reg, vars):
         """绘制图元"""
@@ -452,7 +464,7 @@ class WxGLScene(glcanvas.GLCanvas):
     def _draw_gl(self):
         """绘制模型"""
         
-        for reg in self.regions:
+        for reg, fixed in self.regions:
             x0, y0 = int(reg.box[0]*self.size[0]), int(reg.box[1]*self.size[1])
             w_reg, h_reg = int(reg.box[2]*self.size[0])+1, int(reg.box[3]*self.size[1])
             k = w_reg/h_reg
@@ -576,8 +588,9 @@ class WxGLScene(glcanvas.GLCanvas):
         """设置投影模式"""
         
         self.proj = proj
-        for reg in self.regions:
-            reg.proj = proj
+        for reg, fixed in self.regions:
+            if not fixed:
+                reg.proj = proj
     
     def set_mode(self, mode):
         """设置2D/3D模式"""
@@ -731,7 +744,7 @@ class WxGLScene(glcanvas.GLCanvas):
             proj = self.proj
         
         reg = region.WxGLRegion(self, box, fixed, proj)
-        self.regions.append(reg)
+        self.regions.append((reg,fixed))
         
         return reg
     

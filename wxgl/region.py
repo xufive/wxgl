@@ -266,7 +266,7 @@ class WxGLRegion:
         
         return texture
     
-    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=True):
+    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
         """返回合适的Colorbar标注值
         
         v_min       - 数据最小值
@@ -293,11 +293,15 @@ class WxGLRegion:
         if result[0] > v_min:
             if extend:
                 result.insert(0, 2*result[0]-result[1])
+            elif (result[0]-v_min) < 0.3*(result[1]-result[0]):
+                result[0] = v_min
             else:
                 result.insert(0, v_min)
         if result[-1] < v_max:
             if extend:
                 result.append(2*result[-1]-result[-2])
+            elif (v_max-result[-1]) < 0.3*(result[-1]-result[-2]):
+                result[-1] = v_max
             else:
                 result.append(v_max)
         
@@ -1681,13 +1685,14 @@ class WxGLRegion:
         
         self._surface(vs, texture=texture, texcoord=texcoord, method='Q', light=0, inside=False)
         
-    def ticks3d(self, **kwds):
+    def ticks3d(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
         """绘制3D网格和刻度
         
+        xlabel      - x轴名称，默认'X'
+        ylabel      - y轴名称，默认'Y'
+        zlabel      - z轴名称，默认'Z'
         kwds        - 关键字参数
-                        xlabel          - x轴名称，默认'X'
-                        ylabel          - y轴名称，默认'Y'
-                        zlabel          - z轴名称，默认'Z'
+                        visible         - 是否可见，默认可见
                         xr              - x轴范围，元组，默None，表示使用数据的动态范围
                         yr              - y轴范围，元组，默None，表示使用数据的动态范围
                         zr              - z轴范围，元组，默None，表示使用数据的动态范围
@@ -1700,6 +1705,7 @@ class WxGLRegion:
                         xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
                         yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
                         zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
+                        extend          - 网格外延，默认False
                         lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
@@ -1710,16 +1716,14 @@ class WxGLRegion:
             return
         
         for key in kwds:
-            if key not in ['xlabel','ylabel','zlabel','xr','yr','zr','xf','yf','zf','font','labelsize','ticksize','xd','yd','zd','lc','lw','bg']:
+            if key not in ['visible', 'xr','yr','zr','xf','yf','zf','font','labelsize','ticksize','xd','yd','zd','extend','lc','lw','bg']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         for key in self.grid:
             self.drop_model(self.grid[key])
         self.grid.clear()
         
-        xlabel = kwds.get('xlabel', 'X')
-        ylabel = kwds.get('ylabel', 'Y')
-        zlabel = kwds.get('zlabel', 'Z')
+        visible = kwds.get('visible', True)
         xr = kwds.get('xr', None)
         yr = kwds.get('yr', None)
         zr = kwds.get('zr', None)
@@ -1732,6 +1736,7 @@ class WxGLRegion:
         xd = kwds.get('xd', 0)
         yd = kwds.get('yd', 0)
         zd = kwds.get('zd', 0)
+        extend = kwds.get('extend', False)
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 0.5)
         bg = kwds.get('bg', None)
@@ -1746,13 +1751,24 @@ class WxGLRegion:
             zd = -2
         
         dx, dy, dz = (self.r_x[1]-self.r_x[0])*0.1, (self.r_y[1]-self.r_y[0])*0.1, (self.r_z[1]-self.r_z[0])*0.1
-        x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
-        y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
-        z_min, z_max = (self.r_z[0]-dz, self.r_z[1]+dz) if zr is None else zr
         
-        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd)
-        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd)
-        zz = self._get_tick_label(z_min, z_max, s_min=3+zd, s_max=6+zd)
+        if xr and len(xr) > 2:
+            xx = list(xr)
+        else:
+            x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
+            xx = self._get_tick_label(x_min, x_max, s_min=4+xd, s_max=6+xd, extend=extend)
+        
+        if yr and len(yr) > 2:
+            yy = list(yr)
+        else:
+            y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
+            yy = self._get_tick_label(y_min, y_max, s_min=4+yd, s_max=6+yd, extend=extend)
+        
+        if zr and len(zr) > 2:
+            zz = list(zr)
+        else:
+            z_min, z_max = (self.r_z[0]-dz, self.r_z[1]+dz) if zr is None else zr
+            zz = self._get_tick_label(z_min, z_max, s_min=4+zd, s_max=6+zd, extend=extend)
         
         x_min, x_max = xx[0], xx[-1]
         y_min, y_max = yy[0], yy[-1]
@@ -1834,12 +1850,12 @@ class WxGLRegion:
             vs_ymax.append((xx[0], y_max, z))
             vs_ymax.append((xx[-1], y_max, z))
         
-        self.line(np.array(vs_zmax), lc, width=lw, method='MULTI', inside=False, name=grid_top)
-        self.line(np.array(vs_zmin), lc, width=lw, method='MULTI', inside=False, name=grid_bottom)
-        self.line(np.array(vs_xmax), lc, width=lw, method='MULTI', inside=False, name=grid_right)
-        self.line(np.array(vs_xmin), lc, width=lw, method='MULTI', inside=False, name=grid_left)
-        self.line(np.array(vs_ymax), lc, width=lw, method='MULTI', inside=False, name=grid_back)
-        self.line(np.array(vs_ymin), lc, width=lw, method='MULTI', inside=False, name=grid_front)
+        self.line(np.array(vs_zmax), lc, width=lw, method='MULTI', inside=False, name=grid_top, visible=visible)
+        self.line(np.array(vs_zmin), lc, width=lw, method='MULTI', inside=False, name=grid_bottom, visible=visible)
+        self.line(np.array(vs_xmax), lc, width=lw, method='MULTI', inside=False, name=grid_right, visible=visible)
+        self.line(np.array(vs_xmin), lc, width=lw, method='MULTI', inside=False, name=grid_left, visible=visible)
+        self.line(np.array(vs_ymax), lc, width=lw, method='MULTI', inside=False, name=grid_back, visible=visible)
+        self.line(np.array(vs_ymin), lc, width=lw, method='MULTI', inside=False, name=grid_front, visible=visible)
         
         if not bg is None:
             xy_x, xy_y = np.meshgrid(xx, yy)
@@ -1854,53 +1870,53 @@ class WxGLRegion:
             yz_xmin = np.ones_like(yz_y) * x_min
             yz_xmax = np.ones_like(yz_y) * x_max
             
-            self.mesh(xy_x, xy_y, xy_zmin, color=bg, inside=False, light=0, name=grid_bottom)
-            self.mesh(xy_x, xy_y, xy_zmax, color=bg, inside=False, light=0, name=grid_top)
-            self.mesh(zx_x, zx_ymin, zx_z, color=bg, inside=False, light=0, name=grid_front)
-            self.mesh(zx_x, zx_ymax, zx_z, color=bg, inside=False, light=0, name=grid_back)
-            self.mesh(yz_xmin, yz_y, yz_z, color=bg, inside=False, light=0, name=grid_left)
-            self.mesh(yz_xmax, yz_y, yz_z, color=bg, inside=False, light=0, name=grid_right)
+            self.mesh(xy_x, xy_y, xy_zmin, color=bg, inside=False, light=0, name=grid_bottom, visible=visible)
+            self.mesh(xy_x, xy_y, xy_zmax, color=bg, inside=False, light=0, name=grid_top, visible=visible)
+            self.mesh(zx_x, zx_ymin, zx_z, color=bg, inside=False, light=0, name=grid_front, visible=visible)
+            self.mesh(zx_x, zx_ymax, zx_z, color=bg, inside=False, light=0, name=grid_back, visible=visible)
+            self.mesh(yz_xmin, yz_y, yz_z, color=bg, inside=False, light=0, name=grid_left, visible=visible)
+            self.mesh(yz_xmax, yz_y, yz_z, color=bg, inside=False, light=0, name=grid_right, visible=visible)
         
-        gap, down, i, j, k = 0.2*labelsize/(40*self.scale), 0.03*ticksize/32+0.12*labelsize/(40*self.scale), len(xx)%2, len(yy)%2, len(zz)%2
+        gap, down, i, j, k = 0.2*labelsize/(40*self.scale), 0.03*ticksize/32+0.2*labelsize/(40*self.scale), len(xx)%2, len(yy)%2, len(zz)//2
         if xlabel:
-            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_max+gap), size=labelsize, inside=False, name=x_ymin_zmax)
-            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_min-down), size=labelsize, inside=False, name=x_ymin_zmin)
-            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_max+gap), size=labelsize, inside=False, name=x_ymax_zmax)
-            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_min-down), size=labelsize, inside=False, name=x_ymax_zmin)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_max+gap), size=labelsize, inside=False, name=x_ymin_zmax, visible=visible)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_min-gap, z_min-down), size=labelsize, inside=False, name=x_ymin_zmin, visible=visible)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_max+gap), size=labelsize, inside=False, name=x_ymax_zmax, visible=visible)
+            self.text(xlabel, pos=((xx[i]+x_max)/2, y_max+gap, z_min-down), size=labelsize, inside=False, name=x_ymax_zmin, visible=visible)
         if ylabel:
-            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmin_zmax)
-            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmin_zmin)
-            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmax_zmax)
-            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmax_zmin)
+            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmin_zmax, visible=visible)
+            self.text(ylabel, pos=(x_min-gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmin_zmin, visible=visible)
+            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_max+gap), size=labelsize, inside=False, name=y_xmax_zmax, visible=visible)
+            self.text(ylabel, pos=(x_max+gap, (yy[j]+y_max)/2, z_min-down), size=labelsize, inside=False, name=y_xmax_zmin, visible=visible)
         if zlabel:
-            self.text(zlabel, pos=(x_max+gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymax)
-            self.text(zlabel, pos=(x_min-gap, y_max+gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymax)
-            self.text(zlabel, pos=(x_min-gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmin_ymin)
-            self.text(zlabel, pos=(x_max+gap, y_min-gap, (zz[k]+z_max)/2), size=labelsize, inside=False, name=z_xmax_ymin)
+            self.text(zlabel, pos=(x_max+gap, y_max+gap, (zz[k]+zz[k-1])/2-0.5*gap), size=labelsize, inside=False, name=z_xmax_ymax, visible=visible)
+            self.text(zlabel, pos=(x_min-gap, y_max+gap, (zz[k]+zz[k-1])/2-0.5*gap), size=labelsize, inside=False, name=z_xmin_ymax, visible=visible)
+            self.text(zlabel, pos=(x_min-gap, y_min-gap, (zz[k]+zz[k-1])/2-0.5*gap), size=labelsize, inside=False, name=z_xmin_ymin, visible=visible)
+            self.text(zlabel, pos=(x_max+gap, y_min-gap, (zz[k]+zz[k-1])/2-0.5*gap), size=labelsize, inside=False, name=z_xmax_ymin, visible=visible)
         
         gap, down = 0.05*ticksize/(32*self.scale), 0.1*ticksize/(32*self.scale)
         for x in xx[1:-1]:
-            self.text(xf(x), pos=(x-gap, y_min-gap, z_max+gap), size=ticksize, inside=False, name=x_ymin_zmax)
-            self.text(xf(x), pos=(x-gap, y_min-gap, z_min-down), size=ticksize, inside=False, name=x_ymin_zmin)
-            self.text(xf(x), pos=(x+gap, y_max+gap, z_max+gap), size=ticksize, inside=False, name=x_ymax_zmax)
-            self.text(xf(x), pos=(x+gap, y_max+gap, z_min-down), size=ticksize, inside=False, name=x_ymax_zmin)
+            self.text(xf(x), pos=(x-gap, y_min-gap, z_max+gap), size=ticksize, inside=False, name=x_ymin_zmax, visible=visible)
+            self.text(xf(x), pos=(x-gap, y_min-gap, z_min-down), size=ticksize, inside=False, name=x_ymin_zmin, visible=visible)
+            self.text(xf(x), pos=(x+gap, y_max+gap, z_max+gap), size=ticksize, inside=False, name=x_ymax_zmax, visible=visible)
+            self.text(xf(x), pos=(x+gap, y_max+gap, z_min-down), size=ticksize, inside=False, name=x_ymax_zmin, visible=visible)
         for y in yy[1:-1]:
-            self.text(yf(y), pos=(x_max+gap, y-gap, z_max+gap), size=ticksize, inside=False, name=y_xmax_zmax)
-            self.text(yf(y), pos=(x_max+gap, y-gap, z_min-down), size=ticksize, inside=False, name=y_xmax_zmin)
-            self.text(yf(y), pos=(x_min-gap, y+gap, z_max+gap), size=ticksize, inside=False, name=y_xmin_zmax)
-            self.text(yf(y), pos=(x_min-gap, y+gap, z_min-down), size=ticksize, inside=False, name=y_xmin_zmin)
+            self.text(yf(y), pos=(x_max+gap, y-gap, z_max+gap), size=ticksize, inside=False, name=y_xmax_zmax, visible=visible)
+            self.text(yf(y), pos=(x_max+gap, y-gap, z_min-down), size=ticksize, inside=False, name=y_xmax_zmin, visible=visible)
+            self.text(yf(y), pos=(x_min-gap, y+gap, z_max+gap), size=ticksize, inside=False, name=y_xmin_zmax, visible=visible)
+            self.text(yf(y), pos=(x_min-gap, y+gap, z_min-down), size=ticksize, inside=False, name=y_xmin_zmin, visible=visible)
         for z in zz[1:-1]:
-            self.text(zf(z), pos=(x_max+gap, y_max+gap, z-gap), size=ticksize, inside=False, name=z_xmax_ymax)
-            self.text(zf(z), pos=(x_min-gap, y_max+gap, z-gap), size=ticksize, inside=False, name=z_xmin_ymax)
-            self.text(zf(z), pos=(x_min-gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmin_ymin)
-            self.text(zf(z), pos=(x_max+gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmax_ymin)
+            self.text(zf(z), pos=(x_max+gap, y_max+gap, z-gap), size=ticksize, inside=False, name=z_xmax_ymax, visible=visible)
+            self.text(zf(z), pos=(x_min-gap, y_max+gap, z-gap), size=ticksize, inside=False, name=z_xmin_ymax, visible=visible)
+            self.text(zf(z), pos=(x_min-gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmin_ymin, visible=visible)
+            self.text(zf(z), pos=(x_max+gap, y_min-gap, z-gap), size=ticksize, inside=False, name=z_xmax_ymin, visible=visible)
         
-    def ticks2d(self, **kwds):
+    def ticks2d(self, xlabel='X', ylabel='Y', **kwds):
         """绘制2D网格和刻度
         
+        xlabel      - x轴名称，默认'X'
+        ylabel      - y轴名称，默认'Y'
         kwds        - 关键字参数
-                        xlabel          - x轴名称，默认'X'
-                        ylabel          - y轴名称，默认'Y'
                         xr              - x轴范围，元组，默None，表示使用数据的动态范围
                         yr              - y轴范围，元组，默None，表示使用数据的动态范围
                         xf              - x轴刻度标注格式化函数，默认str
@@ -1912,6 +1928,7 @@ class WxGLRegion:
                         yreverse        - 是否反转y轴刻度，默认不反转
                         xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
                         yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
+                        extend          - 网格外延，默认False
                         lc              - 网格线颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
                         lw              - 网格线宽度，默认0.5
                         bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色，None表示无背景色
@@ -1923,11 +1940,9 @@ class WxGLRegion:
             return
         
         for key in kwds:
-            if key not in ['xlabel','ylabel','xr','yr','xf','yf','font','labelsize','ticksize','xrotate','yreverse','xd','yd','lc','lw','bg','grid']:
+            if key not in ['xr','yr','xf','yf','font','labelsize','ticksize','xrotate','yreverse','xd','yd','extend','lc','lw','bg','grid']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        xlabel = kwds.get('xlabel', 'X')
-        ylabel = kwds.get('ylabel', 'Y')
         xr = kwds.get('xr', None)
         yr = kwds.get('yr', None)
         xf = kwds.get('xf', str)
@@ -1939,6 +1954,7 @@ class WxGLRegion:
         yreverse = kwds.get('yreverse', False)
         xd = kwds.get('xd', 0)
         yd = kwds.get('yd', 0)
+        extend = kwds.get('extend', False)
         lc = kwds.get('lc', np.array(self.scene.style[1]))
         lw = kwds.get('lw', 1)
         bg = kwds.get('bg', False)
@@ -1956,8 +1972,8 @@ class WxGLRegion:
         x_min, x_max = (self.r_x[0]-dx, self.r_x[1]+dx) if xr is None else xr
         y_min, y_max = (self.r_y[0]-dy, self.r_y[1]+dy) if yr is None else yr
         
-        xx = self._get_tick_label(x_min, x_max, s_min=3+xd, s_max=6+xd, extend=False)
-        yy = self._get_tick_label(y_min, y_max, s_min=3+yd, s_max=6+yd, extend=False)
+        xx = self._get_tick_label(x_min, x_max, s_min=4+xd, s_max=6+xd, extend=extend)
+        yy = self._get_tick_label(y_min, y_max, s_min=4+yd, s_max=6+yd, extend=extend)
         
         x_min, x_max = xx[0], xx[-1]
         y_min, y_max = yy[0], yy[-1]

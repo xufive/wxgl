@@ -437,7 +437,7 @@ class WxGLFigure:
     def redraw(self):
         """重新绘制"""
         
-        for reg in self.ff.scene.regions:
+        for reg, fixed in self.ff.scene.regions:
             reg.reset()
         
         self._draw()
