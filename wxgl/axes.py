@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import re
-import uuid
 import numpy as np
 from scipy import ndimage
 
@@ -9,7 +8,7 @@ from . import region
 from . import util
 
 
-class WxGLAxes:
+class Axes:
     """子图类"""
     
     def __init__(self, scene, pos):
@@ -23,88 +22,805 @@ class WxGLAxes:
         
         self.scene = scene
         self.ff = self.scene.parent
-        self.fig = self.ff.parent
-        self.cm = self.scene.cm
+        self.fig = self.ff.fig
         
-        w, h = self.scene.size
-        margin, padding = 0.05, 0.01
+        w, h = self.scene.csize
+        margin, padding = 0.02, 0.01
         
         if isinstance(pos, (str, int)) and re.compile(r'^[1-9]{3}$').match(str(pos)): 
             rows, cols, cell = [int(ch) for ch in str(pos)]
             i, j = (cell-1)//cols, (cell-1)%cols
             cw, ch = (1-2*margin)/cols, (1-2*margin)/rows
-            box = (margin+padding+j*cw, margin+padding+(rows-1-i)*ch, cw-2*padding, ch-2*padding)
+            self.box = (margin+padding+j*cw, margin+padding+(rows-1-i)*ch, cw-2*padding, ch-2*padding)
         elif isinstance(pos, (list,tuple)) and len(pos) == 4:
-            box = (pos[0]+padding, pos[1]+padding, pos[2]-2*padding, pos[3]-2*padding)
+            self.box = (pos[0]+padding, pos[1]+padding, pos[2]-2*padding, pos[3]-2*padding)
         else:
             raise ValueError("期望参数pos是三个数字组成的整数或字符串，或者长度为4的元组或列表")
         
-        self.reg_main = self.scene.add_region(box)      # 主视区
-        self.reg_title = None                           # 标题视区
-        self.reg_cb_r1 = None                           # 右侧色条视区
-        self.reg_cb_r2 = None                           # 右侧色条视区
-        self.reg_cb_l1 = None                           # 左侧色条视区
-        self.reg_cb_l2 = None                           # 左侧色条视区
-        self.reg_cb_b = None                            # 底部色条视区
-        self.reg_cb_br = None                           # 底部右侧色条视区
-        self.reg_cb_bl = None                           # 底部左侧色条视区
+        self.reg_main = self.scene.add_region(self.box)     # 主视区
+        self.reg_title = None                               # 标题视区
+        self.reg_cbr = None                                 # 右侧色条视区
+        self.reg_cbb = None                                 # 底部色条视区
         
-        self.grid_is_show = True                        # 网格是否显示
-        self.axis_is_show = True                        # 坐标轴是否显示（仅2D模式有效）
-        self.ci = 0                                     # 默认颜色选择指针
-        self.cbargs = None                              # ColorBar参数
+        self.title_dict = dict()                            # 保存标题信息的字典
+        self.cbr_list = list()                              # 保存右侧色条信息的列表
+        self.cbb_list = list()                              # 保存底部色条信息的列表
+        self.cbr_uk = 1.0                                   # 右侧色条基本单位缩放系数
+        self.cbb_uk = 1.5                                   # 底部色条基本单位缩放系数
+        self.assembly = list()                              # 生成模型的函数及参数列表
+        self.ci = 0                                         # 默认颜色选择指针
         
-        self.drange = None
-        self.cbcm = None
+        self.xn = 'X'                                       # x轴名称
+        self.yn = 'Y'                                       # y轴名称
+        self.zn = 'Z'                                       # z轴名称
+        self.xr = None                                      # x轴范围
+        self.yr = None                                      # y轴范围
+        self.zr = None                                      # z轴范围
+        self.xf = str                                       # x轴标注格式化函数
+        self.yf = str                                       # y轴标注格式化函数
+        self.zf = str                                       # z轴标注格式化函数
+        self.xd = 0                                         # x轴标注密度，整型，值域范围[-2,10], 默认0
+        self.yd = 0                                         # y轴标注密度，整型，值域范围[-2,10], 默认0
+        self.zd = 0                                         # z轴标注密度，整型，值域范围[-2,10], 默认0
+    
+    def _layout(self):
+        """画布显示前设置主视区、标题视区和色条视区的布局关系"""
         
-        self.labelx = 'X'                               # x轴名称
-        self.labely = 'Y'                               # y轴名称
-        self.labelz = 'Z'                               # z轴名称
-        self.xr = None                                  # x轴范围
-        self.yr = None                                  # y轴范围
-        self.zr = None                                  # z轴范围
-        self.xf = str                                   # x轴标注格式化函数
-        self.yf = str                                   # y轴标注格式化函数
-        self.zf = str                                   # z轴标注格式化函数
-        self.xd = 0                                     # x轴标注密度
-        self.yd = 0                                     # y轴标注密度
-        self.zd = 0                                     # z轴标注密度
-        self.rotatex = False                            # x轴标注是否旋转
-        self.reversey = False                           # y轴是否反转
+        # 计算右侧色条总宽度
+        if self.cbr_list:
+            ur = 0.02 * self.cbr_uk # 垂直色条宽度与Axes宽度之比
+            tick = 0.6 * ur # 刻度线长度
+            w_label = 2.4 * ur # 刻度文字占用空间宽度
+            w_cb = (ur + tick + w_label) * len(self.cbr_list)
+            
+            for cb in self.cbr_list:
+                w_cb += (cb['margin_left'] + cb['margin_right']) * ur
+        else:
+            w_cb = 0
+        
+        # 计算底部色条总高度
+        if self.cbb_list:
+            margin_top_list = [cb['margin_top'] for cb in self.cbb_list if not cb['margin_top'] is None]
+            margin_bottom_list = [cb['margin_bottom'] for cb in self.cbb_list if not cb['margin_bottom'] is None]
+            margin_top = margin_top_list[-1] if any(margin_top_list) else 0.5
+            margin_bottom = margin_bottom_list[-1] if any(margin_bottom_list) else 0.5
+            
+            ub = 0.02 * self.cbb_uk # 水平高度与Axes高度之比
+            tick = 0.6 * ub # 刻度线长度
+            h_subject = 1.4 * ub if any([cb['subject'] for cb in self.cbb_list]) else 0 # 标题高度
+            h_label = 0.7 * ub # 刻度文字高度
+            h_cb = ub + tick + h_subject + h_label + margin_top*ub + margin_bottom*ub
+        else:
+            h_cb = 0
+        
+        # 计算标题高度
+        if self.title_dict:
+            h_t = self.title_dict['height'] * (1 + self.title_dict['margin_top'] + self.title_dict['margin_bottom'])
+        else:
+            h_t = 0
+        
+        # 重置reg_main视区大小
+        x0, y0, w_main, h_main = self.reg_main.box
+        y0 += h_cb * self.box[3]
+        w_main -= w_cb * self.box[2]
+        h_main -= (h_t + h_cb) * self.box[3]
+        self.reg_main.update_size((x0, y0, w_main, h_main))
+        
+        # 标题
+        if self.title_dict:
+            box = (x0, y0+h_main, self.box[2],  h_t*self.box[3])
+            self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建标题视区
+            
+            w = self.reg_title.size[0]/self.reg_title.size[1]
+            top = 1 - 2 * self.title_dict['height'] * self.title_dict['margin_top'] / h_t
+            bottom = -1 + 2 * self.title_dict['height'] * self.title_dict['margin_bottom'] / h_t
+            left = -w + 2 * self.title_dict['height'] * self.title_dict['margin_left'] / h_t
+            right = w - 2 * self.title_dict['height'] * self.title_dict['margin_right'] / h_t
+            box = [[left,top],[left,bottom],[right,bottom],[right,top]]
+            color = self.title_dict['color']
+            size = self.title_dict['size']
+            
+            kwds = {
+                'family':       self.title_dict['family'], 
+                'weight':       self.title_dict['weight'], 
+                'align':        'center', 
+                'valign':       'fill', 
+                'inside':       False
+            }
+            
+            self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
+            
+            if self.title_dict['border']:
+                box = [[-w,1],[w,1],[-w,-1],[w,-1]]
+                self.add_widget(self.reg_title, 'line', box, method='isolate', inside=False)
+        
+        # 右侧色条
+        if self.cbr_list:
+            box = (x0+w_main, y0, w_cb*self.box[2], h_main)
+            self.reg_cbr = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建右侧色条视区
+            
+            h = self.reg_cbr.size[1]/self.reg_cbr.size[0]
+            start = -1
+            for cb in self.cbr_list:
+                w = ur + tick + w_label + cb['margin_left']*ur + cb['margin_right']*ur
+                section = 2*w/w_cb
+                left = start + section * cb['margin_left']*ur / w
+                right = left + section * ur / w
+                top = h - 2*cb['margin_top']*ur/w_cb - 2*1.2*ur/w_cb if cb['subject'] else h - 2*cb['margin_top']*ur/w_cb
+                bottom = -h + 2*cb['margin_bottom']*ur/w_cb
+                start += section
+                
+                box = np.array([[left,top],[left,bottom],[right,bottom],[right,top]], dtype=np.float32)
+                kwds = {
+                    'subject':          cb['subject'],
+                    'tick_format':      cb['tick_format'],
+                    'density':          cb['density'],
+                    'endpoint':         cb['endpoint']
+                }
+                
+                self.add_widget(self.reg_cbr, 'colorbar', cb['cm'], cb['drange'], box, mode='V', **kwds)
+        
+        # 底部色带
+        if self.cbb_list:
+            box = (x0, self.box[1], w_main,  h_cb*self.box[3])
+            self.reg_cbb = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建底部色条视区
+            
+            w = self.reg_cbb.size[0]/self.reg_cbb.size[1]
+            section = 2*w/len(self.cbb_list)
+            top = 1 - 2*margin_top*ub/h_cb - 2*h_subject/h_cb
+            bottom = top - 2*ub/h_cb
+            for i, cb in enumerate(self.cbb_list):
+                start = -w + i*section
+                left = start + 2*cb['margin_left']*ub/h_cb
+                right = -w + (i+1)*section - 2*cb['margin_right']*ub/h_cb
+            
+                box = np.array([[left,top],[left,bottom],[right,bottom],[right,top]], dtype=np.float32)
+                kwds = {
+                    'subject':          cb['subject'],
+                    'tick_format':      cb['tick_format'],
+                    'density':          cb['density'],
+                    'endpoint':         cb['endpoint']
+                }
+                
+                self.add_widget(self.reg_cbb, 'colorbar', cb['cm'], cb['drange'], box, mode='H', **kwds)
     
     def get_color(self):
         """返回下一个可用的默认颜色"""
         
-        color = self.cm.default_colors[self.ci]
-        self.ci = (self.ci+1)%len(self.cm.default_colors)
+        color = util.CM.default_colors[self.ci]
+        self.ci = (self.ci+1)%len(util.CM.default_colors)
         
         return color
     
-    def set_2d_mode(self):
-        """设置scene为2D模式"""
+    def add_widget(self, reg, func, *args, **kwds):
+        """添加生成模型的函数及参数"""
         
-        h2d_offset = -0.1 if self.axis_is_show else 0
-        zoom = 1.5 if self.scene.zoom == 1 else self.scene.zoom
+        self.assembly.append([reg, func, list(args), kwds])
+    
+    def title(self, text, size=40, color=None, **kwds):
+        """Axes顶部区水平居中的标题
         
-        self.scene.set_proj('ortho')
-        self.scene.set_mode('2D')
-        self.scene.set_style(self.fig.style2d)
-        self.scene.set_posture(zoom=zoom, oecs=(h2d_offset,0,0), dist=5, azimuth=0, elevation=0, save=True)
+        text        - 文本字符串：支持LaTex语法
+        size        - 字号：整型，默认40
+        color       - 文本颜色：支持预定义颜色、十六进制颜色，以及值域范围[0,1]的浮点型元组、列表或numpy数组颜色，默认使用场景的前景颜色
+        kwds        - 关键字参数
+                        family          - 字体，None表示当前默认的字体
+                        weight          - 字体的浓淡：'normal'-正常，'light'-轻，'bold'-重（默认）
+                        border          - 显示标题边框，默认True
+                        margin_top      - 标题上方留空与标题文字高度之比，默认0.75
+                        margin_bottom   - 标题下方留空与标题文字高度之比，默认0.25
+                        margin_left     - 标题左侧留空与标题文字高度之比，默认0.0
+                        margin_right    - 标题右侧留空与标题文字高度之比，默认0.0
+        """
+        
+        for key in kwds:
+            if key not in ['family', 'weight', 'border', 'margin_top', 'margin_bottom', 'margin_left', 'margin_right']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        family = kwds.get('family', None)
+        weight = kwds.get('weight', 'bold')
+        border = kwds.get('border', True)
+        margin_top = kwds.get('margin_top', 0.75)
+        margin_bottom = kwds.get('margin_bottom', 0.25)
+        margin_left = kwds.get('margin_left', 0.0)
+        margin_right = kwds.get('margin_right', 0.0)
+        
+        height = size/1000
+        size = int(round(pow(size/64, 0.5) * 64))
+        color = util.color2c(color)
+        
+        self.title_dict.update({
+            'text':             text,
+            'color':            color,
+            'size':             size,
+            'family':           family,
+            'weight':           weight,
+            'border':           border,
+            'height':           height,
+            'margin_top':       margin_top,
+            'margin_bottom':    margin_bottom,
+            'margin_left':      margin_left,
+            'margin_right':     margin_right
+        })
+    
+    def colorbar(self, cm, drange, loc='right', **kwds):
+        """colorbar
+        
+        cm          - 调色板名称
+        drange      - 数据的动态范围：元组、列表或numpy数组
+        loc         - 位置
+                        right           - 右侧
+                        bottom          - 底部
+        kwds        - 关键字参数
+                        subject         - 标题
+                        tick_format     - 刻度标注格式化函数，默认str
+                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+                        endpoint        - 刻度是否包含值域范围的两个端点值
+                        scale           - 色条宽度、文字大小等缩放比例，默认None
+                        margin_left     - 色条左侧留空与色条宽度之比，默认0.5
+                        margin_right    - 色条右侧留空与色条宽度之比，默认0.5
+                        margin_top      - 色条上方留空与色条高度之比，默认0.5
+                        margin_bottom   - 色条下方留空与色条高度之比，默认0.5
+        """
+        
+        for key in kwds:
+            if key not in ['subject', 'tick_format', 'density', 'endpoint', 'scale', 'margin_left', 'margin_right', 'margin_top', 'margin_bottom']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        drange = np.array(drange)
+        drange = (np.nanmin(drange), np.nanmax(drange))
+        
+        if not loc in ('right', 'bottom'):
+            raise ValueError('不支持的选项：%s'%loc)
+        
+        subject = kwds.get('subject', None)
+        tick_format = kwds.get('tick_format', str)
+        density = kwds.get('density', (3,6))
+        endpoint = kwds.get('endpoint', False)
+        scale = kwds.get('scale', None)
+        margin_left = kwds.get('margin_left', 0.5)
+        margin_right = kwds.get('margin_right', 0.5)
+        margin_top = kwds.get('margin_top', 0.5 if loc == 'right' else None)
+        margin_bottom = kwds.get('margin_bottom', 0.5 if loc == 'right' else None)
+        
+        args = {
+            'cm':               cm,
+            'drange':           drange,
+            'subject':          subject,
+            'tick_format':      tick_format,
+            'density':          density,
+            'endpoint':         endpoint,
+            'margin_left':      margin_left,
+            'margin_right':     margin_right,
+            'margin_top':       margin_top,
+            'margin_bottom':    margin_bottom
+        }
+        
+        if loc == 'right':
+            self.cbr_list.append(args)
+            if scale:
+                self.cbr_uk = scale
+        else:
+            self.cbb_list.append(args)
+            if scale:
+                self.cbb_uk = scale * 1.5
+    
+    def text(self, text, pos, color=None, size=32, family=None, weight='normal', loc='left_bottom', **kwds):
+        """文本
+        
+        text        - 文本字符串
+        pos         - 文本位置：元组、列表或numpy数组，shape=(2|3,)
+        color       - 文本颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色，默认使用场景的前景颜色
+        size        - 字号：整型，默认32
+        family      - 字体：默认None，表示使用当前默认的字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        loc         - pos对应文本区域的位置，默认left_bottom
+                        'left-top'      - 左上
+                        'left-middle'   - 左中
+                        'left-bottom'   - 左下
+                        'center-top'    - 上中
+                        'center-middle' - 中
+                        'center-bottom' - 下中
+                        'right-top'     - 右上
+                        'right-middle'  - 右中
+                        'right-bottom'  - 右下
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+        """
+        
+        self.add_widget(self.reg_main, 'text', text, pos, 
+            color       = util.color2c(color), 
+            size        = size, 
+            family      = family, 
+            weight      = weight, 
+            loc         = loc, 
+            **kwds
+        )
+        
+    def text3d(self, text, box, color=None, size=64, family=None, weight='normal', align='fill', valign='fill', **kwds):
+        """3d文本
+        
+        text        - 文本字符串
+        box         - 文本显式区域：左上、左下、右下、右上4个点组成的元组、列表或numpy数组，shape=(4,2|3)
+        color       - 文本颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色，默认使用场景的前景颜色
+        size        - 字号：整型，默认64。此参数仅影响文本显示质量，不改变文本大小
+        family      - 字体：默认None，表示使用当前默认的字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        align       - 文本宽度方向对齐方式
+                        'fill'          - 填充
+                        'left'          - 左对齐
+                        'right'         - 右对齐
+                        'center'        - 居中对齐
+        valign      - 文本高度方向对齐方式
+                        'fill'          - 填充
+                        'top'           - 上对齐
+                        'bottom'        - 下对齐
+                        'middle'        - 居中对齐
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+        """
+        
+        self.add_widget(self.reg_main, 'text3d', text, box, 
+            color       = util.color2c(color), 
+            size        = size, 
+            family      = family, 
+            weight      = weight, 
+            align       = align, 
+            valign      = valign, 
+            **kwds
+        )
+    
+    def line(self, vs, color=None, cm=None, width=None, style='solid', method='strip', **kwds):
+        """线段
+        
+        vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
+        width       - 线宽，0.0~10.0之间，None使用默认设置
+        style       - 线型, 默认实线
+                        'solid'         - 实线 
+                        'dashed'        - 虚线
+                        'dotted'        - 点线
+                        'dash-dot'      - 虚点线
+        method      - 绘制方法
+                        'isolate'       - 独立线段
+                        'strip'         - 连续线段
+                        'loop'          - 闭合线段
+        kwds       - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列 
+        """
+        
+        if cm is None:
+            if color is None:
+                color = self.get_color()
+            color = util.color2c(color, outsize=len(vs))
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)) and len(color) == len(vs):
+                color = util.cmap(np.array(color), cm)
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        stipple = {
+            'solid':    (1, 0xFFFF),
+            'dashed':   (1, 0xFFF0),
+            'dotted':   (1, 0xF0F0),
+            'dash-dot': (1, 0xFF18)
+        }.get(style, 'solid')
+            
+        self.add_widget(self.reg_main, 'line', vs, color, 
+            method      = method, 
+            width       = width, 
+            stipple     = stipple, 
+            **kwds
+        )
+    
+    def scatter(self, vs, color=None, cm=None, size=3.0, **kwds):
+        """散点
+        
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
+        size        - 点或每个点的大小：数值，或数值型的元组、列表、numpy数组
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+        """
+        
+        if cm is None:
+            if color is None:
+                color = self.get_color()
+            color = util.color2c(color, outsize=len(vs))
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)) and len(color) == len(vs):
+                color = util.cmap(np.array(color), cm)
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
+    
+    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+        """由三角面描述的曲面
+        
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        method      - 绘制方法
+                        'isolate'       - 独立三角面
+                        'strip'         - 带状三角面
+                        'fan'           - 扇面
+        indices     - 顶点索引集，默认None
+        xflip       - 2D纹理左右翻转：布尔型，默认False
+        yflip       - 2D纹理上下翻转：布尔型，默认True
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if cm is None:
+            if color is None:
+                if texture is None:
+                    color = util.color2c(self.get_color())
+                elif texcoord is None:
+                    raise ValueError('当参数texture有效时，期望texcoord有效')
+            else:
+                color = util.color2c(color, outsize=vs.shape[0])
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+                color = np.array(color)
+                if color.shape == (vs.shape[0],):
+                    color = util.cmap(color, cm)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'triangle', vs, 
+            color       = color, 
+            texture     = texture, 
+            texcoord    = texcoord, 
+            method      = method, 
+            indices     = indices, 
+            xflip       = xflip, 
+            yflip       = yflip,
+            **kwds
+        )
+        
+    def quad(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+        """四角面
+        
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        texture     - 纹理图片文件（2D纹理）或numpy数组形式的图像数据（2D纹理|3D纹理）
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2|3)
+        method      - 绘制方法
+                        'isolate'       - 独立四角面
+                        'strip'         - 带状四角面
+        indices     - 顶点索引集，默认None
+        xflip       - 2D纹理左右翻转：布尔型，默认False
+        yflip       - 2D纹理上下翻转：布尔型，默认True
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if cm is None:
+            if color is None:
+                if texture is None:
+                    color = util.color2c(self.get_color())
+                elif texcoord is None:
+                    raise ValueError('当参数texture有效时，期望texcoord有效')
+            else:
+                color = util.color2c(color, outsize=vs.shape[0])
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+                color = np.array(color)
+                if color.shape == (vs.shape[0],):
+                    color = util.cmap(color, cm)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'quad', vs, 
+            color       = color, 
+            texture     = texture, 
+            texcoord    = texcoord, 
+            method      = method, 
+            indices     = indices, 
+            xflip       = xflip, 
+            yflip       = yflip,
+            **kwds
+        )
+    
+    def polygon(self, vs, color=None, cm=None, texture=None, texcoord=None, xflip=False, yflip=True, **kwds):
+        """多边形
+        
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        xflip       - 2D纹理左右翻转：布尔型，默认False
+        yflip       - 2D纹理上下翻转：布尔型，默认True
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if cm is None:
+            if color is None:
+                if texture is None:
+                    color = util.color2c(self.get_color())
+                elif texcoord is None:
+                    raise ValueError('当参数texture有效时，期望texcoord有效')
+            else:
+                color = util.color2c(color, outsize=vs.shape[0])
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+                color = np.array(color)
+                if color.shape == (vs.shape[0],):
+                    color = util.cmap(color, cm)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'polygon', vs, color=color, texture=texture, texcoord=texcoord, xflip=xflip, yflip=yflip, **kwds)
+    
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, closed=False, xflip=False, yflip=True, **kwds):
+        """网格面
+        
+        xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，shape=(m,n)
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
+        cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
+        closed      - 网格闭合：布尔型。该参数仅用于使用经纬度网格生成球
+        xflip       - 2D纹理左右翻转：布尔型，默认False
+        yflip       - 2D纹理上下翻转：布尔型，默认True
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if cm is None:
+            if color is None:
+                if texture is None:
+                    color = util.color2c(self.get_color())
+            else:
+                color = util.color2c(color, outsize=xs.shape)
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+                color = np.array(color)
+                if color.shape == xs.shape:
+                    color = util.cmap(color, cm)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'mesh', xs, ys, zs, 
+            color       = color, 
+            texture     = texture, 
+            cw          = cw, 
+            closed      = closed,
+            xflip       = xflip, 
+            yflip       = yflip,
+            **kwds
+        )
+    
+    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, xflip=False, yflip=True, **kwds):
+        """使用经纬度网格生成球
+        
+        center      - 锥底圆心坐标：元组、列表或numpy数组
+        r           - 锥底半径：浮点型
+        lon         - 经度范围：默认0°~360°
+        lat         - 纬度范围：默认-90°~90°
+        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理资源：纹理图片文件或numpy数组形式的图像数据
+        slices      - 圆周分片数：整型
+        xflip       - 2D纹理左右翻转：布尔型，默认False
+        yflip       - 2D纹理上下翻转：布尔型，默认True
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if color is None and texture is None:
+            color = self.get_color()
+        color = util.color2c(color)
+        
+        self.add_widget(self.reg_main, 'uvsphere', center, r, lon=lon, lat=lat, color=color, texture=texture, slices=slices, xflip=xflip, yflip=yflip, **kwds)
+    
+    def isosphere(self, center, r, color=None, iterations=5, **kwds):
+        """通过对正八面体的迭代细分生成球
+        
+        center      - 锥底圆心坐标：元组、列表或numpy数组
+        r           - 锥底半径：浮点型
+        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        iterations  - 迭代次数：整型
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if color is None:
+            color = self.get_color()
+        color = util.color2c(color)
+        
+        self.add_widget(self.reg_main, 'isosphere', center, r, color=color, iterations=iterations, **kwds)
+    
+    def cone(self, spire, center, r, color=None, base=True, slices=90, **kwds):
+        """圆锥
+        
+        spire       - 锥尖：元组、列表或numpy数组
+        center      - 锥底圆心：元组、列表或numpy数组
+        r           - 锥底半径：浮点型
+        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        base        - 是否绘制锥底：默认True
+        slices      - 圆周分片数：整型
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if color is None:
+            color = self.get_color()
+        color = util.color2c(color)
+        
+        self.add_widget(self.reg_main, 'cone', spire, center, r, color=color, base=base, slices=slices, **kwds)
+    
+    def cylinder(self, c1, c2, r, color=None, base=True, slices=90, **kwds):
+        """圆柱
+        
+        c1          - 圆柱端面圆心：元组、列表或numpy数组
+        c2          - 圆柱端面圆心：元组、列表或numpy数组
+        r           - 圆柱半径：浮点型
+        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        base        - 是否绘制圆柱端面：默认True
+        slices      - 圆周分片数：整型
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if color is None:
+            color = self.get_color()
+        color = util.color2c(color)
+        
+        self.add_widget(self.reg_main, 'cylinder', c1, c2, r, color=color, base=base, slices=slices, **kwds)
+    
+    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+        """三维等值面
+        
+        data        - 数据集：三维numpy数组，第0轴对应y轴，第1轴对应z轴，第2轴对应x轴
+        level       - 阈值：浮点型。data数据集中小于level的数据将被忽略
+        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        x/y/z       - 数据集对应的点的x/y/z轴的动态范围
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认不透明
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+                        fill            - 填充，默认True
+                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+        """
+        
+        if color is None:
+            color = self.get_color()
+        color = util.color2c(color)
+        
+        self.add_widget(self.reg_main, 'isosurface', data, level, color, x=x, y=y, z=z, **kwds)
+    
+    def model(self, m):
+        
+        self.add_widget(self.reg_main, 'add_model', m)
     
     def xlabel(self, xlabel):
         """设置x轴名称"""
         
-        self.labelx = xlabel
+        self.xn = xlabel
     
     def ylabel(self, ylabel):
         """设置y轴名称"""
         
-        self.labely = ylabel
+        self.yn = ylabel
     
     def zlabel(self, zlabel):
         """设置z轴名称"""
         
-        self.labelz = zlabel
+        self.zn = zlabel
     
     def xrange(self, xrange):
         """设置x轴范围"""
@@ -151,1567 +867,4 @@ class WxGLAxes:
         
         self.zd = zd
     
-    def axis(self, visible):
-        """设置坐标轴是否可见"""
-        
-        self.axis_is_show = visible
-        if self.scene.mode == '2D':
-            h2d_offset = -0.1 if self.axis_is_show else 0
-            self.scene.set_posture(oecs=(h2d_offset,0,0), save=True)
-    
-    def grid(self, visible):
-        """设置网格是否可见"""
-        
-        self.grid_is_show = visible
-    
-    def xrotate(self):
-        """旋转x轴的标注"""
-        
-        self.rotatex = True
-    
-    def title(self, text, size=64, color=None, align='middle', **kwds):
-        """绘制标题
-        
-        text        - 文本字符串
-        size        - 文字大小，整形，默认64
-        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
-        align       - 垂直对齐方式
-                        'top'       - 顶部对齐
-                        'middle'    - 居中对齐（默认）
-                        'bottom'    - 底部对齐
-        kwds        - 关键字参数
-                        family      - （系统支持的）字体，None表示当前默认的字体
-                        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
-        """
-        
-        for key in kwds:
-            if key not in ['family', 'weight']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        if not align in ('top','middle','bottom'):
-            raise ValueError('不支持的对齐方式：%s'%align)
-        
-        family = kwds.get('family', None)
-        weight = kwds.get('weight', 'bold')
-        kwds = {'family':family, 'weight':weight, 'align':'center-%s'%align, 'inside':False, 'light':0}
-        
-        if self.reg_title is None:
-            if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
-                k = 0.15
-            else:
-                k = 0.17647
-            
-            a0, a1, a2, a3 = self.reg_main.box
-            x, w = a0, a2
-            self.reg_main.reset_box((a0, a1, a2, a3*(1-k)))
-            
-            if not self.reg_cb_r1 is None:
-                b0, b1, b2, b3 = self.reg_cb_r1.box
-                w += b2
-                self.reg_cb_r1.reset_box((b0, b1, b2, b3*(1-k)))
-            
-            if not self.reg_cb_r2 is None:
-                b0, b1, b2, b3 = self.reg_cb_r2.box
-                w += b2
-                self.reg_cb_r2.reset_box((b0, b1, b2, b3*(1-k)))
-            
-            if not self.reg_cb_l1 is None:
-                c0, c1, c2, c3 = self.reg_cb_l1.box
-                x = c0
-                w += c2
-                self.reg_cb_l1.reset_box((c0, c1, c2, c3*(1-k)))
-            
-            if not self.reg_cb_l2 is None:
-                c0, c1, c2, c3 = self.reg_cb_l2.box
-                x = c0
-                w += c2
-                self.reg_cb_l2.reset_box((c0, c1, c2, c3*(1-k)))
-            
-            box = (x, a1+a3*(1-k), w, a3*k)
-            self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho')
-        
-        box = np.array([[-1,0.8,0],[-1,-0.8,0],[1,-0.8,0],[1,0.8,0]])
-        self.fig.add_widget(self.reg_title, 'text3d', text, box, size=size, color=color, **kwds)
-        
-    def colorbar(self, drange=None, cm=None, loc='right', **kwds):
-        """绘制colorbar
-        
-        drange      - 值域范围或标注序列，元组或列表，None表示使用当前设置
-        cm          - 调色板名称，None表示使用当前设置
-        loc         - 位置
-                        right           - 右侧
-                        left            - 左侧
-                        bottom          - 底部
-                        bottom-left     - 底部
-                        bottom-right    - 底部
-        kwds        - 关键字参数
-                        subject         - 标题
-                        subject_size    - 标题字号，默认44
-                        tick_size       - 刻度字号，默认40
-                        tick_format     - 刻度标注格式化函数，默认str
-                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
-                        endpoint        - 刻度是否包含值域范围的两个端点值
-        """
-        
-        if drange is None:
-            if self.cbargs:
-                drange = self.cbargs['drange']
-            else:
-                return
-                
-        if cm is None:
-            if self.cbargs:
-                cm = self.cbargs['cm']
-            else:
-                return
-        
-        if not loc in ('right','left','bottom','bottom-left','bottom-right'):
-            raise ValueError('不支持的位置选项：%s'%loc)
-        
-        if loc == 'right':
-            if not self.reg_cb_l1 is None or not self.reg_cb_l2 is None:
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-            if self.reg_cb_r1 is None:
-                k = 0.15
-                a0, a1, a2, a3 = self.reg_main.box
-                self.reg_main.reset_box((a0, a1, a2*(1-k), a3))
-                
-                box = (a0+a2*(1-k), a1, a2*k, a3)
-                self.reg_cb_r1 = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_r1, 'colorbar', drange, cm, mode='VR', **kwds)
-            elif self.reg_cb_r2 is None:
-                k = 0.17647
-                a0, a1, a2, a3 = self.reg_main.box
-                self.reg_main.reset_box((a0, a1, a2*(1-k), a3))
-                
-                box = (a0+a2*(1-k), a1, a2*k, a3)
-                self.reg_cb_r2 = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_r2, 'colorbar', drange, cm, mode='VR', **kwds)
-            else:
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-        elif loc == 'left':
-            if not self.reg_cb_r1 is None or not self.reg_cb_r2 is None:
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-            if self.reg_cb_l1 is None:
-                k = 0.15
-                a0, a1, a2, a3 = self.reg_main.box
-                self.reg_main.reset_box((a0+a2*k, a1, a2*(1-k), a3))
-                
-                box = (a0, a1, a2*k, a3)
-                self.reg_cb_l1 = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_l1, 'colorbar', drange, cm, mode='VL', **kwds)
-            elif self.reg_cb_l2 is None:
-                k = 0.17647
-                a0, a1, a2, a3 = self.reg_main.box
-                self.reg_main.reset_box((a0+a2*k, a1, a2*(1-k), a3))
-                
-                box = (a0, a1, a2*k, a3)
-                self.reg_cb_l2 = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_l2, 'colorbar', drange, cm, mode='VL', **kwds)
-            else:
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-        else:
-            if loc == 'bottom' and (not self.reg_cb_b is None or not self.reg_cb_bl is None or not self.reg_cb_br is None):
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-            if loc == 'bottom-left' and (not self.reg_cb_bl is None or not self.reg_cb_b is None):
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-            if loc == 'bottom-right' and (not self.reg_cb_br is None or not self.reg_cb_b is None):
-                raise ValueError('位置选项已被使用或禁用：%s'%loc)
-            
-            if self.reg_cb_b is None and self.reg_cb_bl is None and self.reg_cb_br is None:
-                k = 0.15 if self.reg_title is None else 0.17647
-                h = self.reg_main.box[-1]*k
-                
-                a0, a1, a2, a3 = self.reg_main.box
-                self.reg_main.reset_box((a0, a1+a3*k, a2, a3*(1-k)))
-                
-                if not self.reg_cb_r1 is None:
-                    b0, b1, b2, b3 = self.reg_cb_r1.box
-                    self.reg_cb_r1.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
-                
-                if not self.reg_cb_r2 is None:
-                    b0, b1, b2, b3 = self.reg_cb_r2.box
-                    self.reg_cb_r2.reset_box((b0, b1+b3*k, b2, b3*(1-k)))
-                
-                if not self.reg_cb_l1 is None:
-                    c0, c1, c2, c3 = self.reg_cb_l1.box
-                    self.reg_cb_l1.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
-                
-                if not self.reg_cb_l2 is None:
-                    c0, c1, c2, c3 = self.reg_cb_l2.box
-                    self.reg_cb_l2.reset_box((c0, c1+c3*k, c2, c3*(1-k)))
-            elif self.reg_title is None:
-                h = 0.17647*self.reg_main.box[-1]
-            else:
-                h = self.reg_title.box[-1]
-            
-            a0, a1, a2, a3 = self.reg_main.box
-            if loc == 'bottom-left':
-                box = (a0, a1-h, 0.6*a2, h)
-                self.reg_cb_bl = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_bl, 'colorbar', drange, cm, mode='H', **kwds)
-            elif loc == 'bottom-right':
-                box = (a0+0.4*a2, a1-h, 0.6*a2, h)
-                self.reg_cb_br = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_br, 'colorbar', drange, cm, mode='H', **kwds)
-            else:
-                box = (a0, a1-h, a2, h)
-                self.reg_cb_b = self.scene.add_region(box, fixed=True, proj='ortho')
-                self.fig.add_widget(self.reg_cb_b, 'colorbar', drange, cm, mode='H', **kwds)
-        
-        self.cbargs = None
-    
-    def text(self, text, pos, size=40, color=None, align=None, family=None, weight='normal', **kwds):
-        """绘制文本
-        
-        text        - 文本字符串
-        pos         - 文本位置，元组、列表或numpy数组
-        size        - 文字大小，整形，默认40
-        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
-        align       - 对齐方式
-                        None            - 2D模式默认'left-bottom'，3D模式默认横排文字
-                        'left-top'      - 以pos为左上角（仅2D模式有效）
-                        'left-middle'   - 以pos为左侧中（仅2D模式有效）
-                        'left-bottom'   - 以pos为左下角（仅2D模式有效）
-                        'right-top'     - 以pos为右上角（仅2D模式有效）
-                        'right-middle'  - 以pos为右侧中（仅2D模式有效）
-                        'right-bottom'  - 以pos为右下角（仅2D模式有效）
-                        'center-top'    - 以pos为中间上（仅2D模式有效）
-                        'center-middle' - 以pos为中心点（仅2D模式有效）
-                        'center-bottom' - 以pos为中间下（仅2D模式有效）
-                        'VR'            - 竖排文字，自上而下（仅3D模式有效）
-                        'VL'            - 竖排文字，自下而上（仅3D模式有效）
-        family      - （系统支持的）字体
-        weight      - light/bold/normal分别表示字体的轻、重、正常（默认）
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if len(pos) == 2:
-            self.set_2d_mode()
-            
-            x, y = pos
-            if align == 'left-top':
-                box = np.array([[x,y,0],[x,y-0.1,0],[x+0.1,y-0.1,0],[x+0.1,y,0]])
-            elif align == 'left-middle':
-                box = np.array([[x,y+0.1,0],[x,y-0.1,0],[x+0.1,y-0.1,0],[x+0.1,y+0.1,0]])
-            elif align == 'right-top':
-                box = np.array([[x-0.1,y,0],[x-0.1,y-0.1,0],[x,y-0.1,0],[x,y,0]])
-            elif align == 'right-bottom':
-                box = np.array([[x-0.1,y+0.1,0],[x-0.1,y,0],[x,y,0],[x,y+0.1,0]])
-            elif align == 'right-middle':
-                box = np.array([[x-0.1,y+0.1,0],[x-0.1,y-0.1,0],[x,y-0.1,0],[x,y+0.1,0]])
-            elif align == 'center-top':
-                box = np.array([[x-0.1,y,0],[x-0.1,y-0.1,0],[x+0.1,y-0.1,0],[x+0.1,y,0]])
-            elif align == 'center-bottom':
-                box = np.array([[x-0.1,y+0.1,0],[x-0.1,y,0],[x+0.1,y,0],[x+0.1,y+0.1,0]])
-            elif align == 'center-middle':
-                box = np.array([[x-0.1,y+0.1,0],[x-0.1,y-0.1,0],[x+0.1,y-0.1,0],[x+0.1,y+0.1,0]])
-            else:
-                box = np.array([[x,y+0.1,0],[x,y,0],[x+0.1,y,0],[x+0.1,y+0.1,0]])
-                align = 'left-bottom'
-            
-            kwds.update({'light':0, 'inside':False})
-            self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, family=family, weight=weight, align=align, **kwds)
-        else:
-            if align not in ('VR', 'VL'):
-                align = None
-            kwds.update({'inside':False})
-            self.fig.add_widget(self.reg_main, 'text', text, pos, size=size, color=color, family=family, weight=weight, align=align, **kwds)
-    
-    def text3d(self, text, box, size=32, color=None, family=None, weight='normal', align=None, **kwds):
-        """绘制3D文字
-        
-        text        - 文本字符串
-        box         - 文本显式区域的左上、左下、右下、右上4个点的坐标，浮点型元组、列表或numpy数组
-        size        - 文字大小，整型
-        color       - 文本颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用默认颜色
-        family      - （系统支持的）字体，None表示当前默认的字体
-        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
-        align       - 对齐方式
-                        None            - 自动填充box（默认）
-                        'left-top'      - 水平左对齐，垂直上对齐
-                        'left-middle'   - 水平左对齐，垂直居中对齐
-                        'left-bottom'   - 水平左对齐，垂直下对齐
-                        'right-top'     - 水平右对齐，垂直上对齐
-                        'right-middle'  - 水平右对齐，垂直居中对齐
-                        'right-bottom'  - 水平右对齐，垂直下对齐
-                        'center-top'    - 水平居中对齐，垂直上对齐
-                        'center-middle' - 水平居中对齐，垂直居中对齐
-                        'center-bottom' - 水平居中对齐，垂直下对齐
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        kwds.update({'light':0, 'inside':False})
-        self.fig.add_widget(self.reg_main, 'text3d', text, box, size=size, color=color, family=family, weight=weight, align=align, **kwds)
-    
-    def plot(self, xs, ys, zs=None, color=None, cm=None, drange=None, size=0, width=1, style='solid', **kwds):
-        """绘制点和线
-        
-        xs/ys/zs    - 点的x/y/z坐标集，等长的一维元组、列表或numpy数组。若zs为None，则自动切换为2D模式
-        color       - 颜色，或每个顶点对应的数据（此种情况下cm参数不能为None）
-        cm          - 颜色映射表，仅当参数color为每个顶点对应的数据时有效
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        size        - 点的大小，若为0或None，则表示不绘制点，只绘制线
-        width       - 线宽，0.0~10.0之间的浮点数。若为0或None，则表示不绘制线，只绘制点
-        style       - 线型
-                        'solid'     - 实线 
-                        'dashed'    - 虚线
-                        'dotted'    - 点线
-                        'dash-dot'  - 虚点线
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        # xs/ys/zs参数处理
-        if isinstance(xs, (tuple,list)):
-            xs = np.array(xs)
-        
-        if isinstance(ys, (tuple,list)):
-            ys = np.array(ys)
-        
-        if zs is None:
-            self.set_2d_mode()
-            zs = np.zeros(xs.shape)
-        elif isinstance(zs, (tuple,list)):
-            zs = np.array(zs)
-        
-        assert isinstance(xs, np.ndarray) and xs.ndim == 1, '期望参数xs是一维的元组、列表或numpy数组'
-        assert isinstance(ys, np.ndarray) and ys.ndim == 1, '期望参数ys是一维的元组、列表或numpy数组'
-        assert isinstance(zs, np.ndarray) and zs.ndim == 1, '期望参数zs是一维的元组、列表或numpy数组'
-        assert xs.shape == ys.shape == zs.shape, '期望参数xs/ys/zs长度一致'
-        
-        vs = np.stack((xs, ys, zs), axis=1)
-        
-        # color参数处理
-        if cm is None:
-            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
-                color = self.get_color()
-            
-            color = self.cm.color2c(color)
-            cbargs = None
-        else:
-            if isinstance(color, (tuple,list)):
-                color = np.array(color)
-            
-            if not isinstance(color, np.ndarray) or not color.ndim == 1 or not color.shape[0] == vs.shape[0]:
-                raise ValueError('参数cm有效时，期望参数color是和xs/ys/zs等长的元组、列表或numpy数组')
-            
-            if drange is None:
-                cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-            else:
-                cbargs = None
-            
-            color = self.cm.cmap(color, cm, drange=drange, drop=True)
-        
-        # style参数处理
-        if not style in ('solid', 'dashed', 'dotted','dash-dot'):
-            raise ValueError('期望参数style是solid|dashed|dotted|dash-dot之一')
-        stipple = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
-        
-        # 添加到部件库
-        if not width is None and width > 0:
-            self.fig.add_widget(self.reg_main, 'line', vs, color, width=width, stipple=stipple, method='SINGLE', **kwds)
-        if not size is None and size > 0:
-            self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-        
-    def line(self, vs, color=None, cm=None, drange=None, width=1, method='multi', style='solid', **kwds):
-        """绘制线段
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，或每个顶点对应的数据（此种情况下cm参数不能为None）
-        cm          - 颜色映射表，仅当参数color为每个顶点对应的数据时有效
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        width       - 线宽，0.0~10.0之间，None表示使用当前设置
-        method      - 绘制方法
-                        'multi'     - 线段
-                        'single'    - 连续线段
-                        'loop'      - 闭合线段
-        style       - 线型
-                        'solid'     - 实线 
-                        'dashed'    - 虚线
-                        'dotted'    - 点线
-                        'dash-dot'  - 虚点线
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        # vs参数处理
-        if isinstance(vs, (tuple,list)):
-            vs = np.array(vs)
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            z = np.zeros((vs.shape[0],1))
-            vs = np.hstack((vs,z))
-            self.set_2d_mode()
-        
-        # color参数处理
-        if cm is None:
-            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
-                color = self.get_color()
-            
-            color = self.cm.color2c(color)
-            cbargs = None
-        else:
-            if isinstance(color, (tuple,list)):
-                color = np.array(color)
-            
-            if not isinstance(color, np.ndarray) or not color.ndim == 1 or not color.shape[0] == vs.shape[0]:
-                raise ValueError('参数cm有效时，期望参数color是和vs等长的元组、列表或numpy数组')
-            
-            if drange is None:
-                cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-            else:
-                cbargs = None
-            
-            color = self.cm.cmap(color, cm, drange=drange, drop=True)
-        
-        # method参数处理
-        if not method.lower() in ('multi', 'single', 'loop'):
-            raise ValueError('期望参数method是multi|single|loop之一')
-        method = method.upper()
-        
-        # style参数处理
-        if not style in ('solid', 'dashed', 'dotted','dash-dot'):
-            raise ValueError('期望参数style是solid|dashed|dotted|dash-dot之一')
-        stipple = {'solid':(1, 0xFFFF), 'dashed':(1, 0xFFF0), 'dotted':(1, 0xF0F0), 'dash-dot':(1, 0xFF18)}[style]
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'line', vs, color, width=width, method=method, stipple=stipple, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def scatter(self, vs, color=None, cm=None, drange=None, size=1.0, **kwds):
-        """绘制散点图
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，或每个点对应的数据（此种情况下cm参数不能为None）
-        cm          - 颜色映射表，仅当参数color为每个点对应的数据时有效
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        size        - 点或每个点的大小
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        # vs参数处理
-        if isinstance(vs, (tuple,list)):
-            vs = np.array(vs)
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            z = np.zeros((vs.shape[0],1))
-            vs = np.hstack((vs,z))
-            self.set_2d_mode()
-        
-        # color参数处理
-        if cm is None:
-            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
-                color = self.get_color()
-            
-            color = self.cm.color2c(color, size=len(vs))
-            cbargs = None
-        else:
-            if isinstance(color, (tuple,list)):
-                color = np.array(color)
-            
-            if not isinstance(color, np.ndarray) or not color.ndim == 1 or not color.shape[0] == vs.shape[0]:
-                raise ValueError('参数cm有效时，期望参数color是和vs等长的元组、列表或numpy数组')
-            
-            if drange is None:
-                cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-            else:
-                cbargs = {'cm':cm, 'drange':drange}
-            
-            color = self.cm.cmap(color, cm, drange=drange, drop=True)
-        
-        # size参数处理
-        if isinstance(size, (float, int)):
-            self.fig.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
-        else:
-            if isinstance(size, (tuple,list)):
-                size = np.array(size)
-            
-            if not isinstance(size, np.ndarray) or not size.ndim == 1 or not size.shape[0] == vs.shape[0]:
-                raise ValueError('期望参数size是和vs等长的元组、列表或numpy数组')
-            
-            for i in range(len(size)):
-                self.fig.add_widget(self.reg_main, 'point', vs[i:i+1], color[i], size=size[i], **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def mesh(self, xs, ys, zs=None, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, **kwds):
-        """绘制网格
-        
-        xs/ys/zs    - 点的x/y/z坐标集，结构相同的二维元组、列表或数组。若zs为None，则自动切换为2D模式
-        color       - 颜色，或每个点对应的数据。texture为None时该参数有效
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        nanfill     - nan数据的填充色，默认透明
-        texture     - 纹理图片文件或numpy数组形式的图像数据
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-                        
-        """
-        
-        # xs/ys/zs参数处理
-        if isinstance(xs, (tuple,list)):
-            xs = np.array(xs)
-        
-        if isinstance(ys, (tuple,list)):
-            ys = np.array(ys)
-        
-        if zs is None:
-            self.set_2d_mode()
-            kwds.update({'light':0})
-            zs = np.zeros(xs.shape)
-        elif isinstance(zs, (tuple,list)):
-            zs = np.array(zs)
-        
-        assert isinstance(xs, np.ndarray) and xs.ndim == 2, '期望参数xs是二维数组，或类似结构的元组、列表'
-        assert isinstance(ys, np.ndarray) and ys.ndim == 2, '期望参数ys是二维数组，或类似结构的元组、列表'
-        assert isinstance(zs, np.ndarray) and zs.ndim == 2, '期望参数zs是二维数组，或类似结构的元组、列表'
-        assert xs.shape == ys.shape == zs.shape, '期望参数xs/ys/zs结构相同'
-        
-        # color参数处理
-        if texture is None:
-            if color is None:
-                color = self.get_color() # 顺序选择默认的颜色
-            
-            if isinstance(color, str):
-                c = self.cm.color2c(color, size=(2,2))
-                cbargs = None
-            else:
-                if isinstance(color, (tuple,list)):
-                    color = np.array(color)
-                assert isinstance(color, np.ndarray), '期望参数color是numpy数组，或类似结构的元组、列表'
-                
-                if color.ndim == 1:
-                    c = self.cm.color2c(color, size=(2,2))
-                    cbargs = None
-                elif color.ndim == 2 and not cm is None:
-                    if drange is None:
-                        cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-                    else:
-                        cbargs = {'cm':cm, 'drange':drange}
-                    
-                    c = self.cm.cmap(color, cm, drange=drange, invalid_c=nanfill)
-                else:
-                    raise ValueError("期望参数color是单个颜色的表述或类二维数组，或参数cm不应为None")
-            texture = np.uint8(c*255)
-        else:
-            cbargs = None
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def surface(self, vs, color=None, texture=None, texcoord=None, method='Q', **kwds):
-        """绘制表面
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
-        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
-        method      - 绘制方法
-                        'Q'         - 四边形（默认）
-                                        0--3 4--7
-                                        |  | |  |
-                                        1--2 5--6
-                        'T'         - 三角形
-                                        0--2 3--5
-                                         \/   \/
-                                          1    4
-                        'F'         - 扇形（vs首元素为中心点，其余元素为圆弧上顺序排列的点）
-                        'P'         - 多边形（vs为多边形顺序列出的顶点）
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        # vs参数处理
-        if isinstance(vs, (tuple,list)):
-            vs = np.array(vs)
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            self.set_2d_mode()
-            kwds.update({'light':0})
-            z = np.zeros((vs.shape[0],1))
-            vs = np.hstack((vs,z))
-        
-        if method == 'P':
-            assert texture is None and texcoord is None, '绘制多边形不支持texture参数和texcoord参数'
-        
-        if texture is None or texcoord is None:
-            if color is None:
-                color = self.get_color() # 顺序选择默认的颜色
-            
-            c = self.cm.color2c(color, size=(2,2))
-            texture = np.uint8(c*255)
-            texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def _qtf(self, method, vs, color, cm, drange, nanfill, texture, texcoord, **kwds):
-        """绘制四角面、三角面和扇面的底层公用函数"""
-        
-        # vs参数处理
-        if isinstance(vs, (tuple,list)):
-            vs = np.array(vs)
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            self.set_2d_mode()
-            kwds.update({'light':0})
-            z = np.zeros((vs.shape[0],1))
-            vs = np.hstack((vs,z))
-        
-        # color参数处理
-        if texture is None:
-            if color is None:
-                color = self.get_color() # 顺序选择默认的颜色
-            
-            if isinstance(color, str):
-                c = self.cm.color2c(color, size=(2,2))
-                texture = np.uint8(c*255)
-                texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
-                cbargs = None
-            else:
-                if isinstance(color, (tuple,list)):
-                    color = np.array(color)
-                assert isinstance(color, np.ndarray), '期望参数color是numpy数组，或类似结构的元组、列表'
-                
-                if color.ndim == 1:
-                    c = self.cm.color2c(color, size=(2,2))
-                    texture = np.uint8(c*255)
-                    texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
-                    cbargs = None
-                elif color.ndim == 2 and not cm is None and  not texcoord is None:
-                    if drange is None:
-                        cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-                    else:
-                        cbargs = {'cm':cm, 'drange':drange}
-                    
-                    c = self.cm.cmap(color, cm, drange=drange, invalid_c=nanfill)
-                    texture = np.uint8(c*255)
-                else:
-                    raise ValueError("期望参数color是单个颜色或二维数据（此种情况下参数cm和texcoord均不能为None）")
-        else:
-            cbargs = None
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, method, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def quad(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
-        """绘制一个或多个四角面（每个四角面的四个顶点通常在一个平面上）
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，或二维数据。texture为None时该参数有效
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        nanfill     - nan数据的填充色，默认透明
-        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
-        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        self._qtf('Q', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
-    
-    def triangle(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
-        """绘制一个或多个三角面
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，或二维数据。texture为None时该参数有效
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        nanfill     - nan数据的填充色，默认透明
-        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
-        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        self._qtf('T', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
-    
-    def fan(self, vs, color=None, cm=None, drange=None, nanfill=(0,0,0,0), texture=None, texcoord=None, **kwds):
-        """绘制绘制扇面
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，或二维数据。texture为None时该参数有效
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        nanfill     - nan数据的填充色，默认透明
-        texture     - 纹理图片文件或numpy数组形式的图像数据。纹理图片左上、左下、右下和右上对应纹理坐标(0,1)、(0,0)、(1,0)和(1,1)
-        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        self._qtf('F', vs, color, cm, drange, nanfill, texture, texcoord, **kwds)
-    
-    def polygon(self, vs, color=None, **kwds):
-        """绘制多边形
-        
-        vs          - 点坐标集，二维元组、列表或numpy数组
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        # vs参数处理
-        if isinstance(vs, (tuple,list)):
-            vs = np.array(vs)
-        assert isinstance(vs, np.ndarray) and vs.ndim == 2, '期望参数vs是二维的numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            self.set_2d_mode()
-            kwds.update({'light':0})
-            z = np.zeros((vs.shape[0],1))
-            vs = np.hstack((vs,z))
-        
-        if color is None:
-            color = self.get_color() # 顺序选择默认的颜色
-        
-        c = self.cm.color2c(color, size=(2,2))
-        texture = np.uint8(c*255)
-        texcoord = np.tile(np.zeros(2), (vs.shape[0],1))
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, '_surface', vs, texture, texcoord, 'P', **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def cube(self, center, side, color=None, texture=None, **kwds):
-        """绘制六面体
-        
-        center      - 中心坐标，元组、列表或numpy数组
-        side        - 棱长，整型、浮点型，或长度为3的元组、列表、numpy数组
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if color is None and texture is None:
-            color = self.get_color()
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'cube', center, side, color=color, texture=texture, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def circle(self, center, radius, normal, color=None, texture=None, slices=360, **kwds):
-        """绘制圆面
-        
-        center      - 球心坐标，元组、列表或numpy数组
-        radius      - 半径，浮点型
-        normal      - 圆面法向量
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
-        slices      - 分片数，整型
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-                        
-        """
-        
-        if color is None and texture is None:
-            color = self.get_color()
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'circle', center, radius, normal, color=color, texture=texture, slices=slices, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def sphere(self, center, radius, color=None, texture=None, slices=360, **kwds):
-        """绘制球面
-        
-        center      - 球心坐标，元组、列表或numpy数组
-        radius      - 半径，浮点型
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
-        slices      - 分片数，整型，默认360
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-                        
-        """
-        
-        if color is None and texture is None:
-            color = self.get_color()
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'sphere', center, radius, color=color, texture=texture, slices=slices, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def cone(self, center, spire, radius, color=None, texture=None, base=None, slices=360, **kwds):
-        """绘制圆锥面
-        
-        center      - 锥底圆心坐标，元组、列表或numpy数组
-        spire       - 锥尖坐标，元组、列表或numpy数组
-        radius      - 锥底半径，浮点型
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
-        slices      - 分片数，整型，默认360
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if color is None and texture is None:
-            color = self.get_color()
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'cone', center, spire, radius, color=color, texture=texture, base=base, slices=slices, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def cylinder(self, center, radius, color=None, texture=None, top=None, base=None, slices=360, **kwds):
-        """绘制圆柱体
-        
-        center      - 圆柱上下端面圆心坐标，元组、列表或numpy数组，每个元素表示一个端面的圆心坐标
-        radius      - 圆柱上下端面半径，浮点型或元组、列表或numpy数组，每个元素表示一个端面的半径
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理图片文件或numpy数组形式的图像数据，color为None时有效
-        top         - 上端面颜色，None表示无上端面
-        base        - 下端面颜色，None表示无下端面
-        slices      - 分片数，整型 默认360
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
-        """
-        
-        if color is None and texture is None:
-            color = self.get_color()
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'cylinder', center, radius, color=color, texture=texture, top=None, base=base, slices=slices, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def pipe(self, vs, radius, color=None, cm=None, drange=None, slices=90, **kwds):
-        """绘制圆管
-        
-        vs          - 顶点坐标集，numpy数组，shape=(n,3)
-        radius      - 圆管半径，浮点型
-        color       - 颜色或颜色集，或每个顶点对应的数据（此种情况下cm参数不能为None）
-        cm          - 颜色映射表，仅当参数color为每个顶点对应的数据时有效
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        slices      - 圆管面分片数（数值越大越精细）
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
-        """
-        
-        if cm is None:
-            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
-                color = self.get_color()
-            
-            color = self.cm.color2c(color)
-            cbargs = None
-        else:
-            if isinstance(color, (tuple,list)):
-                color = np.array(color)
-            
-            if not isinstance(color, np.ndarray) or not color.ndim == 1 or not color.shape[0] == vs.shape[0]:
-                raise ValueError('参数cm有效时，期望参数color是和vs等长的一维数组，或类似结构的元组、列表')
-            
-            if drange is None:
-                cbargs = {'cm':cm, 'drange':(np.nanmin(color), np.nanmax(color))}
-            else:
-                cbargs = {'cm':cm, 'drange':drange}
-            
-            color = self.cm.cmap(color, cm, drange=drange, drop=True)
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'pipe', vs, radius, color, slices=slices, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def flow(self, vs, uvw, color=None, cm=None, drange=None, k=1, width=0.3, fs=10, speed=2, cdeep=16, **kwds):
-        """绘制动态矢量图
-        
-        vs          - 点坐标集，二维numpy数组，或类似结构的元组、列表
-        uvw         - 与点坐标集对应的矢量集，二维numpy数组，或类似结构的元组、列表
-        color       - 颜色，或与矢量集对应的数据
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        k           - 矢量缩放因子，浮点型
-        width       - 矢量线宽度
-        fs          - 动态变化的帧数，整型
-        speed       - 动态变化的速度因子，整型。该数值越大，变化速度越慢
-        cdeep       - 颜色分段数，默认分为16段
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if not isinstance(vs, np.ndarray):
-            vs = np.array(vs)
-        
-        if not isinstance(uvw, np.ndarray):
-            uvw = np.array(uvw)
-        
-        assert vs.shape == uvw.shape and vs.ndim == 2, '期望参数vs和uvw是结构相同的二维numpy数组，或类似结构的元组、列表'
-        
-        if vs.shape[-1] == 2:
-            self.set_2d_mode()
-            x, y = vs[..., 0], vs[..., 1]
-            z = np.zeros(x.shape)
-            u, v = uvw[..., 0], uvw[..., 1]
-            w = np.zeros(u.shape)
-        else:
-            x, y, z = vs[..., 0], vs[..., 1], vs[..., 2]
-            u, v, w = uvw[..., 0], uvw[..., 1], uvw[..., 2]
-        
-        u, v, w = u*k, v*k, w*k
-        du, dv, dw = u/fs, v/fs, w/fs
-        offset = np.random.randint(0, fs , u.shape)
-        
-        def s_creator(i):
-            def slide(n):
-                return (n//speed)%fs == i
-            return slide
-        
-        # color参数处理
-        if cm is None:
-            if color is None: # 如果没有指定颜色，则顺序选择默认的颜色
-                color = self.get_color()
-            
-            cbargs = None
-            for i in range(fs):
-                j = (offset+i)%fs
-                xx = np.stack((x+j*du, x+j*du+u), axis=1).ravel()
-                yy = np.stack((y+j*dv, y+j*dv+v), axis=1).ravel()
-                zz = np.stack((z+j*dw, z+j*dw+w), axis=1).ravel()
-                vs = np.stack((xx,yy,zz), axis=1)
-                
-                slide = s_creator(i)
-                self.line(vs, color=color, width=width, slide=slide, **kwds)
-        else:
-            if isinstance(color, (tuple,list)):
-                color = np.array(color)
-            assert color.shape[0] == uvw.shape[0], '期望参数color和uvw的长度相同的一维numpy数组，或类似结构的元组、列表'
-            
-            if drange is None:
-                drange = np.nanmin(color), np.nanmax(color)
-            
-            cbargs = {'cm':cm, 'drange':drange}
-            color = np.uint8((cdeep-1)*(color-drange[0])/(drange[1]-drange[0]))
-            
-            for c in range(cdeep):
-                cc = self.cm.cmap(np.array([c]), cm, drange=(0, cdeep-1), drop=True)
-                part = np.where(color==c)
-                for i in range(fs):
-                    j = (offset+i)%fs
-                    xx = np.stack((x[part]+j[part]*du[part], x[part]+j[part]*du[part]+u[part]), axis=1).ravel()
-                    yy = np.stack((y[part]+j[part]*dv[part], y[part]+j[part]*dv[part]+v[part]), axis=1).ravel()
-                    zz = np.stack((z[part]+j[part]*dw[part], z[part]+j[part]*dw[part]+w[part]), axis=1).ravel()
-                    vs = np.stack((xx,yy,zz), axis=1)
-                    
-                    if vs.shape[0]:
-                        slide = s_creator(i)
-                        self.line(vs, color=cc[0], width=width, slide=slide, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def volume(self, data, x=None, y=None, z=None, **kwds):
-        """绘制体数据
-        
-        data        - 数据，四维numpy数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴，第3轴对应每个点的RGBA通道（单字节无符号整型）
-        x/y/z       - 等长的一维元组、列表或数组。若为None，则使用data的索引
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
-        """
-        
-        assert isinstance(data, np.ndarray) and data.ndim ==4, '期望参数data是一个numpy.ndarray类型的四维数组'
-        assert data.shape[-1] == 4 and data.dtype == np.uint8, '期望参数data表示的颜色包含RGBA四个通道且是8位的无符号整型'
-        
-        zn, yn, xn = data.shape[:3]
-        
-        if x is None:
-            x = np.arange(data.shape[2])
-        elif isinstance(x, (tuple, list)):
-            x =  np.array(x)
-        assert isinstance(x, np.ndarray) and x.ndim == 1 and x.size == xn, '期望参数x是一个长度为%d一维数组'%xn
-        
-        if y is None:
-            y = np.arange(data.shape[1])
-        elif isinstance(y, (tuple, list)):
-            y =  np.array(y)
-        assert isinstance(y, np.ndarray) and y.ndim == 1 and y.size == yn, '期望参数y是一个长度为%d一维数组'%yn
-        
-        if z is None:
-            z = np.arange(data.shape[0])
-        elif isinstance(z, (tuple, list)):
-            z =  np.array(z)
-        assert isinstance(z, np.ndarray) and z.ndim == 1 and z.size == zn, '期望参数z是一个长度为%d一维数组'%zn
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'volume', x, y, z, data, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def capsule(self, data, level, color=None, x=None, y=None, z=None, **kwds):
-        """绘制囊性结构
-        
-        data        - 数据集，三维数组，第0轴对应z轴，第1轴对应y轴，第2轴对应x轴
-        level       - 阈值，浮点型。data数据集中小于level的点将被忽略
-        color       - 颜色，支持十六进制，以及浮点型元组、列表或numpy数组，值域范围[0,1]
-        x/y/z       - 等长的一维元组、列表或数组。若为None，则使用data的索引
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        fill        - 是否填充颜色，默认填充
-                        light       - 光照效果
-                            0           - 仅使用环境光
-                            1           - 开启前光源
-                            2           - 开启后光源
-                            4           - 开启左光源
-                            8           - 开启右光源
-                            15          - 开启全部光源（默认）
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转v_top       - 圆柱上端面的圆心坐标，元组、列表或numpy数组
-        """
-        
-        if color is None:
-            color = self.get_color()
-        
-        if x is None:
-            x = np.arange(data.shape[2], dtype=np.float32)
-        else:
-            x =  np.array(x)
-        
-        if y is None:
-            y = np.arange(data.shape[1], dtype=np.float32)
-        else:
-            y =  np.array(y)
-        
-        if z is None:
-            z = np.arange(data.shape[0], dtype=np.float32)
-        else:
-            z =  np.array(z)
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, 'capsule', x, y, z, data, level, color, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = None
-    
-    def contour(self, data, xs=None, ys=None, levels=5, cm='jet', fill=True, **kwds):
-        """等值线
-        
-        data        - 数据，二维元组、列表或数组
-        xs/ys       - 点的x/y坐标集，None或与data结构相同的二维元组、列表或数组
-        levels      - 分级数量，整数，升序的一维元组、列表或数组
-        cm          - 颜色映射表
-        fill        - 是否填充颜色，默认填充
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if isinstance(data, (tuple,list)):
-            data = np.array(data)
-        assert isinstance(data, np.ndarray) and data.ndim == 2, '期望参数data是二维的元组、列表或数组'
-        rows, cols = data.shape
-        
-        if xs is None:
-            xs = np.tile(np.arange(cols), (rows, 1))
-        elif isinstance(xs, (tuple,list)):
-            xs = np.array(xs)
-        assert isinstance(xs, np.ndarray) and xs.shape == (rows, cols), '期望参数xs为None或与data结构相同的二维元组、列表或数组'
-        
-        if ys is None:
-            ys = np.repeat(np.arange(rows), cols).reshape(rows, cols)
-        elif isinstance(ys, (tuple,list)):
-            ys = np.array(ys)
-        assert isinstance(ys, np.ndarray) and ys.shape == (rows, cols), '期望参数ys为None或与data结构相同的二维元组、列表或数组'
-        
-        cvalues, contours = util.get_contour(data, xs, ys, levels)
-        color = self.cm.cmap(cvalues, cm, drop=True)
-        cbargs = {'cm':cm, 'drange':cvalues.tolist()}
-        
-        if fill:
-            for i in range(1, len(cvalues)):
-                data[(data>=cvalues[i-1])&(data<cvalues[i])] = cvalues[i-1]
-            self.hot(data, xs=xs, ys=ys, cm=cm, smooth=False, **kwds)
-        else:
-            for group, c, d in zip(contours, color, cvalues):
-                for item in group:
-                    self.plot(item[:,0], item[:,1], color=c)
-                    self.text('%0.2f'%d, size=32, pos=(*item[0],0.1))
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def hot(self, data, xs=None, ys=None, cm='jet', drange=None, smooth=True, **kwds):
-        """热力图
-        
-        data        - 数据，二维元组、列表或数组
-        xs/ys       - 点的x/y坐标集，None或与data结构相同的二维元组、列表或数组
-        cm          - 颜色映射表
-        drange      - 颜色映射的数据动态范围，二元组，若为None，则使用数据的动态范围
-        smooth      - 是否使用3x3的卷积平滑，默认True
-        kwds        - 关键字参数
-                        name        - 模型名
-                        visible     - 是否可见，默认可见
-                        slide       - None或者display函数，以场景的自增计数器为输入，返回布尔值
-                        inside      - 是否自动缩放至[-1,1]范围内，默认自动缩放
-                        regulate    - 顶点集几何变换，None或者元组、列表，其元素为位移向量三元组，或由旋转角度、旋转向量组成的二元组
-                        rotate      - None或者旋转函数，以场景的自增计数器为输入，返回旋转角度和旋转向量组成的元组
-                        translate   - None或者位移函数，以场景的自增计数器为输入，返回位移元组
-                        order       - 几何变换的顺序
-                            None        - 无变换（默认）
-                            'R'         - 仅旋转变换
-                            'T'         - 仅位移变换
-                            'RT'        - 先旋转后位移
-                            'TR'        - 先位移后旋转
-        """
-        
-        if isinstance(data, (tuple,list)):
-            data = np.array(data)
-        assert isinstance(data, np.ndarray) and data.ndim == 2, '期望参数data是二维numpy数组，或类似结构的元组、列表'
-        
-        self.set_2d_mode()
-        rows, cols = data.shape
-        
-        if xs is None:
-            xs = np.tile(np.arange(cols), (rows, 1))
-        elif isinstance(xs, (tuple,list)):
-            xs = np.array(xs)
-        assert isinstance(xs, np.ndarray) and xs.shape == (rows, cols), '期望参数xs为None或与data结构相同的二维numpy数组，或类似结构的元组、列表'
-        
-        if ys is None:
-            ys = np.repeat(np.arange(rows), cols).reshape(rows, cols)
-        elif isinstance(ys, (tuple,list)):
-            ys = np.array(ys)
-        assert isinstance(ys, np.ndarray) and ys.shape == (rows, cols), '期望参数ys为None或与data结构相同的二维numpy数组，或类似结构的元组、列表'
-        
-        if drange is None:
-            drange = np.nanmin(data), np.nanmax(data)
-        else:
-            dmin, dmax = drange
-        
-        kwds.update({'light':0})
-        zs = np.zeros((rows, cols))
-        c = self.cm.cmap(data, cm, drange=drange)
-        texture = np.uint8(c*255)
-        cbargs = {'cm':cm, 'drange':drange}
-        
-        if smooth:
-            w = np.ones((3,3))
-            w /= np.sum(w)
-            r = ndimage.convolve(texture[..., 0], w)
-            g = ndimage.convolve(texture[..., 1], w)
-            b = ndimage.convolve(texture[..., 2], w)
-            texture = np.dstack((r,g,b))
-        
-        # 添加到部件库
-        self.fig.add_widget(self.reg_main, '_mesh', xs, ys, zs, texture, **kwds)
-        
-        # ColorBar参数
-        self.cbargs = cbargs
-    
-    def colors(self):
-        """绘制可用的颜色及其对应的中英文名称"""
-        
-        vs = np.array([[0, 1],[0, -13],[31, -13],[31, 1]])
-        self.surface(vs, color='#F0F0F0', method='Q')
-        
-        cs = self.cm.color_help()
-        for i in range(len(cs)):
-            row, col = i//6, i%6
-            x, y = 2.2+col*5, -row*0.5
-            cen, ccn = cs[i]
-            c = self.cm.color2c(cen)
-            
-            vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1]])
-            self.surface(vs, color=c, method='Q')
-            
-            vs = np.array([[x-0.1, y+0.1],[x-0.1, y-0.1],[x+0.1, y-0.1],[x+0.1, y+0.1],[x-0.1, y+0.1]])
-            self.plot(vs[:,0], vs[:,1], color='black', width=0.5)
-            
-            self.text(ccn, size=28, pos=(x-0.15,y), align='right-middle')
-            self.text('(%s)'%cen, size=28, pos=(x+0.15,y), align='left-middle')
-        
-        self.axis(False)
-        
-        # ColorBar参数
-        self.cbargs = None
     

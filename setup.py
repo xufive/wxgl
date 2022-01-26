@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf8") as fh:
 
 setuptools.setup(
     name="wxgl",
-    version="0.7.4",
+    version="0.8.0",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",
@@ -22,10 +22,8 @@ setuptools.setup(
     ],
     data_files = [
         ('lib/site-packages/wxgl/res', [
-            'wxgl/res/black_16.png', 
-            'wxgl/res/blue_16.png', 
-            'wxgl/res/gray_16.png', 
-            'wxgl/res/white_16.png', 
+            'wxgl/res/info.png', 
+            'wxgl/res/tb_config_32.png', 
             'wxgl/res/tb_hide_32.png', 
             'wxgl/res/tb_show_32.png', 
             'wxgl/res/tb_play_32.png', 

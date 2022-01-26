@@ -2,7 +2,7 @@
 #
 # MIT License
 # 
-# Copyright (c) 2021 天元浪子
+# Copyright (c) 2021 Tianyuan Langzi
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
+#
 
 
 """
@@ -32,67 +32,16 @@ WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
 """
 
 
-import numpy as np
-from . import figure as wff
+from . figure import Figure
 
 
-fig = wff.WxGLFigure()
-create_figure = wff.WxGLFigure
+fig = Figure()
+create_figure = Figure
 
 show = fig.show
 savefig = fig.savefig
 capture = fig.capture
 
-cmap = fig.cm.cmap
-
-def font_list():
-    """返回可用字体列表"""
-    
-    for i, item in enumerate(fig.fm.get_font_list()):
-        print(i+1, item)
-
-def color_list():
-    """返回颜色列表"""
-    
-    for i, item in enumerate(fig.cm.color_help()):
-        print(i+1, item[0], item[1])
-
-def cmap_list():
-    """返回颜色列表"""
-    
-    cmaps = fig.cm.cmap_help()
-    for i, key in enumerate(cmaps.keys()):
-        print(i+1, key)
-        for j, item in enumerate(cmaps[key]):
-            print('  %d-%d'%(i+1, j+1), item)
-        print()
-
-def figure(**kwds):
-    """初始化画布
-    
-    kwds        - 关键字参数
-                    size        - 画布分辨率， 默认1280x960
-                    style2d     - 2D模式下的默认风格，默认
-                    style3d     - 3D模式下的默认风格
-                    dist        - 眼睛与ECS原点的距离
-                    view        - 视景体
-                    elevation   - 仰角
-                    azimuth     - 方位角
-                    zoom        - 视口缩放因子
-    """
-    
-    global fig
-    fig = wff.WxGLFigure(**kwds)
-
-def subplot(pos=111):
-    """添加子图
-    
-    pos         - 子图在场景中的位置和大小
-                    三位数字    - 指定分割画布的行数、列数和子图序号。例如，223表示两行两列的第3个位置
-                    四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
-    """
-    
-    ax = fig.add_axes(pos)
 
 def current_axes(func):
     """装饰器函数，检查是否存在当前子图，若无则创建"""
@@ -106,13 +55,116 @@ def current_axes(func):
     
     return wrapper
 
-@current_axes
-def axis(visible):
-    fig.curr_ax.axis(visible)
+def figure(**kwds):
+    """初始化画布
+    
+    kwds        - 3D场景参数
+        proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影（默认）
+        oecs        - 视点坐标系ECS原点，默认与目标坐标系OCS原点重合
+        dist        - 相机与ECS原点的距离，默认5个长度单位
+        azim        - 方位角，默认0°
+        elev        - 仰角，默认0°
+        vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
+        near        - 视锥体前面距离相机的距离，默认2.6个长度单位
+        far         - 视锥体后面距离相机的距离，默认1000个长度单位
+        zoom        - 视口缩放因子，默认1.0
+        interval    - 动画定时间隔，默认20毫秒
+        smooth      - 直线、多边形和点的反走样开关
+        azim_range  - 方位角限位器，默认-90°~90°
+        elev_range  - 仰角限位器，默认-90°~90°
+        style       - 场景风格，默认太空蓝
+            'white'     - 珍珠白
+            'black'     - 石墨黑
+            'gray'      - 国际灰
+            'blue'      - 太空蓝
+            'royal'     - 宝石蓝
+    """
+    
+    global fig
+    fig = Figure(**kwds)
+
+def subplot(pos):
+    """添加子图
+    
+    pos         - 子图在场景中的位置和大小
+                    三位数字    - 指定分割画布的行数、列数和子图序号。例如，223表示两行两列的第3个位置
+                    四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
+    """
+    
+    fig.add_axes(pos)
+
+def cruise(func):
+    """设置相机巡航函数"""
+    
+    fig.cruise(func)
 
 @current_axes
-def grid(visible):
-    fig.curr_ax.grid(visible)
+def title(*args, **kwds):
+    fig.curr_ax.title(*args, **kwds)
+
+@current_axes
+def colorbar(*args, **kwds):
+    fig.curr_ax.colorbar(*args, **kwds)
+
+@current_axes
+def text(*args, **kwds):
+    fig.curr_ax.text(*args, **kwds)
+
+@current_axes
+def text3d(*args, **kwds):
+    fig.curr_ax.text3d(*args, **kwds)
+
+@current_axes
+def line(*args, **kwds):
+    fig.curr_ax.line(*args, **kwds)
+
+@current_axes
+def scatter(*args, **kwds):
+    fig.curr_ax.scatter(*args, **kwds)
+
+@current_axes
+def mesh(*args, **kwds):
+    fig.curr_ax.mesh(*args, **kwds)
+
+@current_axes
+def surface(*args, **kwds):
+    fig.curr_ax.surface(*args, **kwds)
+
+@current_axes
+def quad(*args, **kwds):
+    fig.curr_ax.quad(*args, **kwds)
+
+@current_axes
+def polygon(*args, **kwds):
+    fig.curr_ax.polygon(*args, **kwds)
+
+@current_axes
+def uvsphere(*args, **kwds):
+    fig.curr_ax.uvsphere(*args, **kwds)
+
+@current_axes
+def isosphere(*args, **kwds):
+    fig.curr_ax.isosphere(*args, **kwds)
+
+@current_axes
+def cone(*args, **kwds):
+    fig.curr_ax.cone(*args, **kwds)
+
+@current_axes
+def cylinder(*args, **kwds):
+    fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def cylinder(*args, **kwds):
+    fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def isosurface(*args, **kwds):
+    fig.curr_ax.isosurface(*args, **kwds)
+
+@current_axes
+def model(*args, **kwds):
+    fig.curr_ax.model(*args, **kwds)
 
 @current_axes
 def xlabel(xlabel):
@@ -139,10 +191,6 @@ def zrange(zrange):
     fig.curr_ax.zrange(zrange)
 
 @current_axes
-def xrotate():
-    fig.curr_ax.xrotate()
-
-@current_axes
 def xformat(xf):
     fig.curr_ax.xformat(xf)
 
@@ -165,103 +213,3 @@ def ydensity(yd):
 @current_axes
 def zdensity(zd):
     fig.curr_ax.zdensity(zd)
-
-@current_axes
-def title(*args, **kwds):
-    fig.curr_ax.title(*args, **kwds)
-
-@current_axes
-def colorbar(*args, **kwds):
-    fig.curr_ax.colorbar(*args, **kwds)
-
-@current_axes
-def text(*args, **kwds):
-    fig.curr_ax.text(*args, **kwds)
-
-@current_axes
-def text3d(*args, **kwds):
-    fig.curr_ax.text3d(*args, **kwds)
-
-@current_axes
-def plot(*args, **kwds):
-    fig.curr_ax.plot(*args, **kwds)
-
-@current_axes
-def line(*args, **kwds):
-    fig.curr_ax.line(*args, **kwds)
-
-@current_axes
-def scatter(*args, **kwds):
-    fig.curr_ax.scatter(*args, **kwds)
-
-@current_axes
-def mesh(*args, **kwds):
-    fig.curr_ax.mesh(*args, **kwds)
-
-@current_axes
-def surface(*args, **kwds):
-    fig.curr_ax.surface(*args, **kwds)
-
-@current_axes
-def quad(*args, **kwds):
-    fig.curr_ax.quad(*args, **kwds)
-
-@current_axes
-def triangle(*args, **kwds):
-    fig.curr_ax.triangle(*args, **kwds)
-
-@current_axes
-def fan(*args, **kwds):
-    fig.curr_ax.fan(*args, **kwds)
-
-@current_axes
-def polygon(*args, **kwds):
-    fig.curr_ax.polygon(*args, **kwds)
-
-@current_axes
-def cube(*args, **kwds):
-    fig.curr_ax.cube(*args, **kwds)
-
-@current_axes
-def circle(*args, **kwds):
-    fig.curr_ax.circle(*args, **kwds)
-
-@current_axes
-def sphere(*args, **kwds):
-    fig.curr_ax.sphere(*args, **kwds)
-
-@current_axes
-def cone(*args, **kwds):
-    fig.curr_ax.cone(*args, **kwds)
-
-@current_axes
-def cylinder(*args, **kwds):
-    fig.curr_ax.cylinder(*args, **kwds)
-
-@current_axes
-def pipe(*args, **kwds):
-    fig.curr_ax.pipe(*args, **kwds)
-
-@current_axes
-def flow(*args, **kwds):
-    fig.curr_ax.flow(*args, **kwds)
-
-@current_axes
-def volume(*args, **kwds):
-    fig.curr_ax.volume(*args, **kwds)
-
-@current_axes
-def capsule(*args, **kwds):
-    fig.curr_ax.capsule(*args, **kwds)
-
-@current_axes
-def hot(*args, **kwds):
-    fig.curr_ax.hot(*args, **kwds)
-
-@current_axes
-def contour(*args, **kwds):
-    fig.curr_ax.contour(*args, **kwds)
-
-@current_axes
-def colors():
-    fig.curr_ax.colors()

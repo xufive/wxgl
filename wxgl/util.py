@@ -1,31 +1,211 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from matplotlib import pyplot as mplt
+from scipy.spatial.transform import Rotation as sstr
+from OpenGL.GL import *
 
-def get_contour(data, xs, ys, levels):
-    """返回等值线
+from . import text
+from . import cmap
+
+FM = text.FontManager()
+CM = cmap.ColorManager()
+
+def y2v(v):
+    """返回y轴正方向到向量v的旋转矩阵"""
     
-    data        - 数据，类二维数组
-    levels      - 分级数量，整数或升序的类一维数组
+    h =  np.linalg.norm(v)
+    a_z = np.arccos(v[1]/h)
+    
+    if v[0] == 0:
+        if v[2] == 0:
+            a_x = 0
+        elif v[2] > 0:
+            a_x = -np.pi/2
+        else:
+            a_x = np.pi/2
+    else:
+        a_x = np.arctan(-v[2]/v[0]) + (np.pi if v[0] < 0 else 0)
+    
+    return np.float32(sstr.from_euler('zxy', [a_z, a_x, 0], degrees=False).as_matrix())
+
+def rotate(axis_angle):
+    """返回旋转矩阵
+    
+    axis_angle  - 轴角，由旋转向量和旋转角度组成的元组、列表或numpy数组。旋转方向使用右手定则
     """
     
-    c = mplt.contour(xs, ys, data, levels=levels)
-    contours = list()
-    for g in c.collections:
-        contours.append([item.vertices for item in g.get_paths()])
+    a, v = -axis_angle[3], np.array(axis_angle[:3])
+    m = sstr.from_rotvec(np.radians(a)*v/np.linalg.norm(v)).as_matrix()
+    m = np.hstack((m, np.array([[0.0], [0.0], [0.0]])))
+    m = np.vstack((m, np.array([0.0, 0.0, 0.0, 1.0])))
     
+    return np.float32(m)
     
-    return c.cvalues, contours
+def translate(shift):
+    """返回平移矩阵
+    
+    shift       - 由xyz轴偏移量组成的元组、列表或numpy数组
+    """
+    
+    v = np.array(shift).reshape(3,1)
+    m = np.eye(4)
+    m[3] += np.sum((m[:3] * v), axis=0)
+    
+    return np.float32(m)
+    
+def scale(k):
+    """返回缩放矩阵
+    
+    k           - 缩放系数
+    """
+    
+    v = np.array([k,k,k]).reshape(3,1)
+    m = np.eye(4)
+    m[:3] *= v
+    
+    return np.float32(m)
 
-def find_capsule(data, level):
-    """从数据体中找到囊性结构"""
+def model_matrix(*args):
+    """返回模型矩阵
     
+    args        - 旋转（4元组）、平移（3元组）、缩放（数值型）参数
+    """
     
-    data = np.rollaxis(data, 2)
-    data = np.rollaxis(data, 2, 1)
+    m = np.eye(4)
+    for item in args[::-1]:
+        if isinstance(item, (int, float)):
+            m = np.dot(m, scale(item))
+        elif len(item) == 3:
+            m = np.dot(m, translate(item))
+        else:
+            m = np.dot(m, rotate(item))
+    
+    return np.float32(m)
+    
+def view_matrix(cam_pos, cam_up, oecs):
+    """返回视点矩阵
+    
+    cam_pos     - 相机位置
+    cam_up      - 指向相机上方的单位向量
+    oecs        - 视点坐标系ECS原点
+    """
+    
+    camX, camY, camZ = cam_pos
+    oecsX, oecsY, oecsZ = oecs
+    upX, upY, upZ = cam_up
+    
+    f = np.array([oecsX-camX, oecsY-camY, oecsZ-camZ])
+    f /= np.linalg.norm(f)
+    s = np.array([f[1]*upZ - f[2]*upY, f[2]*upX - f[0]*upZ, f[0]*upY - f[1]*upX])
+    s /= np.linalg.norm(s)
+    u = np.cross(s, f)
+    
+    m = np.array([
+        [s[0], u[0], -f[0], 0],
+        [s[1], u[1], -f[1], 0],
+        [s[2], u[2], -f[2], 0],
+        [- s[0]*camX - s[1]*camY - s[2]*camZ, 
+        - u[0]*camX - u[1]*camY - u[2]*camZ, 
+        f[0]*camX + f[1]*camY + f[2]*camZ, 1]
+    ], dtype=np.float32)
+    
+    return m
+    
+def proj_matrix(proj, hexa, zoom):
+    """返回投影矩阵
+    
+    proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影
+    hexa        - 视锥体的左右下上距离中心线的距离以及前后面距离相机的距离组成的元组
+    zoom        - 视口缩放因子
+    csize       - GL窗口宽高元组
+    """
+    
+    left, right, bottom, top, near, far = hexa
+    left, right, bottom, top = zoom*left, zoom*right, zoom*bottom, zoom*top
+    rw, rh, rd = 1/(right - left), 1/(top - bottom), 1/(far - near)
+    
+    if proj == 'ortho':
+        m = np.array([
+            [2 * rw, 0, 0, 0],
+            [0, 2 * rh, 0, 0],
+            [0, 0, -2 * rd, 0],
+            [-(right+left) * rw, -(top+bottom) * rh, -(far+near) * rd, 1]
+        ], dtype=np.float32)
+    else:
+        m = np.array([
+            [2 * near * rw, 0, 0, 0],
+            [0, 2 * near * rh, 0, 0],
+            [(right+left) * rw, (top+bottom) * rh, -(far + near) * rd, -1],
+            [0, 0, -2 * near * far * rd, 0]
+        ], dtype=np.float32)
+    
+    return m
+
+def text2image(text, size, color, family=None, weight='normal'):
+    """生成文本图像
+    
+    text        - 文本字符串
+    size        - 字号，整型，默认32
+    color       - 文本颜色，浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
+    family      - 字体，None表示当前默认的字体
+    weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+    """
+    
+    return FM.text2img(text, size, color, family=family, weight=weight)
+
+def font_list():
+    """返回当前系统可用字体列表"""
+    
+    return FM.get_font_list()
+    
+def color2c(color, drop=False, outsize=None):
+    """检查颜色参数，将字符串、元组、列表等类型的颜色转为值域范围[0,1]的numpy数组颜色
+    
+    color       - 待处理的颜色
+    drop        - 舍弃alpha通道
+    outsize     - 返回颜色的数量：整型或整型元组，None表示不改变返回颜色的数量
+    """
+    
+    return CM.color2c(color, drop=drop, outsize=outsize)
+    
+def color_list():
+    """颜色列表"""
+    
+    return CM.color_list
+    
+def cmap_list():
+    """调色板列表"""
+    
+    return CM.cmap_list
+    
+def color_help():
+    """返回颜色中英文对照表"""
+    
+    return CM.color_help()
+    
+def cmap_help():
+    """返回调色板分类列表"""
+    
+    return CM.cmap_help()
+    
+def cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False):
+    """数值映射到颜色
+        
+    data        - 数据
+    cm          - 调色板
+    invalid     - 无效数据的标识
+    invalid_c   - 无效数据的颜色
+    drange      - 数据动态范围，None表示使用data的动态范围
+    alpha       - 透明度，None表示不改变当前透明度
+    drop        - 舍弃alpha通道
+    """
+    
+    return CM.cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False)
+
+def isosurface(data, level):
+    """返回基于MarchingCube算法的等值面"""
+    
     data = np.ascontiguousarray(data)
-    
     mask = data < level
     face_shift_tables, edge_shifts, edge_table, n_table_faces = _get_data_cache()
     
@@ -127,10 +307,6 @@ def _get_data_cache():
         0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0   
     ], dtype=np.uint16)
     
-    # Table of triangles to use for filling each grid cell.
-    # Each set of three integers tells us which three edges to
-    # draw a triangle between.
-    # (Data stolen from Bourk; see above.)
     triTable = [
         [],
         [0, 8, 3],
@@ -410,8 +586,7 @@ def _get_data_cache():
     for i in range(1, 6):
         faceTableI = np.zeros((len(triTable), i*3), dtype=np.ubyte)
         faceTableInds = np.argwhere(n_table_faces == i)[:, 0]
-        faceTableI[faceTableInds] = np.array([triTable[j] for j in
-                                             faceTableInds])
+        faceTableI[faceTableInds] = np.array([triTable[j] for j in faceTableInds])
         faceTableI = faceTableI.reshape((len(triTable), i, 3))
         face_shift_tables.append(edge_shifts[faceTableI])
         

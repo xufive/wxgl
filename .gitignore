@@ -106,9 +106,10 @@ venv.bak/
 # custem
 wxgl.egg-info/
 build/
-data/
-/res/
+wxgl/custom.ini
 capture/
+data/
+res/
 demo*.py
 
 
