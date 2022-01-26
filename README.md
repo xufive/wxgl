@@ -1,15 +1,15 @@
 # WxGL
 
-WxGL是一个基于PyOpenGL的三维数据可视化库,以wx为显示后端,提供Matplotlib风格的交互式应用方式,同时,也可以和wxPython无缝结合,在wx的窗体上绘制三维模型。从V0.7.0开始,新版本升级均向后兼容。
+WxGL是一个基于PyOpenGL的三维数据可视化库，以wx为显示后端，提供Matplotlib风格的交互式应用方式。WxGL也可以和wxPython无缝结合，在wx的窗体上绘制三维模型。
 
-# 1. 安装和依赖关系
+# 安装和依赖关系
 
 WxGL模块使用pip命令安装。
 ```shell
 pip install wxgl
 ```
 
-WxGL依赖pyopengl等模块,如果当前运行环境没有安装这些模块,安装程序将会自动安装它们。如果安装过程出现问题,或者安装完成后无法正常使用,请手动安装WxGL的依赖模块。
+WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块，安装程序将会自动安装它们。如果安装过程出现问题，或者安装完成后无法正常使用，请手动安装WxGL的依赖模块。
  
 * pyopengl - 推荐版本:3.1.5或更高 
 * numpy - 推荐版本:1.18.2或更高 
@@ -19,67 +19,32 @@ WxGL依赖pyopengl等模块,如果当前运行环境没有安装这些模块,安
 * wxpython - 推荐版本:4.0.7.post2或更高 
 * freetype - 推荐版本:2.2.0或更高
 
-# 2. 快速体验
+# 快速体验
 
-从V0.6.0开始,WxGL增加了交互式绘图子模块wxplot,提供类似Matplotlib风格2D/3D绘图函数。如果熟悉NumPy和Matplotlib的话,几分钟就可以学会使用WxGL的交互式绘图。
+下面这几行代码，绘制了一个中心在坐标原点半径为1的纯色圆球。忽略模块名的话，这些代码和Matplotlib的风格是完全一致的。
 
 ```python
->>> import wxgl.wxplot as plt
->>> plt.sphere((0,0,0), 1, color='cyan')
->>> plt.title('快速体验:$x^2+y^2=1$')
+import wxgl.wxplot as plt
+plt.uvsphere((0,0,0), 1, color='cyan')
+plt.title('快速体验：$x^2+y^2=1$')
+plt.show()
+```
+
+
+生成一个地球模式是如此简单。
+
+```python
+>>> plt.uvsphere((0,0,0), 1, texture='res/image/earth.jpg', xflip=True, yflip=False)
 >>> plt.show()
 ```
 
-上面这几行代码,绘制了一个中心在坐标原点半径为1的青色圆球。如果忽略模块名的话,这些代码和Matplotlib的风格是完全一样的。执行最后一句show()命令后,将弹出GUI窗口,同时程序阻塞,直至关闭GUI窗口。
-
-![本地图片](https://img-blog.csdnimg.cn/20210701223028999.png)
-
-WxGL可以根据绘图指令和绘图数据自动选择2D或3D模式,无需象Matplotlib那样必须在初始化画布时指定。
-
+让地球自转，更是易如反掌。
 ```python
->>> import numpy as np
->>> import wxgl.wxplot as plt
->>> ys, xs = np.mgrid[-2:2:200j,-4:4:400j]
->>> data = 5*xs*np.exp(-xs**2-ys**2)
->>> plt.hot(data, xs=xs, ys=ys, cm='jet')
->>> plt.colorbar(tick_format=lambda t:'%0.2f'%t)
->>> plt.title('热力图和ColorBar')
->>> plt.show()
+plt.uvsphere((0,0,0), 1, 
+    texture='res/image/earth.jpg', 
+    xflip=True, 
+    yflip=False,
+    transform = lambda tn,gms,tms : ((0, 1, 0, (0.02*tms)%360),)
+)
+plt.show()
 ```
-
-上面的代码并未显式地设置2D或3D模式,WxGL自动切换成2D模式并绘制热力图。
-
-![本地图片](https://img-blog.csdnimg.cn/20210701224838593.png)
-
-WxGL支持在一张画布上绘制多张子图,创建子图的方式也非常类似Matplotlib。
-
-```python
->>> import wxgl.wxplot as plt
->>> plt.subplot(121)
->>> plt.cylinder([(0,0,1),(0,0,-1)], 1, color='#ff7f0e', slices=360)
->>> plt.title('多轴子图布局:圆柱体')
->>> plt.subplot(122)
->>> plt.cube((0,0,0), 1, color='#2ca02c')
->>> plt.title('多轴子图布局:六面体')
->>> plt.show()
-```
-
-![本地图片](https://img-blog.csdnimg.cn/20210701231647908.png)
-
-正如Matplotlib可以支持面向对象的使用方式,WxGL也提供了面向对象的使用方法。
-```python
->>> ys, xs = np.mgrid[-2:2:200j,-4:4:400j]
->>> zs = 5*xs*np.exp(-xs**2-ys**2)
->>> fig = plt.create_figure(size=(800,600))
->>> ax = fig.add_axes()
->>> ax.mesh(xs, ys, zs, color=zs, cm='hsv')
->>> fig.show()
-```
-
-![本地图片](https://img-blog.csdnimg.cn/20210701153604516.png)
-
-
-
-
-
-
