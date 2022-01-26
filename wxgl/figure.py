@@ -608,6 +608,12 @@ class FigureFrame(wx.Frame):
         
         if dlg.ShowModal() == wx.ID_OK:
             fn = dlg.GetPath()
+            self.fig.folder = os.path.split(fn)[0]
+            
+            self.fig.cfg.set('custom', 'folder', self.fig.folder)
+            with open(self.fig.fn_cfg, 'w') as fp:
+                self.fig.cfg.write(fp)
+            
             alpha = os.path.splitext(fn)[-1] == '.png'
             self.scene.save_scene(fn, alpha=alpha)
         
