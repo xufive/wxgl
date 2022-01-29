@@ -551,6 +551,7 @@ class FigureFrame(wx.Frame):
     def on_restore(self, evt):
         """回到初始状态"""
         
+        self.click_stop()
         self.scene.restore_posture()
     
     def on_ticks(self, evt):
@@ -622,5 +623,6 @@ class FigureFrame(wx.Frame):
     def click_stop(self):
         """模拟停止录屏"""
         
-        self.on_pause(None)
-        self.tb.ToggleTool(self.ID_PAUSE, False)
+        if self.scene.timer.IsRunning():
+            self.on_pause(None)
+            self.tb.ToggleTool(self.ID_PAUSE, False)

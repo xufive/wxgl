@@ -6,8 +6,8 @@ from wxgl.model import Model
 from wxgl.util import *
 
 name = 'wxgl'
-version = '0.8.1'
-version_info = (0, 8, 1, 0)
+version = '0.8.2'
+version_info = (0, 8, 2, 0)
 
 VERTEX_SHADER                   = GL_VERTEX_SHADER
 TESS_CONTROL_SHADER             = GL_TESS_CONTROL_SHADER

@@ -189,6 +189,8 @@ class Model:
             s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
             t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
             r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 图像左右翻转
+            yflip           - 图像上下翻转
         """
         
         texture_types = (
@@ -341,6 +343,17 @@ class Model:
                     
                     if var_name in self.other:
                         data = self.other[var_name]
+                        
+                        if not hasattr(data, '__call__'):
+                            if var_type == 'float' or var_type[:3] == 'vec':
+                                data = np.float32(data)
+                            elif var_type == 'double' or var_type[:4] == 'dvec':
+                                data = np.float64(data)
+                            elif var_type == 'int' or var_type[:4] == 'ivec':
+                                data = np.int32(data)
+                            elif var_type == 'uint' or var_type[:4] == 'uvec':
+                                data = np.uint8(data)
+                        
                         if qualifier == 'attribute':
                             if hasattr(data, '__call__'):
                                 raise ValueError('in或attribute限定的着色器变量不能赋值为函数')
@@ -352,11 +365,11 @@ class Model:
                             
                             self.attribute.update({var_name: {'tag':'other', 'data':data, 'un':data.shape[-1], 'usize':data.itemsize}})
                         else:
-                            if hasattr(self.other[var_name], '__call__'):
-                                self.uniform.update({var_name: {'tag':'other', 'f':self.other[var_name]}})
+                            if hasattr(data, '__call__'):
+                                self.uniform.update({var_name: {'tag':'other', 'f':data}})
                                 self.islive = True
                             else:
-                                self.uniform.update({var_name: {'tag':'other', 'v':self.other[var_name]}})
+                                self.uniform.update({var_name: {'tag':'other', 'v':data}})
                             
                             dtype = {
                                 'float': '1f',
