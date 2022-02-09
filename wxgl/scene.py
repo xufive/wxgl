@@ -312,9 +312,19 @@ class Scene(glcanvas.GLCanvas):
                 loc = m.uniform[key].get('loc')
                 
                 if tag == 'pmat':
-                    glUniformMatrix4fv(loc, 1, GL_FALSE, mat_proj, None)
+                    if 'v' in m.uniform[key]:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
+                    elif 'f' in m.uniform[key]:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.tn, self.gms, self.tms), None)
+                    else:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, mat_proj, None)
                 elif tag == 'vmat':
-                    glUniformMatrix4fv(loc, 1, GL_FALSE, mat_view, None)
+                    if 'v' in m.uniform[key]:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
+                    elif 'f' in m.uniform[key]:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.tn, self.gms, self.tms), None)
+                    else:
+                        glUniformMatrix4fv(loc, 1, GL_FALSE, mat_view, None)
                 elif tag == 'mmat':
                     if 'v' in m.uniform[key]:
                         args = m.uniform[key]['v']

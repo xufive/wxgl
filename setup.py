@@ -2,12 +2,12 @@
 
 import setuptools
 
-with open("README.md", "r", encoding="utf8") as fh:
-    long_description = fh.read()
+with open("README.md", "r", encoding="utf8") as fp:
+    long_description = fp.read()
 
 setuptools.setup(
     name="wxgl",
-    version="0.8.2",
+    version="0.8.3",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",

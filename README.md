@@ -47,4 +47,4 @@ plt.uvsphere((0,0,0), 1,
     transform = lambda tn,gms,tms : ((0, 1, 0, (0.02*tms)%360),)
 )
 plt.show()
-```
+``

@@ -94,9 +94,9 @@ def view_matrix(cam_pos, cam_up, oecs):
     oecsX, oecsY, oecsZ = oecs
     upX, upY, upZ = cam_up
     
-    f = np.array([oecsX-camX, oecsY-camY, oecsZ-camZ])
+    f = np.array([oecsX-camX, oecsY-camY, oecsZ-camZ], dtype=np.float64)
     f /= np.linalg.norm(f)
-    s = np.array([f[1]*upZ - f[2]*upY, f[2]*upX - f[0]*upZ, f[0]*upY - f[1]*upX])
+    s = np.array([f[1]*upZ - f[2]*upY, f[2]*upX - f[0]*upZ, f[0]*upY - f[1]*upX], dtype=np.float64)
     s /= np.linalg.norm(s)
     u = np.cross(s, f)
     

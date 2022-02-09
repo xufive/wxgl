@@ -222,21 +222,35 @@ class Model:
         
         self.uniform.update({var_name: {'tag':'mvpmat'}})
     
-    def set_view_matrix(self, var_name):
+    def set_view_matrix(self, var_name, vmatrix=None):
         """设置视点矩阵
         
         var_name        - 视点矩阵在着色器中的变量名
+        vmatrix         - 视点矩阵或生成视点矩阵的函数，None表示使用场景的视点矩阵
         """
         
-        self.uniform.update({var_name: {'tag':'vmat'}})
+        if vmatrix is None:
+            self.uniform.update({var_name: {'tag':'vmat'}})
+        elif hasattr(vmatrix, '__call__'):
+            self.uniform.update({var_name: {'tag':'vmat', 'f':vmatrix}})
+            self.islive = True
+        else:
+            self.uniform.update({var_name: {'tag':'vmat', 'v':vmatrix}})
     
-    def set_proj_matrix(self, var_name):
+    def set_proj_matrix(self, var_name, pmatrix=None):
         """设置投影矩阵
         
         var_name        - 投影矩阵在着色器中的变量名
+        mmatrix         - 投影矩阵或生成投影矩阵的函数，None表示使用场景的投影矩阵
         """
         
-        self.uniform.update({var_name: {'tag':'pmat'}})
+        if pmatrix is None:
+            self.uniform.update({var_name: {'tag':'pmat'}})
+        elif hasattr(pmatrix, '__call__'):
+            self.uniform.update({var_name: {'tag':'pmat', 'f':pmatrix}})
+            self.islive = True
+        else:
+            self.uniform.update({var_name: {'tag':'pmat', 'v':pmatrix}})
     
     def set_model_matrix(self, var_name, mmatrix=None):
         """设置模型矩阵
