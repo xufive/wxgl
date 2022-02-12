@@ -109,7 +109,7 @@ build/
 wxgl/custom.ini
 capture/
 data/
-res/
+temp/
 demo*.py
 
 

@@ -55,8 +55,11 @@ def create_texture_2d(src, **kwds):
     xflip = kwds.get('xflip', False)
     yflip = kwds.get('yflip', True)
     
-    if isinstance(src, str) and os.path.isfile(src):
-        im = np.array(Image.open(src))
+    if isinstance(src, str):
+        if os.path.isfile(src):
+            im = np.array(Image.open(src))
+        else:
+            raise ValueError('纹理资源文件不存在：%s'%src)
     elif isinstance(src, np.ndarray) and src.dtype == np.uint8 and src.ndim in (2, 3):
         im = src
     else:
