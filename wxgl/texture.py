@@ -6,6 +6,21 @@ from PIL import Image
 from OpenGL.GL import *
 
 
+def create_texture(src, texture_type=GL_TEXTURE_2D, **kwds):
+    """创建纹理对象
+    
+    src             - 图像全路径或者np.array数组
+    texture_type    - 纹理类型，默认2D纹理
+    kwds            - 关键字参数
+    """
+    
+    if texture_type == GL_TEXTURE_2D:
+        return create_texture_2d(src, **kwds)
+    elif texture_type == GL_TEXTURE_3D:
+        return create_texture_3d(src, **kwds)
+    else:
+        pass
+
 def create_texture_2d(src, **kwds):
     """创建2D纹理对象
     
@@ -141,18 +156,4 @@ def create_texture_3d(src, **kwds):
     glBindTexture(GL_TEXTURE_3D, 0)
     
     return tid
-
-def create_texture(src, texture_type, **kwds):
-    """创建纹理对象
     
-    src             - 图像全路径或者np.array数组
-    texture_type    - 纹理类型
-    kwds            - 关键字参数
-    """
-    
-    if texture_type == GL_TEXTURE_2D:
-        return create_texture_2d(src, **kwds)
-    elif texture_type == GL_TEXTURE_3D:
-        return create_texture_3d(src, **kwds)
-    else:
-        pass

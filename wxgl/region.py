@@ -34,16 +34,68 @@ class Region:
         self.pos = None
         self.size = None
         self.vision = None
-        self.update_size()
+        self.models = dict()                                    # 成品模型（已生成缓冲区对象）字典
+        self.mnames = [list(), list()]                          # 模型名列表：不透明、透明
+        self.ticks = dict()                                     # 刻度线
+        self.r_x = [1e10, -1e10]                                # 数据在x轴上的动态范围
+        self.r_y = [1e10, -1e10]                                # 数据在y轴上的动态范围
+        self.r_z = [1e10, -1e10]                                # 数据在z轴上的动态范围
+        self.scale = 1.0                                        # 模型缩放比例
+        self.shift = np.array((0, 0, 0), dtype=np.float32)      # 模型位移量
         
-        self.models = dict()                                # 成品模型（已生成缓冲区对象）字典
-        self.mnames = [list(), list(), list()]              # 模型名列表：不透明、透明（顺序）、透明（逆序）
-        self.r_x = [1e10, -1e10]                            # 数据在x轴上的动态范围
-        self.r_y = [1e10, -1e10]                            # 数据在y轴上的动态范围
-        self.r_z = [1e10, -1e10]                            # 数据在z轴上的动态范围
-        self.scale = 1.0                                    # 模型缩放比例
-        self.shift = np.array((0, 0, 0), dtype=np.float32)  # 模型位移量
-        self.ticks = dict()                                 # 刻度线
+        self.mmat = self.get_mmat()                             # 模型矩阵
+        self.vmat = self.get_vmat()                             # 视点矩阵
+        self.pmat = None                                        # 投影矩阵
+        
+        self.update_size()
+    
+    def update_size(self, box=None):
+        """设置视区大小"""
+        
+        if not box is None:
+            self.box = box
+        
+        self.pos = int(self.scene.csize[0] * self.box[0]), int(self.scene.csize[1] * self.box[1])
+        self.size = int(self.scene.csize[0] * self.box[2]), int(self.scene.csize[1] * self.box[3])
+        
+        k = self.size[0]/self.size[1]
+        if k > 1:
+            self.vision = (-self.scene.vision*k, self.scene.vision*k, -self.scene.vision, self.scene.vision)
+        else:
+            self.vision = (-self.scene.vision, self.scene.vision, -self.scene.vision/k, self.scene.vision/k)
+        
+        if self.pmat is None:
+            self.pmat = self.get_pmat()
+        else:
+            self.update_pmat()
+    
+    def get_mmat(self):
+        """返回模型矩阵"""
+        
+        return util.model_matrix(self.scale, self.shift)
+    
+    def get_vmat(self):
+        """返回视点矩阵"""
+        
+        if self.fixed:
+            return util.view_matrix((0.0,0.0,5.0), (0.0,1.0,0.0), (0.0,0.0,0.0))
+        else:
+            return self.scene.vmat
+    
+    def get_pmat(self):
+        """返回投影矩阵"""
+        
+        hexa = (*self.vision, self.scene.near, self.scene.far)
+        zoom = self.scene.zoom if self.zoom is None else self.zoom
+        
+        return util.proj_matrix(self.proj, hexa, zoom)
+    
+    def update_pmat(self):
+        """更新投影矩阵"""
+        
+        if not self.fixed:
+            hexa = (*self.vision, self.scene.near, self.scene.far)
+            self.pmat[:] = util.proj_matrix(self.proj, hexa, self.scene.zoom)
     
     def clear_buffer(self):
         """删除buffer"""
@@ -67,21 +119,6 @@ class Region:
                         textures.append(m.attribute[key]['texture'])
                 if textures:
                     glDeleteTextures(len(textures), textures)
-    
-    def update_size(self, box=None):
-        """设置视区大小"""
-        
-        if not box is None:
-            self.box = box
-        
-        self.pos = int(self.scene.csize[0] * self.box[0]), int(self.scene.csize[1] * self.box[1])
-        self.size = int(self.scene.csize[0] * self.box[2]), int(self.scene.csize[1] * self.box[3])
-        
-        k = self.size[0]/self.size[1]
-        if k > 1:
-            self.vision = (-self.scene.vision*k, self.scene.vision*k, -self.scene.vision, self.scene.vision)
-        else:
-            self.vision = (-self.scene.vision, self.scene.vision, -self.scene.vision/k, self.scene.vision/k)
         
     def reset(self):
         """视区复位"""
@@ -91,7 +128,6 @@ class Region:
         self.ticks.clear()
         self.mnames[0].clear()
         self.mnames[1].clear()
-        self.mnames[2].clear()
         self.r_x = [1e10, -1e10]
         self.r_y = [1e10, -1e10]
         self.r_z = [1e10, -1e10]
@@ -181,6 +217,14 @@ class Region:
         if dist_max > 0:
             self.scale = 2/dist_max
         self.shift = np.array((-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2), dtype=np.float32)
+        self.mmat[:] = util.model_matrix(self.scale, self.shift)
+        
+        for name in self.models:
+            for m in self.models[name]:
+                for key in m.uniform: 
+                    item = m.uniform[key]
+                    if item['tag'] == 'mmat' and 'v' in item:
+                        item.update({'o': np.dot(self.mmat, util.model_matrix(*item['v']))})
     
     def add_model(self, m, name=None):
         """添加模型
@@ -224,6 +268,18 @@ class Region:
             item = m.uniform[key]
             if item['tag'] == 'texture':
                 item.update({'tid': texture.create_texture(item['src'], item['type'], **item['kwds'])})
+            elif item['tag'] == 'pmat':
+                if 'v' not in item and 'f' not in item:
+                    item.update({'v': self.pmat})
+            elif item['tag'] == 'vmat':
+                if 'v' not in item and 'f' not in item:
+                    item.update({'v': self.vmat})
+            elif item['tag'] == 'mmat':
+                if 'v' in item:
+                    item.update({'o': np.dot(self.mmat, util.model_matrix(*item['v']))})
+                else:
+                    if 'f' not in item:
+                        item.update({'o': self.mmat})
             
             if 'loc' not in item:
                 item.update({'loc': glGetUniformLocation(m.program, key)})
@@ -243,9 +299,8 @@ class Region:
         if m.opacity:
             self.mnames[0].append((name, idx, m.depth))
         else:
-            self.mnames[2].append((name, idx, m.depth))
-            self.mnames[1] = sorted(self.mnames[2], key=lambda item:item[2])
-            self.mnames[2] = self.mnames[1][::-1]
+            self.mnames[1].append((name, idx, m.depth))
+            self.mnames[1].sort(key=lambda item:item[2])
         
         wx.CallAfter(self.scene.render)
     

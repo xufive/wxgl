@@ -90,7 +90,7 @@ class Scene(glcanvas.GLCanvas):
         self.near = kwds.get('near', 3.0)                                   # 视锥体前面距离相机的距离
         self.far = kwds.get('far', 1000.0)                                  # 视锥体后面距离相机的距离
         self.zoom = kwds.get('zoom', 1.0)                                   # 视口缩放因子
-        self.interval = max(10, kwds.get('interval', 20))                   # 定时间隔，单位毫妙
+        self.interval = max(10, kwds.get('interval', 10))                   # 定时间隔，单位毫妙
         self.smooth = kwds.get('smooth', True)                              # 反走样开关
         self.azim_range = kwds.get('azim_range', (-180, 180))               # 方位角限位器
         self.elev_range = kwds.get('elev_range', (-180, 180))               # 仰角限位器
@@ -100,6 +100,7 @@ class Scene(glcanvas.GLCanvas):
         self.elev = 0                                                       # 仰角
         self.cam = [0.0, 0.0, 5.0]                                          # 相机位置
         self.up = [0.0, 1.0, 0.0]                                           # 指向相机上方的单位向量
+        self.vmat = util.view_matrix(self.cam, self.up, self.oecs)          # 视点矩阵
         self.status = dict()                                                # 存储相机姿态、视锥体、缩放比例等设置参数的字典
         
         azim = kwds.get('azim', 0.0)
@@ -112,10 +113,10 @@ class Scene(glcanvas.GLCanvas):
         self.regions = list()                                               # 视区列表
         self.mpos = wx._core.Point()                                        # 鼠标位置
         
-        self.tn = 0                                                         # 计时计数器
-        self.tms = 0                                                        # 累计渲染时长，单位毫妙
-        self.gms = 0                                                        # 距离上次渲染的间隔时长，单位毫妙
-        self.tstamp = None                                                  # 开始渲染的时间戳
+        self.tn = 0                                                         # 计数器
+        self.tstamp = None                                                  # 开始渲染时的时间戳
+        self.tbase = 0                                                      # 开始渲染时的累计时长
+        self.duration = 0;                                                  # 累计渲染时长，单位毫妙
         self.timer = timer.PyTimer(self.render_on_timer)                    # 动画定时器
         self.cam_cruise = None                                              # 相机巡航函数
         self.islive = False                                                 # 存在动画模型
@@ -124,8 +125,19 @@ class Scene(glcanvas.GLCanvas):
         self.threading_record = None                                        # 录屏进程
         self.q = None                                                       # PIL对象数据队列
         
+        self.tsid = 0                                                       # 纹理插槽id
         self.ticks_is_show = False                                          # 显示坐标轴及刻度网格
         self._init_gl()                                                     # 画布初始化
+        
+        self.render_functions = {
+            'pmat': self._tag_pvmat,
+            'vmat': self._tag_pvmat,
+            'mmat': self._tag_mmat,
+            'mvpmat': self._tag_mvpmat,
+            'texture': self._tag_texture,
+            'campos': self._tag_campos,
+            'other': self._tag_other
+        }
         
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_close)                     # 绑定窗口销毁事件
         self.Bind(wx.EVT_SIZE, self.on_resize)                              # 绑定窗口大小改变事件
@@ -185,6 +197,8 @@ class Scene(glcanvas.GLCanvas):
         self.cam[2] = d * np.cos(azim) + self.oecs[2]
         self.cam[0] = d * np.sin(azim) + self.oecs[0]
         self.up[1] = 1.0 if -90 <= self.elev <= 90 else -1.0
+        
+        self.update_vmat()
     
     def _save_status(self):
         """保存当前的相机状态"""
@@ -278,129 +292,93 @@ class Scene(glcanvas.GLCanvas):
             self.zoom *= 1.05
             if self.zoom > 100:
                 self.zoom = 100
-        elif evt.WheelRotation > 0:
+        else:
             self.zoom *= 0.95
             if self.zoom < 0.01:
                 self.zoom = 0.01
         
+        for reg in self.regions:
+            reg.update_pmat()
+        
         self.render()
     
-    def _render(self, reg, gid, mat_proj, mat_view, mat_model):
-        """模型渲染核函数"""
+    def _tag_pvmat(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的投影矩阵和视点矩阵赋值"""
         
-        for name, idx, depth in reg.mnames[gid]:
-            m = reg.models[name][idx]
-            if not m.visible or m.slide and not m.slide(self.tn, self.gms, self.tms):
-                continue
-            
-            glUseProgram(m.program)
-            
-            for key in m.attribute:
-                loc = m.attribute[key].get('loc')
-                bo = m.attribute[key]['bo']
-                un = m.attribute[key]['un']
-                usize = m.attribute[key]['usize']
-                
-                bo.bind()
-                glVertexAttribPointer(loc, un, GL_FLOAT, GL_FALSE, un*usize, bo)
-                glEnableVertexAttribArray(loc)
-                bo.unbind()
-            
-            tsid = 0
-            for key in m.uniform:
-                tag = m.uniform[key]['tag']
-                loc = m.uniform[key].get('loc')
-                
-                if tag == 'pmat':
-                    if 'v' in m.uniform[key]:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
-                    elif 'f' in m.uniform[key]:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.tn, self.gms, self.tms), None)
-                    else:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, mat_proj, None)
-                elif tag == 'vmat':
-                    if 'v' in m.uniform[key]:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
-                    elif 'f' in m.uniform[key]:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.tn, self.gms, self.tms), None)
-                    else:
-                        glUniformMatrix4fv(loc, 1, GL_FALSE, mat_view, None)
-                elif tag == 'mmat':
-                    if 'v' in m.uniform[key]:
-                        args = m.uniform[key]['v']
-                        mmat = np.dot(mat_model, util.model_matrix(*args))
-                    elif 'f' in m.uniform[key]:
-                        args = m.uniform[key]['f'](self.tn, self.gms, self.tms)
-                        mmat = np.dot(mat_model, util.model_matrix(*args))
-                    else:
-                        mmat = mat_model
-                    glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
-                elif tag == 'mvpmat':
-                    pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
-                    glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
-                elif tag == 'campos':
-                    glUniform3f(loc, *self.cam)
-                elif tag == 'texture':
-                    eval('glActiveTexture(GL_TEXTURE%d)'%tsid)
-                    glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
-                    glUniform1i(loc, tsid)
-                    tsid += 1
-                else:
-                    value = m.uniform[key].get('v')
-                    if value is None:
-                        value = m.uniform[key].get('f')(self.tn, self.gms, self.tms)
-                    
-                    dtype = m.uniform[key]['dtype']
-                    ndim = m.uniform[key]['ndim']
-                    if ndim is None:
-                        try:
-                            eval('glUniform%s(loc, value)'%dtype)
-                        except:
-                            print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
-                    else:
-                        eval('glUniform%s(loc, ndim, value)'%dtype)
+        if 'v' in item:
+            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['v'], None)
+        else:
+            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['f'](self.duration), None)
     
-            for glcmd, args in m.before:
-                glcmd(*args)
-            
-            if m.indices:
-                m.indices['ibo'].bind()
-                glDrawElements(m.gltype, m.indices['n'], GL_UNSIGNED_INT, None)
-                m.indices['ibo'].unbind()
-            else:
-                glDrawArrays(m.gltype, 0, m.vshape[0])
-            
-            for glcmd, args in m.after:
-                glcmd(*args)
-            
-            glUseProgram(0)
+    def _tag_mmat(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的模型矩阵和视点矩阵赋值"""
+        
+        if 'o' in item:
+            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['o'], None)
+        else:
+            args = item['f'](self.duration)
+            mmat = np.dot(mat_model, util.model_matrix(*args))
+            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, mmat, None)
+    
+    def _tag_texture(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的纹理赋值"""
+        
+        eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
+        glBindTexture(item['type'], item['tid'])
+        glUniform1i(item.get('loc'), self.tsid)
+        self.tsid += 1
+    
+    def _tag_mvpmat(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的MVP矩阵赋值"""
+        
+        pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
+        glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, pvmmat, None)
+    
+    def _tag_campos(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的相机位置赋值"""
+        
+        glUniform3f(item.get('loc'), *self.cam)
+    
+    def _tag_other(self, item, mat_proj, mat_view, mat_model):
+        """为着色器中的其他变量赋值"""
+        
+        value = item.get('v')
+        if value is None:
+            value = item.get('f')(self.duration)
+        
+        dtype = item['dtype']
+        ndim = item['ndim']
+        loc = item.get('loc')
+        if ndim is None:
+            try:
+                eval('glUniform%s(loc, value)'%dtype)
+            except:
+                print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
+        else:
+            eval('glUniform%s(loc, ndim, value)'%dtype)
     
     def render(self):
         """模型渲染"""
         
+        if self.cam_cruise:
+            v = self.cam_cruise(self.duration)
+            self.set_posture(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+        
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
-        
-        if self.cam_cruise and self.timer.running:
-            v = self.cam_cruise(self.tn, self.gms, self.tms)
-            if v.get('delta', True):
-                self.set_posture(azim=self.azim+v.get('azim',0), elev=self.elev+v.get('elev',0), dist=self.dist+v.get('dist',0))
-            else:
-                self.set_posture(azim=v.get('azim',None), elev=v.get('elev',None), dist=v.get('dist',None))
-        
-        mat_view = self.get_view_matrix(fixed=False), self.get_view_matrix(fixed=True) # 非fixe和fixe视区用视点矩阵
         
         for reg in self.regions:
             glViewport(*reg.pos, *reg.size) # 设置视口
-            mat_proj = self.get_proj_matrix(reg.proj, reg.vision, reg.zoom) # 计算投影矩阵
-            mat_model = self.get_model_matrix(reg.scale, reg.shift) # 计算模型矩阵
             
-            self._render(reg, 0, mat_proj, mat_view[reg.fixed], mat_model)
+            for name, idx, depth in reg.mnames[0]:
+                self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             
             glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
-            if self.up[1] > 0 and not 90 < self.azim < 270 or self.up[1] < 0 and 90 < self.azim < 270:
-                self._render(reg, 1, mat_proj, mat_view[reg.fixed], mat_model)
+            if self.up[1] > 0 and -90 <= self.azim < 90 or self.up[1] < 0 and (self.azim < -90 or self.azim >= 90):
+                for name, idx, depth in reg.mnames[1]:
+                    self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             else:
-                self._render(reg, 2, mat_proj, mat_view[reg.fixed], mat_model) 
+                for name, idx, depth in reg.mnames[1][::-1]:
+                    self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             glDepthMask(True) # 释放深度缓冲区
         
         self.SwapBuffers() # 切换缓冲区，以显示绘制内容
@@ -408,6 +386,85 @@ class Scene(glcanvas.GLCanvas):
         if self.capturing:
             im = self.get_scene_buffer(alpha=True, crop=True)
             self.q.put(im)
+    
+    def _render_core(self, m, mat_proj, mat_view, mat_model):
+        """模型渲染核函数"""
+        
+        if not m.visible or m.slide and not m.slide(self.duration):
+            return
+        
+        glUseProgram(m.program)
+        self.tsid = 0
+        
+        for key in m.attribute:
+            loc = m.attribute[key].get('loc')
+            bo = m.attribute[key]['bo']
+            un = m.attribute[key]['un']
+            usize = m.attribute[key]['usize']
+            
+            bo.bind()
+            glVertexAttribPointer(loc, un, GL_FLOAT, GL_FALSE, un*usize, bo)
+            glEnableVertexAttribArray(loc)
+            bo.unbind()
+        
+        for key in m.uniform:
+            item = m.uniform[key]
+            self.render_functions[item['tag']](item, mat_proj, mat_view, mat_model)
+            
+            #tag = m.uniform[key]['tag']
+            #loc = m.uniform[key].get('loc')
+            #
+            #if tag == 'pmat' or tag == 'vmat':
+            #    if 'v' in m.uniform[key]:
+            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
+            #    else:
+            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.duration), None)
+            #elif tag == 'mmat':
+            #    if 'o' in m.uniform[key]:
+            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['o'], None)
+            #    else:
+            #        args = m.uniform[key]['f'](self.duration)
+            #        mmat = np.dot(mat_model, util.model_matrix(*args))
+            #        glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
+            #elif tag == 'texture':
+            #    eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
+            #    glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
+            #    glUniform1i(loc, self.tsid)
+            #    self.tsid += 1
+            #elif tag == 'mvpmat':
+            #    pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
+            #    glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
+            #elif tag == 'campos':
+            #    glUniform3f(loc, *self.cam)
+            #else:
+            #    value = m.uniform[key].get('v')
+            #    if value is None:
+            #        value = m.uniform[key].get('f')(self.duration)
+            #    
+            #    dtype = m.uniform[key]['dtype']
+            #    ndim = m.uniform[key]['ndim']
+            #    if ndim is None:
+            #        try:
+            #            eval('glUniform%s(loc, value)'%dtype)
+            #        except:
+            #            print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
+            #    else:
+            #        eval('glUniform%s(loc, ndim, value)'%dtype)
+
+        for glcmd, args in m.before:
+            glcmd(*args)
+        
+        if m.indices:
+            m.indices['ibo'].bind()
+            glDrawElements(m.gltype, m.indices['n'], GL_UNSIGNED_INT, None)
+            m.indices['ibo'].unbind()
+        else:
+            glDrawArrays(m.gltype, 0, m.vshape[0])
+        
+        for glcmd, args in m.after:
+            glcmd(*args)
+        
+        glUseProgram(0)
     
     def update_ticks(self):
         """刷新坐标轴和刻度网格"""
@@ -571,10 +628,7 @@ class Scene(glcanvas.GLCanvas):
     def render_on_timer(self):
         """定时器事件函数"""
         
-        t = time.time()
-        self.gms = (t - self.tstamp) * 1000
-        self.tms += self.gms
-        self.tstamp = t
+        self.duration = int((time.time() - self.tstamp) * 1000) + self.tbase
         self.tn += 1
         wx.CallAfter(self.render)
     
@@ -584,13 +638,13 @@ class Scene(glcanvas.GLCanvas):
         wx.CallAfter(self.render)
         if self.islive:
             self.tstamp = time.time()
+            self.tbase = self.duration
             self.timer.start(self.interval)
     
     def stop_animate(self):
         """停止动画"""
         
         self.timer.stop()
-        self.gms = 0
     
     def pause_animate(self):
         """暂停/重启动画"""
@@ -605,48 +659,41 @@ class Scene(glcanvas.GLCanvas):
         
         self.timer.stop()
         self.tn = 0 
-        self.tms = 0
-        self.gms = 0
+        self.duration = 0
+        self.tbase = 0
     
     def estimate(self):
         """动画渲染帧频评估"""
         
-        fps_expected = 1000/self.interval                               # 期望帧频
-        fps_practical = (0 if self.tms == 0 else 1000*self.tn/self.tms) # 实测帧频
+        fps_expected = 1000/self.interval                                           # 期望帧频
+        fps_practical = (0 if self.duration == 0 else 1000*self.tn/self.duration)   # 实测帧频
         
         return fps_expected, fps_practical
     
-    def get_proj_matrix(self, proj, vision, zoom):
-        """返回投影矩阵
-        
-        proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影
-        vision      - 视野
-        zoom        - 视口缩放因子，None表示使用场景对象的视口缩放因子
-        """
-        
-        hexa = (*vision, self.near, self.far)
-        if zoom is None:
-            zoom = self.zoom
-        
-        return util.proj_matrix(proj, hexa, zoom)
-    
-    def get_view_matrix(self, fixed=False):
-        """返回视点矩阵
+    def update_vmat(self):
+        """更新视点矩阵
         
         fixed       - 布尔型，是否锁定相机位置
         """
         
-        if fixed:
-            m = util.view_matrix((0.0,0.0,5.0), (0.0,1.0,0.0), (0.0,0.0,0.0))
-        else:
-            m = util.view_matrix(self.cam, self.up, self.oecs)
+        camX, camY, camZ = self.cam
+        oecsX, oecsY, oecsZ = self.oecs
+        upX, upY, upZ = self.up
         
-        return m
-    
-    def get_model_matrix(self, scale, shift, *args):
-        """返回模型矩阵"""
+        f = np.array([oecsX-camX, oecsY-camY, oecsZ-camZ], dtype=np.float64)
+        f /= np.linalg.norm(f)
+        s = np.array([f[1]*upZ - f[2]*upY, f[2]*upX - f[0]*upZ, f[0]*upY - f[1]*upX], dtype=np.float64)
+        s /= np.linalg.norm(s)
+        u = np.cross(s, f)
         
-        return util.model_matrix(scale, shift, *args)
+        self.vmat[:] = [
+            [s[0], u[0], -f[0], 0],
+            [s[1], u[1], -f[1], 0],
+            [s[2], u[2], -f[2], 0],
+            [- s[0]*camX - s[1]*camY - s[2]*camZ, 
+            - u[0]*camX - u[1]*camY - u[2]*camZ, 
+            f[0]*camX + f[1]*camY + f[2]*camZ, 1]
+        ]
     
     def add_region(self, box, fixed=False, proj=None, zoom=None):
         """添加视区
@@ -764,7 +811,6 @@ class Scene(glcanvas.GLCanvas):
             im = np.array(self.q.get())
             writer.append_data(im)
             n += 1
-            #print(n, self.tn, self.q.qsize())
         
         self.capturing = False
         writer.close()

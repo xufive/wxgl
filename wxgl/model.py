@@ -168,7 +168,7 @@ class Model:
         self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
         self.after.append((glPopAttrib, ()))
     
-    def add_texture(self, var_name, texture_src, texture_type, **kwds):
+    def add_texture(self, var_name, texture_src, texture_type=GL_TEXTURE_2D, **kwds):
         """添加纹理
         
         var_name        - 纹理在着色器中的变量名
