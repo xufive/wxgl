@@ -129,16 +129,6 @@ class Scene(glcanvas.GLCanvas):
         self.ticks_is_show = False                                          # 显示坐标轴及刻度网格
         self._init_gl()                                                     # 画布初始化
         
-        self.render_functions = {
-            'pmat': self._tag_pvmat,
-            'vmat': self._tag_pvmat,
-            'mmat': self._tag_mmat,
-            'mvpmat': self._tag_mvpmat,
-            'texture': self._tag_texture,
-            'campos': self._tag_campos,
-            'other': self._tag_other
-        }
-        
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_close)                     # 绑定窗口销毁事件
         self.Bind(wx.EVT_SIZE, self.on_resize)                              # 绑定窗口大小改变事件
         
@@ -198,7 +188,7 @@ class Scene(glcanvas.GLCanvas):
         self.cam[0] = d * np.sin(azim) + self.oecs[0]
         self.up[1] = 1.0 if -90 <= self.elev <= 90 else -1.0
         
-        self.update_vmat()
+        self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
     
     def _save_status(self):
         """保存当前的相机状态"""
@@ -302,61 +292,6 @@ class Scene(glcanvas.GLCanvas):
         
         self.render()
     
-    def _tag_pvmat(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的投影矩阵和视点矩阵赋值"""
-        
-        if 'v' in item:
-            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['v'], None)
-        else:
-            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['f'](self.duration), None)
-    
-    def _tag_mmat(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的模型矩阵和视点矩阵赋值"""
-        
-        if 'o' in item:
-            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, item['o'], None)
-        else:
-            args = item['f'](self.duration)
-            mmat = np.dot(mat_model, util.model_matrix(*args))
-            glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, mmat, None)
-    
-    def _tag_texture(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的纹理赋值"""
-        
-        eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
-        glBindTexture(item['type'], item['tid'])
-        glUniform1i(item.get('loc'), self.tsid)
-        self.tsid += 1
-    
-    def _tag_mvpmat(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的MVP矩阵赋值"""
-        
-        pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
-        glUniformMatrix4fv(item.get('loc'), 1, GL_FALSE, pvmmat, None)
-    
-    def _tag_campos(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的相机位置赋值"""
-        
-        glUniform3f(item.get('loc'), *self.cam)
-    
-    def _tag_other(self, item, mat_proj, mat_view, mat_model):
-        """为着色器中的其他变量赋值"""
-        
-        value = item.get('v')
-        if value is None:
-            value = item.get('f')(self.duration)
-        
-        dtype = item['dtype']
-        ndim = item['ndim']
-        loc = item.get('loc')
-        if ndim is None:
-            try:
-                eval('glUniform%s(loc, value)'%dtype)
-            except:
-                print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
-        else:
-            eval('glUniform%s(loc, ndim, value)'%dtype)
-    
     def render(self):
         """模型渲染"""
         
@@ -408,48 +343,45 @@ class Scene(glcanvas.GLCanvas):
             bo.unbind()
         
         for key in m.uniform:
-            item = m.uniform[key]
-            self.render_functions[item['tag']](item, mat_proj, mat_view, mat_model)
+            tag = m.uniform[key]['tag']
+            loc = m.uniform[key].get('loc')
             
-            #tag = m.uniform[key]['tag']
-            #loc = m.uniform[key].get('loc')
-            #
-            #if tag == 'pmat' or tag == 'vmat':
-            #    if 'v' in m.uniform[key]:
-            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
-            #    else:
-            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.duration), None)
-            #elif tag == 'mmat':
-            #    if 'o' in m.uniform[key]:
-            #        glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['o'], None)
-            #    else:
-            #        args = m.uniform[key]['f'](self.duration)
-            #        mmat = np.dot(mat_model, util.model_matrix(*args))
-            #        glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
-            #elif tag == 'texture':
-            #    eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
-            #    glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
-            #    glUniform1i(loc, self.tsid)
-            #    self.tsid += 1
-            #elif tag == 'mvpmat':
-            #    pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
-            #    glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
-            #elif tag == 'campos':
-            #    glUniform3f(loc, *self.cam)
-            #else:
-            #    value = m.uniform[key].get('v')
-            #    if value is None:
-            #        value = m.uniform[key].get('f')(self.duration)
-            #    
-            #    dtype = m.uniform[key]['dtype']
-            #    ndim = m.uniform[key]['ndim']
-            #    if ndim is None:
-            #        try:
-            #            eval('glUniform%s(loc, value)'%dtype)
-            #        except:
-            #            print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
-            #    else:
-            #        eval('glUniform%s(loc, ndim, value)'%dtype)
+            if tag == 'pmat' or tag == 'vmat':
+                if 'v' in m.uniform[key]:
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
+                else:
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['f'](self.duration), None)
+            elif tag == 'mmat':
+                if 'o' in m.uniform[key]:
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['o'], None)
+                else:
+                    args = m.uniform[key]['f'](self.duration)
+                    mmat = np.dot(mat_model, util.model_matrix(*args))
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
+            elif tag == 'texture':
+                eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
+                glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
+                glUniform1i(loc, self.tsid)
+                self.tsid += 1
+            elif tag == 'mvpmat':
+                pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
+                glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
+            elif tag == 'campos':
+                glUniform3f(loc, *self.cam)
+            else:
+                value = m.uniform[key].get('v')
+                if value is None:
+                    value = m.uniform[key].get('f')(self.duration)
+                
+                dtype = m.uniform[key]['dtype']
+                ndim = m.uniform[key]['ndim']
+                if ndim is None:
+                    try:
+                        eval('glUniform%s(loc, value)'%dtype)
+                    except:
+                        print('渲染函数出现异常，请通知xufive@gmail.com，如可能的话，请提供shader源码。')
+                else:
+                    eval('glUniform%s(loc, ndim, value)'%dtype)
 
         for glcmd, args in m.before:
             glcmd(*args)
@@ -669,31 +601,6 @@ class Scene(glcanvas.GLCanvas):
         fps_practical = (0 if self.duration == 0 else 1000*self.tn/self.duration)   # 实测帧频
         
         return fps_expected, fps_practical
-    
-    def update_vmat(self):
-        """更新视点矩阵
-        
-        fixed       - 布尔型，是否锁定相机位置
-        """
-        
-        camX, camY, camZ = self.cam
-        oecsX, oecsY, oecsZ = self.oecs
-        upX, upY, upZ = self.up
-        
-        f = np.array([oecsX-camX, oecsY-camY, oecsZ-camZ], dtype=np.float64)
-        f /= np.linalg.norm(f)
-        s = np.array([f[1]*upZ - f[2]*upY, f[2]*upX - f[0]*upZ, f[0]*upY - f[1]*upX], dtype=np.float64)
-        s /= np.linalg.norm(s)
-        u = np.cross(s, f)
-        
-        self.vmat[:] = [
-            [s[0], u[0], -f[0], 0],
-            [s[1], u[1], -f[1], 0],
-            [s[2], u[2], -f[2], 0],
-            [- s[0]*camX - s[1]*camY - s[2]*camZ, 
-            - u[0]*camX - u[1]*camY - u[2]*camZ, 
-            f[0]*camX + f[1]*camY + f[2]*camZ, 1]
-        ]
     
     def add_region(self, box, fixed=False, proj=None, zoom=None):
         """添加视区

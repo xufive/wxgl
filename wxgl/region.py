@@ -67,7 +67,7 @@ class Region:
         if self.pmat is None:
             self.pmat = self.get_pmat()
         else:
-            self.update_pmat()
+            self.pmat[:] = self.get_pmat()
     
     def get_mmat(self):
         """返回模型矩阵"""
@@ -89,13 +89,6 @@ class Region:
         zoom = self.scene.zoom if self.zoom is None else self.zoom
         
         return util.proj_matrix(self.proj, hexa, zoom)
-    
-    def update_pmat(self):
-        """更新投影矩阵"""
-        
-        if not self.fixed:
-            hexa = (*self.vision, self.scene.near, self.scene.far)
-            self.pmat[:] = util.proj_matrix(self.proj, hexa, self.scene.zoom)
     
     def clear_buffer(self):
         """删除buffer"""

@@ -55,8 +55,8 @@ class PyTimer:
                 
                 # 定时时间到，调用定时事件函数
                 if self.running:
-                    #self._run_func()
-                    self.func(*self.args, **self.kwargs)
+                    self._run_func()
+                    #self.func(*self.args, **self.kwargs)
     
     def start(self, interval, once=False):
         """启动定时器

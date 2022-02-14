@@ -132,7 +132,7 @@ plt.model(m)
 plt.show()
 ```
 
-![动画函数](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_05.png)
+![GLSL接口](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_05.png)
 
 
 
