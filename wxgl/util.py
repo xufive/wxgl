@@ -72,7 +72,7 @@ def model_matrix(*args):
     """
     
     m = np.eye(4)
-    for item in args[::-1]:
+    for item in args:
         if isinstance(item, (int, float)):
             m = np.dot(m, scale(item))
         elif len(item) == 3:

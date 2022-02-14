@@ -288,7 +288,7 @@ class Scene(glcanvas.GLCanvas):
                 self.zoom = 0.01
         
         for reg in self.regions:
-            reg.update_pmat()
+            reg.pmat[:] = reg.get_pmat()
         
         self.render()
     
@@ -650,6 +650,10 @@ class Scene(glcanvas.GLCanvas):
         self.near = self.status['near']
         self.far = self.status['far']
         self.zoom = self.status['zoom']
+        
+        for reg in self.regions:
+            reg.pmat[:] = reg.get_pmat()
+        
         self.set_posture(oecs=self.status['oecs'], dist=self.status['dist'], azim=self.status['azim'], elev=self.status['elev'])
         self.reset_timer()
         self.render()

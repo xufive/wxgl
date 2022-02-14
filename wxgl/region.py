@@ -325,7 +325,9 @@ class Region:
                 d = np.arange(2, n, 2)
                 indices = np.stack((a, b, c, d), axis=1).ravel()
             else:
-                indices = np.arange(n, dtype=np.int32)     
+                indices = np.arange(n, dtype=np.int32)
+        else:
+            indices = np.array(indices, dtype=np.int32)
         
         primitive = vs[indices]
         if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
@@ -1047,7 +1049,7 @@ class Region:
             color = self.scene.style[1]
         
         if isinstance(size, (int, float)):
-            size = np.ones(vs.shape[0], dtype=np.float32) * size
+            size = np.ones(len(vs), dtype=np.float32) * size
         elif isinstance(size, np.ndarray):
             size = np.float32(size)
         

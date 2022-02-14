@@ -487,11 +487,11 @@ class Axes:
                 elif texcoord is None:
                     raise ValueError('当参数texture有效时，期望texcoord有效')
             else:
-                color = util.color2c(color, outsize=vs.shape[0])
+                color = util.color2c(color, outsize=len(vs))
         else:
             if not color is None and isinstance(color, (tuple, list, np.ndarray)):
                 color = np.array(color)
-                if color.shape == (vs.shape[0],):
+                if color.shape == (len(vs),):
                     color = util.cmap(color, cm)
                 else:
                     raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
@@ -512,6 +512,7 @@ class Axes:
     def quad(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
         """四角面
         
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
         cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
         texture     - 纹理图片文件（2D纹理）或numpy数组形式的图像数据（2D纹理|3D纹理）
@@ -543,11 +544,11 @@ class Axes:
                 elif texcoord is None:
                     raise ValueError('当参数texture有效时，期望texcoord有效')
             else:
-                color = util.color2c(color, outsize=vs.shape[0])
+                color = util.color2c(color, outsize=len(vs))
         else:
             if not color is None and isinstance(color, (tuple, list, np.ndarray)):
                 color = np.array(color)
-                if color.shape == (vs.shape[0],):
+                if color.shape == (len(vs),):
                     color = util.cmap(color, cm)
                 else:
                     raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
@@ -568,6 +569,7 @@ class Axes:
     def polygon(self, vs, color=None, cm=None, texture=None, texcoord=None, xflip=False, yflip=True, **kwds):
         """多边形
         
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
         cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
         texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
@@ -595,11 +597,11 @@ class Axes:
                 elif texcoord is None:
                     raise ValueError('当参数texture有效时，期望texcoord有效')
             else:
-                color = util.color2c(color, outsize=vs.shape[0])
+                color = util.color2c(color, outsize=len(vs))
         else:
             if not color is None and isinstance(color, (tuple, list, np.ndarray)):
                 color = np.array(color)
-                if color.shape == (vs.shape[0],):
+                if color.shape == (len(vs),):
                     color = util.cmap(color, cm)
                 else:
                     raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
