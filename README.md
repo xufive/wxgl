@@ -17,7 +17,7 @@ WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块�
 * matplotlib - 推荐版本:3.1.2或更高  
 * pillow - 推荐版本:8.2.0或更高
 * wxpython - 推荐版本:4.0.7.post2或更高 
-* freetype - 推荐版本:2.2.0或更高
+* freetype-py - 推荐版本:2.2.0或更高
 
 # 快速体验
 
