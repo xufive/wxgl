@@ -42,6 +42,7 @@ class Model:
         self.visible = visible                          # 模型可见性，默认可见
         self.opacity = opacity                          # 模型不透明属性，默认不透明
         self.inside = inside                            # 模型顶点是否影响模型空间，默认True
+        self.sprite = sprite                            # 开启点精灵，默认False
         self.slide = None                               # 幻灯片函数
         self.depth = None                               # 深度轴均值
         self.islive = False                             # 模型是否有动画函数
@@ -164,9 +165,12 @@ class Model:
         
         self.attribute.update({var_name: {'tag':'psize', 'data':data, 'un':1}})
         
-        self.before.append((glPushAttrib, (GL_POINT_BIT,)))
-        self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
-        self.after.append((glPopAttrib, ()))
+        if not self.sprite:
+            self.sprite = True
+            self.before.append((glPushAttrib, (GL_POINT_BIT,)))
+            self.before.append((glEnable, (GL_POINT_SPRITE,)))
+            self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
+            self.after.append((glPopAttrib, ()))
     
     def add_texture(self, var_name, texture_src, texture_type=GL_TEXTURE_2D, **kwds):
         """添加纹理

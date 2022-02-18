@@ -72,7 +72,7 @@ class Region:
     def get_mmat(self):
         """返回模型矩阵"""
         
-        return util.model_matrix(self.scale, self.shift)
+        return util.model_matrix(self.shift, self.scale)
     
     def get_vmat(self):
         """返回视点矩阵"""
@@ -210,7 +210,7 @@ class Region:
         if dist_max > 0:
             self.scale = 2/dist_max
         self.shift = np.array((-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2), dtype=np.float32)
-        self.mmat[:] = util.model_matrix(self.scale, self.shift)
+        self.mmat[:] = util.model_matrix(self.shift, self.scale)
         
         for name in self.models:
             for m in self.models[name]:
@@ -461,6 +461,19 @@ class Region:
                         v_Color = a_Color;
                     }
                 """
+                
+                fshader = """
+                    #version 330 core
+                    in vec4 v_Color;
+                    uniform vec3 u_AmbientColor; // 环境光颜色
+                    void main() { 
+                        vec2 temp = gl_PointCoord - vec2(0.5);
+                        if (dot(temp, temp) > 0.25) {
+                            discard;
+                        }
+                        gl_FragColor = vec4(v_Color.rgb * u_AmbientColor, v_Color.a); 
+                    } 
+                """
             else:
                 vshader = """
                     #version 330 core
@@ -476,14 +489,14 @@ class Region:
                     }
                 """
             
-            fshader = """
-                #version 330 core
-                in vec4 v_Color;
-                uniform vec3 u_AmbientColor; // 环境光颜色
-                void main() { 
-                    gl_FragColor = vec4(v_Color.rgb * u_AmbientColor, v_Color.a); 
-                } 
-            """
+                fshader = """
+                    #version 330 core
+                    in vec4 v_Color;
+                    uniform vec3 u_AmbientColor; // 环境光颜色
+                    void main() { 
+                        gl_FragColor = vec4(v_Color.rgb * u_AmbientColor, v_Color.a); 
+                    } 
+                """
         else:
             vshader = """
                 #version 330 core
@@ -1038,19 +1051,20 @@ class Region:
             visible         - 是否可见，默认True
             slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'transform']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        if color is None:
-            color = self.scene.style[1]
+        if size is None:
+            size = 1.0
         
         if isinstance(size, (int, float)):
             size = np.ones(len(vs), dtype=np.float32) * size
-        elif isinstance(size, np.ndarray):
+        elif isinstance(size, (list, tuple, np.ndarray)):
             size = np.float32(size)
         
         kwds.update({'light':None, 'psize':size})
@@ -1073,11 +1087,12 @@ class Region:
             visible         - 是否可见，默认True
             slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'transform']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if color is None:

@@ -397,6 +397,7 @@ class Axes:
                         visible         - 是否可见，默认True
                         slide           - 幻灯片函数，默认None
                         inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
                         transform       - 由旋转、平移和缩放组成的模型几何变换序列 
         """
         
@@ -424,7 +425,7 @@ class Axes:
             **kwds
         )
     
-    def scatter(self, vs, color=None, cm=None, size=3.0, **kwds):
+    def scatter(self, vs, color=None, cm=None, size=1.0, **kwds):
         """散点
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
@@ -436,6 +437,7 @@ class Axes:
                         visible         - 是否可见，默认True
                         slide           - 幻灯片函数，默认None
                         inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
                         transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
@@ -634,6 +636,10 @@ class Axes:
                         light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
                         shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
         """
+        
+        xs, ys = np.array(xs), np.array(ys)
+        if not zs is None:
+            zs = np.array(zs)
         
         if cm is None:
             if color is None:

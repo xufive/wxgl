@@ -125,7 +125,6 @@ class Scene(glcanvas.GLCanvas):
         self.threading_record = None                                        # 录屏进程
         self.q = None                                                       # PIL对象数据队列
         
-        self.tsid = 0                                                       # 纹理插槽id
         self.ticks_is_show = False                                          # 显示坐标轴及刻度网格
         self._init_gl()                                                     # 画布初始化
         
@@ -329,7 +328,7 @@ class Scene(glcanvas.GLCanvas):
             return
         
         glUseProgram(m.program)
-        self.tsid = 0
+        tsid = 0
         
         for key in m.attribute:
             loc = m.attribute[key].get('loc')
@@ -359,10 +358,10 @@ class Scene(glcanvas.GLCanvas):
                     mmat = np.dot(mat_model, util.model_matrix(*args))
                     glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
             elif tag == 'texture':
-                eval('glActiveTexture(GL_TEXTURE%d)'%self.tsid)
+                eval('glActiveTexture(GL_TEXTURE%d)'%tsid)
                 glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
-                glUniform1i(loc, self.tsid)
-                self.tsid += 1
+                glUniform1i(loc, tsid)
+                tsid += 1
             elif tag == 'mvpmat':
                 pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
                 glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
@@ -613,6 +612,9 @@ class Scene(glcanvas.GLCanvas):
         
         if proj is None:
             proj = self.proj
+        
+        if fixed and zoom is None:
+            zoom = 1.0
         
         reg = region.Region(self, box, fixed, proj, zoom)
         self.regions.append(reg)
