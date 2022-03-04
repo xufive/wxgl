@@ -165,7 +165,7 @@ class Region:
         if name in self.models:
             for m in self.models[name]:
                 if m.indices:
-                    self.m.indices['ibo'].delete()
+                    m.indices['ibo'].delete()
             
                 for key in m.attribute:
                     if 'bo' in m.attribute[key]:
@@ -513,7 +513,9 @@ class Region:
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     v_Color = a_Color;
                     v_Position= vec3(u_ModelMatrix * a_Position);
-                    v_Normal = normalize(vec3(u_ModelMatrix * vec4(a_Normal, 1.0)));
+                    
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
                 }
             """
             
@@ -575,7 +577,7 @@ class Region:
         
         self.add_model(m, name)
     
-    def _draw_texture(self, vs, gltype, texture, texcoord, indices=None, normal=None, xflip=False, yflip=True, **kwds):
+    def _draw_texture(self, vs, gltype, texture, texcoord, indices=None, normal=None, **kwds):
         """绘制纹理模型
         
         vs          - 顶点集：numpy数组，shape=(n,2|3)
@@ -584,8 +586,6 @@ class Region:
         texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
         indices     - 顶点索引集：默认None，表示不使用索引
         normal      - 顶点法线集：numpy数组，shape=(n,3)
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -601,6 +601,22 @@ class Region:
             t2dw            - 2D文字的宽度（绘制2D文字有效）
             t2dh            - 2D文字的高度（绘制2D文字有效）
             t2dbase         - 2D文字的对齐基点（绘制2D文字有效）
+            level           - 纹理分级数，默认1
+            min_filter      - 纹理缩小滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+                                - GL_NEAREST_MIPMAP_NEAREST
+                                - GL_LINEAR_MIPMAP_NEAREST
+                                - GL_NEAREST_MIPMAP_LINEAR
+                                - GL_LINEAR_MIPMAP_LINEAR
+            mag_filter      - 纹理放大滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 2D纹理左右翻转：布尔型，默认False
+            yflip           - 2D纹理上下翻转：布尔型，默认False
         """
         
         name = kwds.get('name')
@@ -620,9 +636,18 @@ class Region:
         light_color = kwds.get('light_color', (0.8, 0.8, 0.8))
         shininess = kwds.get('shininess', 0.0)
         ambient = kwds.get('ambient', (1.0, 1.0, 1.0) if direction is None else (0.5, 0.5, 0.5))
+        
         t2dw = kwds.get('t2dw', None)
         t2dh = kwds.get('t2dh', None)
         t2dbase = kwds.get('t2dbase', None)
+        level = kwds.get('level', 1)
+        mag_filter = kwds.get('mag_filter', GL_LINEAR)
+        min_filter = kwds.get('min_filter', GL_LINEAR_MIPMAP_NEAREST)
+        s_tile = kwds.get('s_tile', GL_REPEAT)
+        t_tile = kwds.get('t_tile', GL_REPEAT)
+        r_tile = kwds.get('r_tile', GL_REPEAT)
+        xflip = kwds.get('xflip', False)
+        yflip = kwds.get('yflip', False)
         
         vs = np.array(vs, dtype=np.float32)
         vs = vs.reshape(-1, vs.shape[-1])
@@ -801,7 +826,9 @@ class Region:
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     v_Texcoord = a_Texcoord;
                     v_Position= vec3(u_ModelMatrix * a_Position);
-                    v_Normal = normalize(vec3(u_ModelMatrix * vec4(a_Normal, 1.0)));
+                    
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
                 }
             """%(tndim, tndim)
             
@@ -847,19 +874,19 @@ class Region:
         if tndim == 2:
             m.add_texture('u_Texture', texture, GL_TEXTURE_2D, 
                 min_filter = GL_LINEAR_MIPMAP_NEAREST, 
-                s_tile = GL_CLAMP_TO_EDGE, 
-                t_tile = GL_CLAMP_TO_EDGE, 
-                level=1,
+                s_tile = s_tile, 
+                t_tile = t_tile, 
+                level=level,
                 xflip=xflip,
                 yflip=yflip
             )
         elif tndim == 3:
             m.add_texture('u_Texture', texture, GL_TEXTURE_3D,  
                 min_filter = GL_LINEAR_MIPMAP_NEAREST, 
-                s_tile = GL_CLAMP_TO_EDGE, 
-                t_tile = GL_CLAMP_TO_EDGE, 
-                r_tile = GL_CLAMP_TO_EDGE, 
-                level=1
+                s_tile = s_tile, 
+                t_tile = t_tile, 
+                r_tile = r_tile, 
+                level=level
             )
         
         m.set_proj_matrix('u_ProjMatrix')
@@ -943,8 +970,8 @@ class Region:
         width = height * texture.shape[1]/texture.shape[0] * self.size[1]/self.size[0]
         
         box = np.tile(np.array(pos, dtype=np.float32), (4,1))
-        texcoord = np.array([[0,1],[0,0],[1,0],[1,1]], dtype=np.float32)
-        kwds.update({'light':None, 'opacity':False, 't2dw':width, 't2dh':height, 't2dbase':loc, 'inside':False})
+        texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
+        kwds.update({'light':None, 'opacity':False, 't2dw':width, 't2dh':height, 't2dbase':loc, 's_tile':GL_CLAMP_TO_EDGE, 't_tile':GL_CLAMP_TO_EDGE})
         
         self._draw_texture(box, GL_QUADS, texture, texcoord, **kwds)
     
@@ -1033,8 +1060,8 @@ class Region:
             box[2] -= offset
             box[3] -= offset
         
-        texcoord = ((0,1),(0,0),(1,0),(1,1))
-        kwds.update({'opacity': False})
+        texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
+        kwds.update({'opacity': False, 's_tile':GL_CLAMP_TO_EDGE, 't_tile':GL_CLAMP_TO_EDGE})
         if 'light' not in kwds:
             kwds.update({'light': None})
         
@@ -1058,6 +1085,9 @@ class Region:
         for key in kwds:
             if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform']:
                 raise KeyError('不支持的关键字参数：%s'%key)
+        
+        if color is None:
+            color = self.scene.style[1]
         
         if size is None:
             size = 1.0
@@ -1112,7 +1142,7 @@ class Region:
         
         self._draw_color(vs, gltype, color, **kwds)
     
-    def triangle(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+    def surface(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
         """三角面
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
@@ -1124,8 +1154,6 @@ class Region:
             'strip'         - 带状三角面
             'fan'           - 扇面
         indices     - 顶点索引集，默认None，表示不使用索引
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -1138,10 +1166,26 @@ class Region:
             light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
             light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
             shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            level           - 纹理分级数，默认1
+            min_filter      - 纹理缩小滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+                                - GL_NEAREST_MIPMAP_NEAREST
+                                - GL_LINEAR_MIPMAP_NEAREST
+                                - GL_NEAREST_MIPMAP_LINEAR
+                                - GL_LINEAR_MIPMAP_LINEAR
+            mag_filter      - 纹理放大滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 2D纹理左右翻转：布尔型，默认False
+            yflip           - 2D纹理上下翻转：布尔型，默认False
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess', 'level', 'min_filter', 'mag_filter', 's_tile', 't_tile', 'r_tile', 'xflip', 'yflip']:
                 raise KeyError('不支持的关键字参数：%s'%key)
        
         method = method.upper()
@@ -1160,11 +1204,11 @@ class Region:
         if isinstance(color, (tuple, list, np.ndarray)):
             self._draw_color(vs, gltype, color, indices=indices, **kwds)
         elif not texture is None and not texcoord is None:
-            self._draw_texture(vs, gltype, texture, texcoord, indices=indices, xflip=xflip, yflip=yflip, **kwds)
+            self._draw_texture(vs, gltype, texture, texcoord, indices=indices, **kwds)
         else:
             raise ValueError('缺少color参数，或texture参数和texcoord参数')
     
-    def quad(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+    def quad(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
         """四角面
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,3)
@@ -1175,8 +1219,6 @@ class Region:
             'isolate'       - 独立四角面
             'strip'         - 带状四角面
         indices     - 顶点索引集：默认None，表示不使用索引
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -1189,10 +1231,26 @@ class Region:
             light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
             light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
             shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            level           - 纹理分级数，默认1
+            min_filter      - 纹理缩小滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+                                - GL_NEAREST_MIPMAP_NEAREST
+                                - GL_LINEAR_MIPMAP_NEAREST
+                                - GL_NEAREST_MIPMAP_LINEAR
+                                - GL_LINEAR_MIPMAP_LINEAR
+            mag_filter      - 纹理放大滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 2D纹理左右翻转：布尔型，默认False
+            yflip           - 2D纹理上下翻转：布尔型，默认False
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess', 'level', 'min_filter', 'mag_filter', 's_tile', 't_tile', 'r_tile', 'xflip', 'yflip']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         method = method.upper()
@@ -1209,45 +1267,11 @@ class Region:
         if isinstance(color, (tuple, list, np.ndarray)):
             self._draw_color(vs, gltype, color, indices=indices, **kwds)
         elif not texture is None and not texcoord is None:
-            self._draw_texture(vs, gltype, texture, texcoord, indices=indices, xflip=xflip, yflip=yflip, **kwds)
+            self._draw_texture(vs, gltype, texture, texcoord, indices=indices, **kwds)
         else:
             raise ValueError('缺少color参数或texture参数')
-    
-    def polygon(self, vs, color=None, texture=None, texcoord=None, xflip=False, yflip=True, **kwds):
-        """多边形
         
-        vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
-        color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理资源：纹理图片文件或numpy数组形式的图像数据
-        texcoord    - 顶点纹理坐标集：元组、列表或numpy数组，shape=(n,2)
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
-        kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
-            inside          - 模型顶点是否影响模型空间，默认True
-            opacity         - 模型不透明属性，默认不透明
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
-            fill            - 填充，默认True
-            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
-        """
-        
-        for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-            
-        if isinstance(color, (tuple, list, np.ndarray)):
-            self._draw_color(vs, GL_POLYGON, color, **kwds)
-        elif not texture is None and not texcoord is None:
-            self._draw_texture(vs, GL_POLYGON, texture, texcoord, xflip=xflip, yflip=yflip, **kwds)
-        else:
-            raise ValueError('缺少color参数，或texture参数和texcoord参数')
-        
-    def mesh(self, xs, ys, zs=None, color=None, texture=None, cw=False, closed=False, xflip=False, yflip=True, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, texture=None, cw=False, closed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
@@ -1255,8 +1279,6 @@ class Region:
         texture     - 纹理资源：纹理图片文件或numpy数组形式的图像数据
         cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
         closed      - 网格闭合：布尔型。该参数仅用于使用经纬度网格生成球
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -1269,10 +1291,26 @@ class Region:
             light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
             light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
             shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            level           - 纹理分级数，默认1
+            min_filter      - 纹理缩小滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+                                - GL_NEAREST_MIPMAP_NEAREST
+                                - GL_LINEAR_MIPMAP_NEAREST
+                                - GL_NEAREST_MIPMAP_LINEAR
+                                - GL_LINEAR_MIPMAP_LINEAR
+            mag_filter      - 纹理放大滤波器
+                                - GL_NEAREST
+                                - GL_LINEAR
+            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 2D纹理左右翻转：布尔型，默认False
+            yflip           - 2D纹理上下翻转：布尔型，默认False
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
+            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess', 'level', 'min_filter', 'mag_filter', 's_tile', 't_tile', 'r_tile', 'xflip', 'yflip']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if zs is None:
@@ -1309,11 +1347,11 @@ class Region:
             v = np.linspace(1, 0, vs.shape[0])
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)))
             
-            self._draw_texture(vs, GL_TRIANGLES, texture, texcoord, indices=indices, normal=normal, xflip=xflip, yflip=yflip, **kwds)
+            self._draw_texture(vs, GL_TRIANGLES, texture, texcoord, indices=indices, normal=normal, **kwds)
         else:
             raise ValueError('缺少color参数或texture参数')
         
-    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, xflip=False, yflip=True, **kwds):
+    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, xflip=False, yflip=False, **kwds):
         """使用经纬度网格生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
@@ -1324,7 +1362,7 @@ class Region:
         texture     - 纹理资源：纹理图片文件或numpy数组形式的图像数据
         slices      - 圆周分片数：整型
         xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
+        yflip       - 2D纹理上下翻转：布尔型，False
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -1391,7 +1429,7 @@ class Region:
             vs = np.stack((vs[::3],p0,p2,vs[1::3],p1,p0,vs[2::3],p2,p1,p0,p1,p2),axis=1).reshape(-1,3)
         vs += np.array(center)
         
-        self.triangle(vs, color=color, method='isolate', **kwds)
+        self.surface(vs, color=color, method='isolate', **kwds)
     
     def cone(self, spire, center, r, color=None, base=True, slices=90, **kwds):
         """圆锥
@@ -1434,9 +1472,9 @@ class Region:
         vs = np.stack((xs,ys,zs), axis=1)
         vs = np.dot(vs, m_rotate) + center
         
-        self.triangle(np.vstack((spire, vs)), color=color, method='fan', **kwds)
+        self.surface(np.vstack((spire, vs)), color=color, method='fan', **kwds)
         if base:
-            self.triangle(np.vstack((center, vs)), color=color, method='fan', **kwds)
+            self.surface(np.vstack((center, vs)), color=color, method='fan', **kwds)
     
     def cylinder(self, c1, c2, r, color=None, base=True, slices=90, **kwds):
         """圆柱
@@ -1482,10 +1520,10 @@ class Region:
         vs1 = vs + c1
         vs2 = vs + c2
         
-        self.triangle(np.stack((vs1, vs2), axis=1).reshape(-1,3), color=color, method='strip', **kwds)
+        self.surface(np.stack((vs1, vs2), axis=1).reshape(-1,3), color=color, method='strip', **kwds)
         if base:
-            self.triangle(np.vstack((c1, vs1)), color=color, method='fan', **kwds)
-            self.triangle(np.vstack((c2, vs2)), color=color, method='fan', **kwds)
+            self.surface(np.vstack((c1, vs1)), color=color, method='fan', **kwds)
+            self.surface(np.vstack((c2, vs2)), color=color, method='fan', **kwds)
     
     def isosurface(self, data, level, color, x=None, y=None, z=None, **kwds):
         """三维等值面
@@ -1521,7 +1559,7 @@ class Region:
         zs = vs[:,2] if z is None else (z[1] - z[0]) * vs[:,2] / data.shape[2] + z[0]
         vs = np.stack((xs, ys, zs), axis=1)
         
-        self.triangle(vs[indices], color=color, indices=None, **kwds)
+        self.surface(vs[indices], color=color, indices=None, **kwds)
     
     def colorbar(self, cm, drange, box, mode='V', **kwds):
         """绘制colorBar 

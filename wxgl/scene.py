@@ -42,7 +42,6 @@ import queue
 import threading
 from OpenGL.GL import *
 
-from . import timer
 from . import region
 from . import util
 
@@ -59,7 +58,7 @@ class Scene(glcanvas.GLCanvas):
             oecs        - 视点坐标系ECS原点，默认与目标坐标系OCS原点重合
             dist        - 相机与ECS原点的距离，默认5个长度单位
             azim        - 方位角，默认0°
-            elev        - 仰角，默认0°
+            elev        - 高度角，默认0°
             vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
             near        - 视锥体前面距离相机的距离，默认3.0个长度单位
             far         - 视锥体后面距离相机的距离，默认1000个长度单位
@@ -90,21 +89,21 @@ class Scene(glcanvas.GLCanvas):
         self.near = kwds.get('near', 3.0)                                   # 视锥体前面距离相机的距离
         self.far = kwds.get('far', 1000.0)                                  # 视锥体后面距离相机的距离
         self.zoom = kwds.get('zoom', 1.0)                                   # 视口缩放因子
-        self.interval = max(10, kwds.get('interval', 10))                   # 定时间隔，单位毫妙
+        self.interval = max(10, kwds.get('interval', 20))                   # 定时间隔，单位毫妙
         self.smooth = kwds.get('smooth', True)                              # 反走样开关
         self.azim_range = kwds.get('azim_range', (-180, 180))               # 方位角限位器
         self.elev_range = kwds.get('elev_range', (-180, 180))               # 仰角限位器
         self.style = self._set_style(kwds.get('style', 'blue'))             # 设置风格（背景和文本颜色）
+        azim = kwds.get('azim', 0.0)                                        # 初始方位角
+        elev = kwds.get('elev', 0.0)                                        # 初始高度角
         
         self.azim = 0                                                       # 方位角
-        self.elev = 0                                                       # 仰角
+        self.elev = 0                                                       # 高度角
         self.cam = [0.0, 0.0, 5.0]                                          # 相机位置
         self.up = [0.0, 1.0, 0.0]                                           # 指向相机上方的单位向量
         self.vmat = util.view_matrix(self.cam, self.up, self.oecs)          # 视点矩阵
         self.status = dict()                                                # 存储相机姿态、视锥体、缩放比例等设置参数的字典
         
-        azim = kwds.get('azim', 0.0)
-        elev = kwds.get('elev', 0.0)
         self._update_pos_and_up(azim=azim, elev=elev)                       # 更新相机位置和up向量
         self._save_status()                                                 # 保存当前的相机状态
         
@@ -117,19 +116,20 @@ class Scene(glcanvas.GLCanvas):
         self.tstamp = None                                                  # 开始渲染时的时间戳
         self.tbase = 0                                                      # 开始渲染时的累计时长
         self.duration = 0;                                                  # 累计渲染时长，单位毫妙
-        self.timer = timer.PyTimer(self.render_on_timer)                    # 动画定时器
         self.cam_cruise = None                                              # 相机巡航函数
         self.islive = False                                                 # 存在动画模型
-        self.recording = False                                              # 录屏中
+        self.playing = False                                                # 动画播放中
         self.capturing = False                                              # 截屏中
-        self.threading_record = None                                        # 录屏进程
+        self.creating = False                                               # 动画文件生成中
+        self.fn = 0                                                         # 录屏总帧数
+        self.cn = 0                                                         # 已完成帧数
         self.q = None                                                       # PIL对象数据队列
         
         self.ticks_is_show = False                                          # 显示坐标轴及刻度网格
         self._init_gl()                                                     # 画布初始化
         
-        self.Bind(wx.EVT_WINDOW_DESTROY, self.on_close)                     # 绑定窗口销毁事件
-        self.Bind(wx.EVT_SIZE, self.on_resize)                              # 绑定窗口大小改变事件
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)                   # 绑定canvas销毁事件
+        self.Bind(wx.EVT_SIZE, self.on_resize)                              # 绑定canvas大小改变事件
         
         self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)                      # 绑定鼠标左键按下事件
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)                          # 绑定鼠标左键弹起事件                   
@@ -224,10 +224,9 @@ class Scene(glcanvas.GLCanvas):
             glEnable(GL_LINE_SMOOTH)                                        # 开启直线反走样
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                          # 最高质量直线反走样
     
-    def on_close(self, evt):
-        """窗口关闭事件函数"""
+    def on_destroy(self, evt):
+        """canvas销毁事件函数"""
         
-        self.timer.stop()
         for reg in self.regions:
             reg.clear_buffer()
         
@@ -292,7 +291,7 @@ class Scene(glcanvas.GLCanvas):
         self.render()
     
     def render(self):
-        """模型渲染"""
+        """模型渲染器"""
         
         if self.cam_cruise:
             v = self.cam_cruise(self.duration)
@@ -318,8 +317,13 @@ class Scene(glcanvas.GLCanvas):
         self.SwapBuffers() # 切换缓冲区，以显示绘制内容
         
         if self.capturing:
-            im = self.get_scene_buffer(alpha=True, crop=True)
-            self.q.put(im)
+            if self.cn < self.fn:
+                im = self.get_scene_buffer(alpha=True, crop=True)
+                self.q.put(im)
+                self.cn += 1
+            else:
+                #self.capturing = False
+                self.stop_record()
     
     def _render_core(self, m, mat_proj, mat_view, mat_model):
         """模型渲染核函数"""
@@ -562,25 +566,30 @@ class Scene(glcanvas.GLCanvas):
         self.duration = int((time.time() - self.tstamp) * 1000) + self.tbase
         self.tn += 1
         wx.CallAfter(self.render)
+        
+        if self.playing:
+            wx.CallLater(10, self.render_on_timer)
     
     def start_animate(self):
         """开始动画"""
         
-        wx.CallAfter(self.render)
+        self.render()
         if self.islive:
             self.tstamp = time.time()
             self.tbase = self.duration
-            self.timer.start(self.interval)
+            self.playing = True
+            self.render_on_timer()
     
     def stop_animate(self):
         """停止动画"""
         
-        self.timer.stop()
+        self.playing = False
+        print(self.estimate())
     
     def pause_animate(self):
         """暂停/重启动画"""
         
-        if self.timer.IsRunning():
+        if self.playing:
             self.stop_animate()
         else:
             self.start_animate()
@@ -588,7 +597,9 @@ class Scene(glcanvas.GLCanvas):
     def reset_timer(self):
         """复位和定时器相关的参数"""
         
-        self.timer.stop()
+        self.playing = False
+        self.capturing = False
+        self.creating = False
         self.tn = 0 
         self.duration = 0
         self.tbase = 0
@@ -596,10 +607,7 @@ class Scene(glcanvas.GLCanvas):
     def estimate(self):
         """动画渲染帧频评估"""
         
-        fps_expected = 1000/self.interval                                           # 期望帧频
-        fps_practical = (0 if self.duration == 0 else 1000*self.tn/self.duration)   # 实测帧频
-        
-        return fps_expected, fps_practical
+        return 0 if self.duration == 0 else 1000*self.tn/self.duration
     
     def add_region(self, box, fixed=False, proj=None, zoom=None):
         """添加视区
@@ -657,7 +665,7 @@ class Scene(glcanvas.GLCanvas):
             reg.pmat[:] = reg.get_pmat()
         
         self.set_posture(oecs=self.status['oecs'], dist=self.status['dist'], azim=self.status['azim'], elev=self.status['elev'])
-        self.reset_timer()
+        #self.reset_timer()
         self.render()
         
     def get_scene_buffer(self, alpha=True, buffer='FRONT', crop=False):
@@ -705,7 +713,7 @@ class Scene(glcanvas.GLCanvas):
         im = self.get_scene_buffer(alpha=alpha, buffer=buffer, crop=crop)
         im.save(fn)
     
-    def _create_gif_or_video(self, out_file, fps, loop, fn, callback):
+    def _create_gif_or_video(self, out_file, fps, loop=0, fn=50):
         """生成gif或视频文件的线程函数"""
         
         if os.path.splitext(out_file)[1] == '.gif':
@@ -713,38 +721,37 @@ class Scene(glcanvas.GLCanvas):
         else:
             writer = imageio.get_writer(out_file, fps=fps)
         
-        n = 0
-        self.q = queue.Queue()
-        self.recording = True
-        self.capturing = True
-        self.interval *= 10
-        self.start_animate()
-        
-        while n < fn and self.recording:
+        while not self.q.empty():
             im = np.array(self.q.get())
             writer.append_data(im)
-            n += 1
         
-        self.capturing = False
         writer.close()
-        
-        if callback and n >= fn:
-            callback()
-        
-        self.interval /= 10
-        self.recording = False
+        self.creating = False
     
-    def start_record(self, out_file, fps, loop=0, fn=50, callback=None):
+    def start_record(self, out_file, fps, loop=0, fn=50):
         """生成gif或视频文件
         
         out_file    - 文件名，支持gif和mp4、avi、wmv等格式
         fps         - 每秒帧数
         loop        - 循环播放次数（仅gif格式有效，0表示无限循环）
         fn          - 总帧数
-        callback    - 回调函数
         """
         
-        self.threading_record = threading.Thread(target=self._create_gif_or_video, args=(out_file, fps, loop, fn, callback))
+        self.cn = 0
+        self.fn = fn
+        self.q = queue.Queue()
+        self.capturing = True
+        self.start_animate()
+        
+        self.threading_record = threading.Thread(target=self._create_gif_or_video, args=(out_file, fps, loop, fn))
         self.threading_record.setDaemon(True)
         self.threading_record.start()
+    
+    def stop_record(self):
+        """"""
+        
+        self.capturing = False
+        self.creating = True
+        self.stop_animate()
+        
     

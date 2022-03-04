@@ -257,10 +257,10 @@ class Axes:
                         density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
                         endpoint        - 刻度是否包含值域范围的两个端点值
                         scale           - 色条宽度、文字大小等缩放比例，默认None
-                        margin_left     - 色条左侧留空与色条宽度之比，默认0.5
-                        margin_right    - 色条右侧留空与色条宽度之比，默认0.5
-                        margin_top      - 色条上方留空与色条高度之比，默认0.5
-                        margin_bottom   - 色条下方留空与色条高度之比，默认0.5
+                        margin_left     - 色条左侧留空，默认0.5
+                        margin_right    - 色条右侧留空，默认0.5
+                        margin_top      - 色条上方留空，默认0.5
+                        margin_bottom   - 色条下方留空，默认0.5
         """
         
         for key in kwds:
@@ -500,7 +500,7 @@ class Axes:
             else:
                 raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
         
-        self.add_widget(self.reg_main, 'triangle', vs, 
+        self.add_widget(self.reg_main, 'surface', vs, 
             color       = color, 
             texture     = texture, 
             texcoord    = texcoord, 
@@ -568,49 +568,49 @@ class Axes:
             **kwds
         )
     
-    def polygon(self, vs, color=None, cm=None, texture=None, texcoord=None, xflip=False, yflip=True, **kwds):
-        """多边形
-        
-        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
-        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
-        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
-        texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
-        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
-        kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        slide           - 幻灯片函数，默认None
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认True（不透明）
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        fill            - 填充，默认True
-                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
-        """
-        
-        if cm is None:
-            if color is None:
-                if texture is None:
-                    color = util.color2c(self.get_color())
-                elif texcoord is None:
-                    raise ValueError('当参数texture有效时，期望texcoord有效')
-            else:
-                color = util.color2c(color, outsize=len(vs))
-        else:
-            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
-                color = np.array(color)
-                if color.shape == (len(vs),):
-                    color = util.cmap(color, cm)
-                else:
-                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
-            else:
-                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
-        
-        self.add_widget(self.reg_main, 'polygon', vs, color=color, texture=texture, texcoord=texcoord, xflip=xflip, yflip=yflip, **kwds)
+    #def polygon(self, vs, color=None, cm=None, texture=None, texcoord=None, xflip=False, yflip=True, **kwds):
+    #    """多边形
+    #    
+    #    vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
+    #    color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+    #    cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+    #    texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
+    #    texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+    #    xflip       - 2D纹理左右翻转：布尔型，默认False
+    #    yflip       - 2D纹理上下翻转：布尔型，默认True
+    #    kwds        - 关键字参数
+    #                    name            - 模型名
+    #                    visible         - 是否可见，默认True
+    #                    slide           - 幻灯片函数，默认None
+    #                    inside          - 模型顶点是否影响模型空间，默认True
+    #                    opacity         - 模型不透明属性，默认True（不透明）
+    #                    transform       - 由旋转、平移和缩放组成的模型几何变换序列
+    #                    fill            - 填充，默认True
+    #                    ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+    #                    light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+    #                    light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+    #                    shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+    #    """
+    #    
+    #    if cm is None:
+    #        if color is None:
+    #            if texture is None:
+    #                color = util.color2c(self.get_color())
+    #            elif texcoord is None:
+    #                raise ValueError('当参数texture有效时，期望texcoord有效')
+    #        else:
+    #            color = util.color2c(color, outsize=len(vs))
+    #    else:
+    #        if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+    #            color = np.array(color)
+    #            if color.shape == (len(vs),):
+    #                color = util.cmap(color, cm)
+    #            else:
+    #                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+    #        else:
+    #            raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+    #    
+    #    self.add_widget(self.reg_main, 'polygon', vs, color=color, texture=texture, texcoord=texcoord, xflip=xflip, yflip=yflip, **kwds)
     
     def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, closed=False, xflip=False, yflip=True, **kwds):
         """网格面

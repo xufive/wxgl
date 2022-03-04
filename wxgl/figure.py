@@ -52,7 +52,7 @@ class Figure:
             oecs        - 视点坐标系ECS原点，默认与目标坐标系OCS原点重合
             dist        - 相机与ECS原点的距离，默认5个长度单位
             azim        - 方位角，默认0°
-            elev        - 仰角，默认0°
+            elev        - 高度角，默认0°
             vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
             near        - 视锥体前面距离相机的距离，默认3个长度单位
             far         - 视锥体后面距离相机的距离，默认1000个长度单位
@@ -73,6 +73,10 @@ class Figure:
         self.kwds3d = kwds                          # 3d场景的参数
         self.style = kwds.get('style', None)        # 背景色
         self.folder = os.getcwd()                   # 保存路径
+        self.ext = '.gif'                           # 输出文件格式
+        self.fps = 25                               # 输出GIF或视频的帧率
+        self.loop = 0                               # GIF循环次数
+        self.fn = 50                                # 输出文件总帧数
         
         self.app = None                             # wx.App对象
         self.ff = None                              # wx.Frame对象
@@ -97,15 +101,38 @@ class Figure:
                 self.folder = self.cfg.get('custom', 'folder')
             else:
                 self.cfg.set('custom', 'folder', self.folder)
+            
+            if self.cfg.has_option('custom', 'ext'):
+                self.ext = self.cfg.get('custom', 'ext')
+            else:
+                self.cfg.set('custom', 'ext', self.ext)
+            
+            if self.cfg.has_option('custom', 'fps'):
+                self.fps = int(self.cfg.get('custom', 'fps'))
+            else:
+                self.cfg.set('custom', 'fps', str(self.fps))
+            
+            if self.cfg.has_option('custom', 'loop'):
+                self.loop = int(self.cfg.get('custom', 'loop'))
+            else:
+                self.cfg.set('custom', 'loop', str(self.loop))
+            
+            if self.cfg.has_option('custom', 'fn'):
+                self.fn = int(self.cfg.get('custom', 'fn'))
+            else:
+                self.cfg.set('custom', 'fn', str(self.fn))
         else:
             self.cfg.add_section('custom')
-            if self.style:
-                self.cfg.set('custom', 'style', self.style)
-            else:
+            if self.style is None:
                 self.style = 'blue'
-                self.cfg.set('custom', 'style', self.style)
                 self.kwds3d.update({'style':self.style})
+            
+            self.cfg.set('custom', 'style', self.style)
             self.cfg.set('custom', 'folder', self.folder)
+            self.cfg.set('custom', 'ext', self.ext)
+            self.cfg.set('custom', 'fps', str(self.fps))
+            self.cfg.set('custom', 'loop', str(self.loop))
+            self.cfg.set('custom', 'fn', str(self.fn))
         
         with open(self.fn_cfg, 'w') as fp:
             self.cfg.write(fp)
@@ -197,7 +224,7 @@ class Figure:
             self._destroy_frame()
     
     def capture(self, out_file, fps=25, loop=0, fn=50):
-        """生成mp4或gif文件
+        """生成mp4、avi、wmv或gif文件
         
         out_file    - 输出文件名，可带路径，支持gif和mp4、avi、wmv等格式
         fps         - 每秒帧数
@@ -219,7 +246,7 @@ class Figure:
         
         try:
             self._draw()
-            self.ff.scene.start_record(out_file, fps, loop=loop, fn=fn, callback=self.ff.scene.stop_animate)
+            self.ff.scene.start_record(out_file, fps, loop=loop, fn=fn)
             self.ff.capture_timer.Start(100)
             self.app.MainLoop()
         except Exception as e:
@@ -274,11 +301,9 @@ class FigureFrame(wx.Frame):
         
         self.scene = scene.Scene(self, **self.fig.kwds3d)
         
+        self.gauge = None                                   # 保存文件的进度条窗口
         self.export = False                                 # 播放动画时生成GIF或视频文件
         self.ext = '.gif'                                   # 输出文件格式
-        self.fps = 25                                       # 输出GIF或视频的帧率
-        self.loop = 0                                       # GIF循环次数
-        self.fn = 50                                        # 输出文件总帧数
         
         bmp_config = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_config_32.png'), wx.BITMAP_TYPE_ANY)
         bmp_style = wx.Bitmap(os.path.join(BASE_PATH, 'res', 'tb_style_32.png'), wx.BITMAP_TYPE_ANY)
@@ -307,10 +332,6 @@ class FigureFrame(wx.Frame):
         self.cb_export.Bind(wx.EVT_CHECKBOX, self.on_export)
         self.tb.AddControl(self.cb_export)
         
-        sb = wx.StaticBitmap(self.tb, -1, wx.Bitmap(os.path.join(BASE_PATH, 'res', 'info.png'), wx.BITMAP_TYPE_ANY))
-        sb.Bind(wx.EVT_LEFT_UP, self.on_info)
-        self.tb.AddControl(sb)
-        
         self.tb.EnableTool(self.ID_PAUSE, False)
         self.cb_export.Enable(False)
         self.tb.Realize()
@@ -320,7 +341,6 @@ class FigureFrame(wx.Frame):
         self._mgr.AddPane(self.scene, aui.AuiPaneInfo().Name('Scene').CenterPane().Show())
         self._mgr.AddPane(self.tb, aui.AuiPaneInfo().Name('ToolBar').ToolbarPane().Bottom().Floatable(False))
         self._mgr.Update()
-        
         
         self.Bind(wx.EVT_MENU, self.on_config, id=self.ID_CONFIG)
         self.Bind(wx.EVT_MENU, self.on_style, id=self.ID_STYLE)
@@ -334,28 +354,33 @@ class FigureFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_color, id=self.id_blue)
         self.Bind(wx.EVT_MENU, self.on_color, id=self.id_royal)
         
+        self.recording_timer = wx.Timer() # 录屏操作定时器
         self.capture_timer = wx.Timer() # 离线录屏定时器
+        self.recording_timer.Bind(wx.EVT_TIMER, self.after_stop_record)
         self.capture_timer.Bind(wx.EVT_TIMER, self.on_capture)
+        
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+    
+    def on_close(self, evt):
+        """窗口关闭事件函数"""
+        
+        if self.scene.playing:
+            self.scene.playing = False
+            wx.CallLater(100, self.on_close, None)
+        else:
+            self.Destroy()
     
     def on_capture(self, evt):
         """离线录屏定时器函数"""
         
-        if not self.scene.recording:
+        if not self.scene.capturing and not self.scene.creating:
             self.capture_timer.Stop()
-            #self.scene.threading_record.join()
-            #self.fig._destroy_frame()
-            #self.Destroy()
             self.Close()
     
     def on_export(self, evt):
         """录屏开关"""
         
         self.export = self.cb_export.GetValue()
-    
-    def on_info(self, evt):
-        """关于录屏的说明"""
-        
-        wx.MessageBox('录屏时渲染频率降低90%，录屏结束后自动恢复。', '操作提示')
     
     def on_color(self, evt):
         """选择风格"""
@@ -408,57 +433,43 @@ class FigureFrame(wx.Frame):
                 else:
                     evt.GetEventObject().SetValue('0')
         
-        dlg = wx.Dialog(self, size=(640, 370), title='参数设置')
+        dlg = wx.Dialog(self, size=(640, 330), title='参数设置')
         dlg.CenterOnScreen()
         
-        wx.StaticBox(dlg, -1, '系统参数', pos=(20,20), size=(300,110))
+        wx.StaticBox(dlg, -1, 'GIF/视频设置', pos=(20,90), size=(300,135))
         
-        wx.StaticText(dlg, -1, '方位角限位：', pos=(40,47), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_azim_0 = wx.TextCtrl(dlg, -1, value='%d'%self.scene.azim_range[0], pos=(120,45), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' ° ~ ', pos=(180,45), size=(25,-1))
-        tc_azim_1 = wx.TextCtrl(dlg, -1, value='%d'%self.scene.azim_range[1], pos=(205,45), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' °', pos=(265,45))
-        tc_azim_0.Bind(wx.EVT_TEXT, on_text)
-        tc_azim_0.Bind(wx.EVT_TEXT, on_text)
+        wx.StaticText(dlg, -1, '文件格式：', pos=(40,117), size=(80,-1), style=wx.ALIGN_RIGHT)
+        rb_gif = wx.RadioButton(dlg, id=-1, label='.gif', pos=(120,115), size=(55,20), style=wx.RB_GROUP)
+        rb_avi = wx.RadioButton(dlg, id=-1, label='.avi', pos=(175,115), size=(55,20))
+        rb_mp4 = wx.RadioButton(dlg, id=-1, label='.mp4', pos=(230,115), size=(55,20))
         
-        wx.StaticText(dlg, -1, '仰角限位：', pos=(40,72), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_elev_0 = wx.TextCtrl(dlg, -1, value='%d'%self.scene.elev_range[0], pos=(120,70), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' ° ~ ', pos=(180,70), size=(25,-1))
-        tc_elev_1 = wx.TextCtrl(dlg, -1, value='%d'%self.scene.elev_range[1], pos=(205,70), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' °', pos=(265,70))
-        tc_elev_0.Bind(wx.EVT_TEXT, on_text)
-        tc_elev_0.Bind(wx.EVT_TEXT, on_text)
+        if self.fig.ext == '.gif':
+            rb_gif.SetValue(True)
+        elif self.fig.ext == '.avi':
+            rb_avi.SetValue(True)
+        else:
+            rb_mp4.SetValue(True)
         
-        wx.StaticText(dlg, -1, '定时器间隔：', pos=(40,97), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_interval = wx.TextCtrl(dlg, -1, value='%d'%self.scene.interval, pos=(120,95), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' ms', pos=(180,97))
-        tc_interval.Bind(wx.EVT_TEXT, on_text)
-        
-        wx.StaticBox(dlg, -1, 'GIF/视频', pos=(20,140), size=(300,160))
-        
-        wx.StaticText(dlg, -1, '保存路径：', pos=(40,167), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_dir = wx.TextCtrl(dlg, -1, value='%s'%self.fig.folder, pos=(120,165), size=(140,20))
-        btn_dir = wx.Button(dlg, -1, '浏览', pos=(265,165), size=(40,20))
-        btn_dir.Bind(wx.EVT_BUTTON, on_dir)
-        
-        wx.StaticText(dlg, -1, '文件格式：', pos=(40,192), size=(80,-1), style=wx.ALIGN_RIGHT)
-        rb_gif = wx.RadioButton(dlg, id=-1, label='.gif', pos=(120,190), size=(55,20), style=wx.RB_GROUP)
-        rb_avi = wx.RadioButton(dlg, id=-1, label='.avi', pos=(175,190), size=(55,20))
-        rb_mp4 = wx.RadioButton(dlg, id=-1, label='.mp4', pos=(230,190), size=(55,20))
-        
-        wx.StaticText(dlg, -1, '帧率：', pos=(40,217), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_fps = wx.TextCtrl(dlg, -1, value='%d'%self.fps, pos=(120,215), size=(60,20), style=wx.TE_CENTRE)
-        wx.StaticText(dlg, -1, ' f/s', pos=(180,217))
+        wx.StaticText(dlg, -1, '帧率：', pos=(40,142), size=(80,-1), style=wx.ALIGN_RIGHT)
+        tc_fps = wx.TextCtrl(dlg, -1, value='%d'%self.fig.fps, pos=(120,140), size=(60,20), style=wx.TE_CENTRE)
+        wx.StaticText(dlg, -1, ' f/s', pos=(180,140))
         tc_fps.Bind(wx.EVT_TEXT, on_text)
         
-        wx.StaticText(dlg, -1, '最大帧数：', pos=(40,242), size=(80,-1), style=wx.ALIGN_RIGHT)
-        tc_fn = wx.TextCtrl(dlg, -1, value='%d'%self.fn, pos=(120,240), size=(60,20), style=wx.TE_CENTRE)
+        wx.StaticText(dlg, -1, '总帧数：', pos=(40,167), size=(80,-1), style=wx.ALIGN_RIGHT)
+        tc_fn = wx.TextCtrl(dlg, -1, value='%d'%self.fig.fn, pos=(120,165), size=(60,20), style=wx.TE_CENTRE)
         tc_fn.Bind(wx.EVT_TEXT, on_text)
         
-        cb_loop = wx.CheckBox(dlg, -1, '循环播放（仅gif格式有效）', pos=(60,267))
-        cb_loop.SetValue(self.loop==0)
+        wx.StaticText(dlg, -1, '循环播放：', pos=(40,192), size=(80,-1), style=wx.ALIGN_RIGHT)
+        cb_loop = wx.CheckBox(dlg, -1, '（仅gif格式有效）', pos=(120,190))
+        cb_loop.SetValue(self.fig.loop==0)
         
-        info = wx.Panel(dlg, -1, pos=(350,25), size=(250,230), style=wx.BORDER_SUNKEN)
+        wx.StaticBox(dlg, -1, '文件保存路径', pos=(20,20), size=(300,60))
+        
+        tc_dir = wx.TextCtrl(dlg, -1, value='%s'%self.fig.folder, pos=(40,45), size=(215,20))
+        btn_dir = wx.Button(dlg, -1, '浏览', pos=(260,45), size=(40,20))
+        btn_dir.Bind(wx.EVT_BUTTON, on_dir)
+        
+        info = wx.Panel(dlg, -1, pos=(350,25), size=(250,235), style=wx.BORDER_SUNKEN)
         info.SetBackgroundColour(wx.Colour(192, 255, 255))
         
         wx.StaticText(info, -1, '投影方式：', pos=(20,15), size=(80,-1), style=wx.ALIGN_RIGHT)
@@ -482,35 +493,39 @@ class FigureFrame(wx.Frame):
         wx.StaticText(info, -1, '方位角：', pos=(20,153), size=(80,-1), style=wx.ALIGN_RIGHT)
         wx.StaticText(info, -1, '%.3f°'%self.scene.azim, pos=(100,153))
         
-        wx.StaticText(info, -1, '仰角：', pos=(20,176), size=(80,-1), style=wx.ALIGN_RIGHT)
+        wx.StaticText(info, -1, '高度角：', pos=(20,176), size=(80,-1), style=wx.ALIGN_RIGHT)
         wx.StaticText(info, -1, '%.3f°'%self.scene.elev, pos=(100,176))
         
         wx.StaticText(info, -1, '距离：', pos=(20,199), size=(80,-1), style=wx.ALIGN_RIGHT)
         wx.StaticText(info, -1, '%.3f'%self.scene.dist, pos=(100,199))
         
-        btn_cancel = wxbtn.GenButton(dlg, wx.ID_CANCEL, '取消', pos=(400,275), size=(60,-1))
+        btn_cancel = wxbtn.GenButton(dlg, wx.ID_CANCEL, '取消', pos=(100,240), size=(60,-1))
         btn_cancel.SetBezelWidth(2)
         btn_cancel.SetBackgroundColour(wx.Colour(217,228,241))
         
-        btn_ok = wxbtn.GenButton(dlg, wx.ID_OK, '确定', pos=(500,275), size=(60,-1))
+        btn_ok = wxbtn.GenButton(dlg, wx.ID_OK, '确定', pos=(200,240), size=(60,-1))
         btn_ok.SetBezelWidth(2)
         btn_ok.SetBackgroundColour(wx.Colour(245,227,129))
         
         if dlg.ShowModal() == wx.ID_OK:
-            self.scene.azim_range = int(tc_azim_0.GetValue()), int(tc_azim_1.GetValue())
-            self.scene.elev_range = int(tc_elev_0.GetValue()), int(tc_elev_1.GetValue())
-            self.scene.interval = int(tc_interval.GetValue())
-            
             if rb_avi.GetValue():
-                self.ext = '.avi'
+                self.fig.ext = '.avi'
             if rb_mp4.GetValue():
-                self.ext = '.mp4'
+                self.fig.ext = '.mp4'
             else:
-                self.ext = '.gif'
+                self.fig.ext = '.gif'
             
-            self.fps = int(tc_fps.GetValue())
-            self.fn = int(tc_fn.GetValue())
-            self.loop = 1 - int(cb_loop.GetValue())
+            self.fig.fps = int(tc_fps.GetValue())
+            self.fig.fn = int(tc_fn.GetValue())
+            self.fig.loop = 1 - int(cb_loop.GetValue())
+            
+            self.fig.cfg.set('custom', 'ext', self.fig.ext)
+            self.fig.cfg.set('custom', 'fps', str(self.fig.fps))
+            self.fig.cfg.set('custom', 'fn', str(self.fig.fn))
+            self.fig.cfg.set('custom', 'loop', str(self.fig.loop))
+            
+            with open(self.fig.fn_cfg, 'w') as fp:
+                self.fig.cfg.write(fp)
     
     def on_style(self, evt):
         """背景颜色"""
@@ -551,7 +566,6 @@ class FigureFrame(wx.Frame):
     def on_restore(self, evt):
         """回到初始状态"""
         
-        self.click_stop()
         self.scene.restore_posture()
     
     def on_ticks(self, evt):
@@ -576,25 +590,21 @@ class FigureFrame(wx.Frame):
     def on_pause(self, evt):
         """暂停/启动"""
         
-        if self.scene.timer.IsRunning():
-            self.scene.stop_animate()
-            self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
-            self.tb.SetToolShortHelp(self.ID_PAUSE, '播放动画')
+        if self.scene.playing:
             if self.export:
-                self.scene.recording = False
-                self.export = False
-                self.cb_export.SetValue(self.export)
-                
-                if PLAT_FORM == 'Windows':
-                    os.system("explorer %s" % self.fig.folder)
-                else:
-                    wx.MessageBox('文件已保存至：%s' % self.fig.folder, '操作提示')
+                self.scene.stop_record()
+            else:
+                self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
+                self.tb.SetToolShortHelp(self.ID_PAUSE, '播放动画')
+                self.scene.stop_animate()
         else:
             self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_stop)
             self.tb.SetToolShortHelp(self.ID_PAUSE, '停止动画')
+            
             if self.export:
-                out_file = os.path.join(self.fig.folder, '%s%s'%(time.strftime('%Y%m%d_%H%M%S'), self.ext))
-                self.scene.start_record(out_file, self.fps, loop=self.loop, fn=self.fn, callback=self.click_stop)
+                out_file = os.path.join(self.fig.folder, '%s%s'%(time.strftime('%Y%m%d_%H%M%S'), self.fig.ext))
+                self.scene.start_record(out_file, self.fig.fps, loop=self.fig.loop, fn=self.fig.fn)
+                self.recording_timer.Start(50)
             else:
                 self.scene.start_animate()
         
@@ -620,9 +630,79 @@ class FigureFrame(wx.Frame):
         
         dlg.Destroy()
     
-    def click_stop(self):
-        """模拟停止录屏"""
+    def after_stop_record(self, evt):
+        """自动或手动停止录屏后的操作"""
         
-        if self.scene.timer.IsRunning():
-            self.on_pause(None)
-            self.tb.ToggleTool(self.ID_PAUSE, False)
+        if not self.scene.capturing:
+            if self.scene.creating:
+                self.tb.SetToolBitmap(self.ID_PAUSE, self.bmp_play)
+                self.tb.SetToolShortHelp(self.ID_PAUSE, '播放动画')
+                self.tb.ToggleTool(self.ID_PAUSE, False)
+                self.tb.Realize()
+                self.export = False
+                self.cb_export.SetValue(self.export)
+            
+                if self.gauge is None:
+                    self.gauge = ProcessDialog(self, '正在保存文件，请稍候...')
+                    self.gauge.ShowModal()
+            else:
+                self.recording_timer.Stop()
+                if not self.gauge is None:
+                    self.gauge.EndModal(wx.ID_OK)
+                    self.gauge = None
+                
+                if PLAT_FORM == 'Windows':
+                    os.system("explorer %s" % self.fig.folder)
+                else:
+                    wx.MessageBox('文件已保存至：%s' % self.fig.folder, '操作提示')
+        
+
+class ProcessDialog(wx.Dialog):
+    """显示进度对话框"""
+
+    def __init__(self, parent, msg):
+        """构造函数"""
+
+        wx.Dialog.__init__(self, parent, -1, size=(300, 100), style=wx.NO_BORDER)
+        
+        # 初始化变量
+        self.parent = parent
+        self.start_sec = int(time.time())
+
+        # 初始化界面
+        sizer = wx.BoxSizer()
+        grid = wx.GridBagSizer(10, 10)
+
+        text = wx.StaticText(self, -1, msg)
+        grid.Add(text, (0, 0), flag=wx.ALIGN_CENTER)
+
+        self.gauge = wx.Gauge(self, -1)
+        grid.Add(self.gauge, (1, 0), flag=wx.EXPAND)
+
+        self.clock = wx.StaticText(self, -1, "00:00:00")
+        grid.Add(self.clock, (2, 0), flag=wx.ALIGN_CENTER)
+
+        grid.AddGrowableCol(0)
+        sizer.Add(grid, 1, wx.EXPAND | wx.ALL, 10)
+
+        self.SetSizer(sizer)
+        self.Layout()
+
+        self.CenterOnScreen()
+
+        # 启动定时器
+        self.timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_timer)
+        self.timer.Start(1000)
+
+    def on_timer(self, evt):
+        """定时器事件处理"""
+
+        self.gauge.Pulse()
+        delta = int(time.time()) - self.start_sec
+
+        # 将秒转化为时间字符串
+        hour = delta // 3600
+        minute = (delta % 3600) // 60
+        second = delta % 60
+        self.clock.SetLabel("%02d:%02d:%02d"%(hour, minute, second))
