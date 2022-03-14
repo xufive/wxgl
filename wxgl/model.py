@@ -163,6 +163,7 @@ class Model:
         data            - 顶点大小数据
         """
         
+        data = np.array(data, dtype=np.float32)
         self.attribute.update({var_name: {'tag':'psize', 'data':data, 'un':1}})
         
         if not self.sprite:
@@ -172,43 +173,14 @@ class Model:
             self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
             self.after.append((glPopAttrib, ()))
     
-    def add_texture(self, var_name, texture_src, texture_type=GL_TEXTURE_2D, **kwds):
+    def add_texture(self, var_name, texture):
         """添加纹理
         
         var_name        - 纹理在着色器中的变量名
-        texture_src     - 纹理资源（数据或文件名）
-        texture_type    - 纹理类型
-        kwds            - 关键字参数（不同的纹理类型，关键字参数可能不尽相同）
-            level           - 纹理分级数，默认1
-            min_filter      - 纹理缩小滤波器
-                                - GL_NEAREST
-                                - GL_LINEAR
-                                - GL_NEAREST_MIPMAP_NEAREST
-                                - GL_LINEAR_MIPMAP_NEAREST
-                                - GL_NEAREST_MIPMAP_LINEAR
-                                - GL_LINEAR_MIPMAP_LINEAR
-            mag_filter      - 纹理放大滤波器
-                                - GL_NEAREST
-                                - GL_LINEAR
-            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            xflip           - 图像左右翻转
-            yflip           - 图像上下翻转
+        texture         - wxgl.Texture对象
         """
         
-        texture_types = (
-            GL_TEXTURE_1D,
-            GL_TEXTURE_2D,
-            GL_TEXTURE_3D,
-            GL_TEXTURE_CUBE_MAP,
-            GL_TEXTURE_RECTANGLE
-        )
-        
-        if texture_type not in texture_types:
-            raise ValueError('不支持的纹理类型')
-        
-        self.uniform.update({var_name: {'tag':'texture', 'type':texture_type, 'src':texture_src, 'kwds':kwds}})
+        self.uniform.update({var_name: {'tag':'texture', 'data':texture}})
     
     def set_cam_pos(self, var_name):
         """设置相机位置（用于计算镜面反射）
@@ -302,10 +274,15 @@ class Model:
         mode            - 填充模式：布尔型，或FCBC|FLBC|FCBL|FLBL
         """
         
-        mode = mode.upper()
+        if mode is None:
+            return
+        
+        if isinstance(mode, str):
+            mode = mode.upper()
+        
         if mode in ('FCBC', 'FLBC', 'FCBL', 'FLBL', True, False):
             self.before.append((glPushAttrib, (GL_ALL_ATTRIB_BITS,)))
-            if mode == 'FCBC' or mode ==True:
+            if mode == 'FCBC' or mode == True:
                 self.before.append((glPolygonMode,(GL_FRONT_AND_BACK, GL_FILL)))
             elif mode == 'FLBL' or mode == False:
                 self.before.append((glPolygonMode,(GL_FRONT_AND_BACK, GL_LINE)))

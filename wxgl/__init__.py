@@ -2,12 +2,14 @@
 
 from OpenGL.GL import *
 from wxgl.scene import Scene
+from wxgl.texture import Texture
 from wxgl.model import Model
+from wxgl.light import *
 from wxgl.util import *
 
 name = 'wxgl'
-version = '0.8.6'
-version_info = (0, 8, 6, 0)
+version = '0.8.7'
+version_info = (0, 8, 7, 0)
 
 VERTEX_SHADER                   = GL_VERTEX_SHADER
 TESS_CONTROL_SHADER             = GL_TESS_CONTROL_SHADER
@@ -19,8 +21,7 @@ COMPUTE_SHADER                  = GL_COMPUTE_SHADER
 POINTS	                        = GL_POINTS	      
 LINES	                        = GL_LINES	      
 LINE_STRIP	                    = GL_LINE_STRIP	  
-LINE_LOOP	                    = GL_LINE_LOOP	  
-POLYGON	                        = GL_POLYGON	      
+LINE_LOOP	                    = GL_LINE_LOOP
 TRIANGLES	                    = GL_TRIANGLES	  
 TRIANGLE_STRIP                  = GL_TRIANGLE_STRIP
 TRIANGLE_FAN                    = GL_TRIANGLE_FAN  

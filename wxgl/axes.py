@@ -425,7 +425,7 @@ class Axes:
             **kwds
         )
     
-    def scatter(self, vs, color=None, cm=None, size=1.0, **kwds):
+    def point(self, vs, color=None, cm=None, size=1.0, **kwds):
         """散点
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
@@ -453,7 +453,7 @@ class Axes:
         
         self.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
     
-    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
         """由三角面描述的曲面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
@@ -466,8 +466,6 @@ class Axes:
                         'strip'         - 带状三角面
                         'fan'           - 扇面
         indices     - 顶点索引集，默认None
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
                         name            - 模型名
                         visible         - 是否可见，默认True
@@ -476,10 +474,7 @@ class Axes:
                         opacity         - 模型不透明属性，默认True（不透明）
                         transform       - 由旋转、平移和缩放组成的模型几何变换序列
                         fill            - 填充，默认True
-                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
                         light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
         """
         
         if cm is None:
@@ -506,12 +501,10 @@ class Axes:
             texcoord    = texcoord, 
             method      = method, 
             indices     = indices, 
-            xflip       = xflip, 
-            yflip       = yflip,
             **kwds
         )
         
-    def quad(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, xflip=False, yflip=True, **kwds):
+    def quad(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
         """四角面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
@@ -563,8 +556,6 @@ class Axes:
             texcoord    = texcoord, 
             method      = method, 
             indices     = indices, 
-            xflip       = xflip, 
-            yflip       = yflip,
             **kwds
         )
     
@@ -612,7 +603,7 @@ class Axes:
     #    
     #    self.add_widget(self.reg_main, 'polygon', vs, color=color, texture=texture, texcoord=texcoord, xflip=xflip, yflip=yflip, **kwds)
     
-    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, closed=False, xflip=False, yflip=True, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, closed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
@@ -621,8 +612,6 @@ class Axes:
         texture     - 纹理资源：图片文件或numpy数组形式的图像数据，color为None时有效
         cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
         closed      - 网格闭合：布尔型。该参数仅用于使用经纬度网格生成球
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，默认True
         kwds        - 关键字参数
                         name            - 模型名
                         visible         - 是否可见，默认True
@@ -659,15 +648,11 @@ class Axes:
         
         self.add_widget(self.reg_main, 'mesh', xs, ys, zs, 
             color       = color, 
-            texture     = texture, 
-            cw          = cw, 
-            closed      = closed,
-            xflip       = xflip, 
-            yflip       = yflip,
+            texture     = texture,
             **kwds
         )
     
-    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, xflip=False, yflip=True, **kwds):
+    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, **kwds):
         """使用经纬度网格生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
@@ -687,17 +672,14 @@ class Axes:
                         opacity         - 模型不透明属性，默认不透明
                         transform       - 由旋转、平移和缩放组成的模型几何变换序列
                         fill            - 填充，默认True
-                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
                         light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
         """
         
         if color is None and texture is None:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'uvsphere', center, r, lon=lon, lat=lat, color=color, texture=texture, slices=slices, xflip=xflip, yflip=yflip, **kwds)
+        self.add_widget(self.reg_main, 'uvsphere', center, r, lon=lon, lat=lat, color=color, texture=texture, slices=slices, **kwds)
     
     def isosphere(self, center, r, color=None, iterations=5, **kwds):
         """通过对正八面体的迭代细分生成球

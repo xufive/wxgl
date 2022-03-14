@@ -59,11 +59,9 @@ class Scene(glcanvas.GLCanvas):
             dist        - 相机与ECS原点的距离，默认5个长度单位
             azim        - 方位角，默认0°
             elev        - 高度角，默认0°
-            vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
             near        - 视锥体前面距离相机的距离，默认3.0个长度单位
             far         - 视锥体后面距离相机的距离，默认1000个长度单位
             zoom        - 视口缩放因子，默认1.0
-            interval    - 动画定时间隔，默认20毫秒
             smooth      - 直线、多边形和点的反走样开关
             azim_range  - 方位角限位器，默认-180°~180°
             elev_range  - 仰角限位器，默认-180°~180°
@@ -76,7 +74,7 @@ class Scene(glcanvas.GLCanvas):
         """
         
         for key in kwds:
-            if key not in ['proj', 'oecs', 'dist', 'azim', 'elev', 'vision', 'near', 'far', 'zoom', 'interval', 'smooth', 'azim_range', 'elev_range', 'style']:
+            if key not in ['proj', 'oecs', 'dist', 'azim', 'elev', 'near', 'far', 'zoom', 'smooth', 'azim_range', 'elev_range', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         self.parent = parent
@@ -85,11 +83,9 @@ class Scene(glcanvas.GLCanvas):
         self.proj = kwds.get('proj', 'frustum')                             # 投影模式
         self.oecs = kwds.get('oecs', [0.0, 0.0, 0.0])                       # 视点坐标系ECS原点
         self.dist = kwds.get('dist', 5.0)                                   # 相机与ECS原点的距离
-        self.vision = kwds.get('vision', 1.0)                               # 视锥体左右下上边距离中心点的距离
         self.near = kwds.get('near', 3.0)                                   # 视锥体前面距离相机的距离
         self.far = kwds.get('far', 1000.0)                                  # 视锥体后面距离相机的距离
         self.zoom = kwds.get('zoom', 1.0)                                   # 视口缩放因子
-        self.interval = max(10, kwds.get('interval', 20))                   # 定时间隔，单位毫妙
         self.smooth = kwds.get('smooth', True)                              # 反走样开关
         self.azim_range = kwds.get('azim_range', (-180, 180))               # 方位角限位器
         self.elev_range = kwds.get('elev_range', (-180, 180))               # 仰角限位器
@@ -322,7 +318,6 @@ class Scene(glcanvas.GLCanvas):
                 self.q.put(im)
                 self.cn += 1
             else:
-                #self.capturing = False
                 self.stop_record()
     
     def _render_core(self, m, mat_proj, mat_view, mat_model):
@@ -339,7 +334,6 @@ class Scene(glcanvas.GLCanvas):
             bo = m.attribute[key]['bo']
             un = m.attribute[key]['un']
             usize = m.attribute[key]['usize']
-            
             bo.bind()
             glVertexAttribPointer(loc, un, GL_FLOAT, GL_FALSE, un*usize, bo)
             glEnableVertexAttribArray(loc)
@@ -363,7 +357,7 @@ class Scene(glcanvas.GLCanvas):
                     glUniformMatrix4fv(loc, 1, GL_FALSE, mmat, None)
             elif tag == 'texture':
                 eval('glActiveTexture(GL_TEXTURE%d)'%tsid)
-                glBindTexture(m.uniform[key]['type'], m.uniform[key]['tid'])
+                glBindTexture(m.uniform[key]['data'].ttype, m.uniform[key]['tid'])
                 glUniform1i(loc, tsid)
                 tsid += 1
             elif tag == 'mvpmat':
@@ -584,7 +578,7 @@ class Scene(glcanvas.GLCanvas):
         """停止动画"""
         
         self.playing = False
-        print(self.estimate())
+        #print(self.estimate())
     
     def pause_animate(self):
         """暂停/重启动画"""

@@ -119,8 +119,8 @@ def line(*args, **kwds):
     fig.curr_ax.line(*args, **kwds)
 
 @current_axes
-def scatter(*args, **kwds):
-    fig.curr_ax.scatter(*args, **kwds)
+def point(*args, **kwds):
+    fig.curr_ax.point(*args, **kwds)
 
 @current_axes
 def mesh(*args, **kwds):

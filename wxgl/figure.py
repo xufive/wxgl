@@ -21,7 +21,7 @@ def single_figure(cls):
 
     def _single_figure(**kwds):
         for key in kwds:
-            if key not in ['size', 'proj', 'oecs', 'dist', 'azim', 'elev', 'vision', 'near', 'far', 'zoom', 'interval', 'smooth', 'azim_range', 'elev_range', 'style']:
+            if key not in ['size', 'proj', 'oecs', 'dist', 'azim', 'elev', 'near', 'far', 'zoom', 'smooth', 'azim_range', 'elev_range', 'style']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         if cls not in _instance:
@@ -53,11 +53,9 @@ class Figure:
             dist        - 相机与ECS原点的距离，默认5个长度单位
             azim        - 方位角，默认0°
             elev        - 高度角，默认0°
-            vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
             near        - 视锥体前面距离相机的距离，默认3个长度单位
             far         - 视锥体后面距离相机的距离，默认1000个长度单位
             zoom        - 视口缩放因子，默认1.0
-            interval    - 动画定时间隔，默认20毫秒
             smooth      - 直线、多边形和点的反走样开关
             azim_range  - 方位角限位器，默认-180°~180°
             elev_range  - 仰角限位器，默认-180°~180°
