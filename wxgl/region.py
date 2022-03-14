@@ -310,13 +310,13 @@ class Region:
         
         wx.CallAfter(self.scene.render)
     
-    def _get_normal(self, gltype, vs, indices=None):
+    def _get_normal(self, gltype, vs, indices=None, cw=False):
         """返回法线集"""
         
-        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUADS, GL_QUAD_STRIP):
+        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN):
             raise KeyError('%s不支持法线计算'%(str(gltype)))
         
-        if not indices is None and gltype not in (GL_TRIANGLES, GL_QUADS):
+        if not indices is None and gltype != GL_TRIANGLES:
             raise KeyError('当前图元类型不支持indices参数')
         
         n = vs.shape[0]
@@ -331,57 +331,21 @@ class Region:
                 b = np.arange(1, n-1, dtype=np.int32)
                 c = np.stack((np.arange(2, n, 2, dtype=np.int32), np.arange(1, n, 2, dtype=np.int32)[:(n-1)//2]), axis=1).ravel()[:n-2]
                 idx = np.stack((a, b, c), axis=1).ravel()
-            elif gltype == GL_QUAD_STRIP:
-                a = np.arange(0, n-2, 2)
-                b = np.arange(1, n-2, 2)
-                c = np.arange(3, n, 2)
-                d = np.arange(2, n, 2)
-                idx = np.stack((a, b, c, d), axis=1).ravel()
             else:
                 idx = np.arange(n, dtype=np.int32)
         else:
             idx = np.array(indices, dtype=np.int32)
         
         primitive = vs[idx]
+        a = primitive[::3]
+        b = primitive[1::3]
+        c = primitive[2::3]
+        normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
         
-        if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
-            a = primitive[::4]
-            b = primitive[1::4]
-            c = primitive[2::4]
-            d = primitive[3::4]
-            normal = np.repeat(np.cross(c-a, b-d), 4, axis=0)
-        else:
-            a = primitive[::3]
-            b = primitive[1::3]
-            c = primitive[2::3]
-            normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
-        
-        
-        uniind = idx.size -1 - np.unique(np.flipud(idx), return_index=True)[1]
-        uniind.sort()
+        #uniind = idx.size -1 - np.unique(np.flipud(idx), return_index=True)[1]
+        uniind = np.unique(idx, return_index=True)[1]
         result = normal[uniind]
         return result
-        
-        #if gltype in (GL_TRIANGLES, GL_QUADS) and indices is None:
-        #    t1 = time.time()
-        #    return normal
-        
-        #result = np.zeros((n,3))
-        #for i in range(n):
-        #    #result[i] = np.sum(normal[np.where(idx==i)], axis=0)
-        
-        #t1 = time.time()
-        #return result
-        
-        #result = np.zeros((n,3))
-        #rise = np.where(np.diff(idx[np.argsort(idx)]) == 1)[0] + 1
-        #rise = np.hstack(([0],rise,[n]))
-        #
-        #for i in range(n):
-        #    result[i] = np.sum(normal[i:i+1], axis=0)
-        #
-        #t1 = time.time()
-        #return result
     
     def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
         """返回合适的Colorbar标注值
@@ -465,7 +429,7 @@ class Region:
             color = self.scene.style[1]
         
         box = np.tile(np.array(pos, dtype=np.float32), (4,1))
-        texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
+        texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
                 
         loc = {
             'left-top':         0, 
@@ -487,7 +451,7 @@ class Region:
         texture = wxTexture.Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         
         light = wxLight.BaseLight(ambient)
-        self.add_model(light.get_model(GL_QUADS, box, 
+        self.add_model(light.get_model(GL_TRIANGLE_STRIP, box, 
             texture     = texture, 
             texcoord    = texcoord, 
             loc         = loc, 
@@ -503,7 +467,7 @@ class Region:
         """3d文字
         
         text        - 文本字符串
-        box         - 文本显式区域：左上、左下、右下、右上4个点的坐标，浮点型元组、列表或numpy数组，shape=(4,2|3)
+        box         - 文本显式区域：左上、左下、右上、右下4个点的坐标，浮点型元组、列表或numpy数组，shape=(4,2|3)
         color       - 文本颜色：浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
         size        - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
         family      - 字体：None表示当前默认的字体
@@ -538,7 +502,7 @@ class Region:
         transform = kwds.get('transform')
         light = kwds.get('light', wxLight.SunLight())
         
-        gltype = GL_QUADS
+        gltype = GL_TRIANGLE_STRIP
         box = np.array(box, dtype=np.float32)
         normal = self._get_normal(gltype, box)
         
@@ -547,9 +511,9 @@ class Region:
          
         im_text = util.text2image(text, size, color, family, weight)
         texture = wxTexture.Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
-        texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
+        texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
         
-        box_width = np.linalg.norm(box[3] - box[0])
+        box_width = np.linalg.norm(box[2] - box[0])
         box_height = np.linalg.norm(box[0] - box[1])
 
         k_box, k_text = box_width/box_height, im_text.shape[1]/im_text.shape[0]
@@ -565,27 +529,27 @@ class Region:
             if valign == 'top':
                 offset = (box[1] - box[0])*k_box/k_text
                 box[1] = box[0] + offset
-                box[2] = box[3] + offset
+                box[3] = box[2] + offset
             elif valign == 'middle':
                 offset = (box[1]-box[0])*(1-k_box/k_text)/2
                 box[0] += offset
-                box[3] += offset
+                box[2] += offset
                 box[1] -= offset
-                box[2] -= offset
+                box[3] -= offset
             elif valign == 'bottom':
                 offset = (box[0]-box[1])*k_box/k_text
                 box[0] = box[1] + offset
-                box[3] = box[2] + offset
+                box[2] = box[3] + offset
         elif align == 'left':
-            offset = (box[2]-box[1])*k_text/k_box
-            box[2] = box[1] + offset
-            box[3] = box[0] + offset
+            offset = (box[3]-box[1])*k_text/k_box
+            box[3] = box[1] + offset
+            box[2] = box[0] + offset
         elif align == 'right':
-            offset = (box[0] - box[3])*k_text/k_box
-            box[0] = box[3] + offset
-            box[1] = box[2] + offset
+            offset = (box[0] - box[2])*k_text/k_box
+            box[0] = box[2] + offset
+            box[1] = box[3] + offset
         elif align == 'center':
-            offset = (box[3] - box[0])*(1-k_text/k_box)/2
+            offset = (box[2] - box[0])*(1-k_text/k_box)/2
             box[0] += offset
             box[1] += offset
             box[2] -= offset
@@ -785,73 +749,6 @@ class Region:
             slide       = slide,
             transform   = transform
         ), name)
-    
-    def quad(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
-        """四角面
-        
-        vs          - 顶点集：元组、列表或numpy数组，shape=(n,3)
-        color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
-        texture     - 纹理：wxgl.Texture对象
-        texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
-        method      - 绘制方法
-            'isolate'       - 独立四角面
-            'strip'         - 带状四角面
-        indices     - 顶点索引集：默认None，表示不使用索引
-        kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            inside          - 模型顶点是否影响模型空间，默认True
-            opacity         - 模型不透明属性，默认True（不透明）
-            fill            - 填充，默认None（使用当前设置）
-            slide           - 幻灯片函数，默认None
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
-            light           - 光照情景模式，默认太阳光照情景模式
-        """
-        
-        for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'fill', 'slide', 'transform', 'light']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        name = kwds.get('name')
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
-        light = kwds.get('light', wxLight.SunLight())
-        
-        method = method.upper()
-        if method == "ISOLATE":
-            gltype = GL_QUADS
-        elif method == "STRIP":
-            gltype = GL_QUAD_STRIP
-        else:
-            raise ValueError('不支持的四角面方法：%s'%method)
-        
-        if gltype == GL_QUAD_STRIP and not indices is None:
-            raise ValueError('STRIP不支持indices参数')
-        
-        vs = np.array(vs, dtype=np.float32)
-        normal = self._get_normal(gltype, vs, indices)
-        color = np.array(color, dtype=np.float32)
-        
-        if color.ndim == 1:
-            color = np.tile(color, (len(vs),1))
-        
-        self.add_model(light.get_model(gltype, vs,
-            indices     = indices,
-            normal      = normal, 
-            color       = color,
-            texture     = texture, 
-            texcoord    = texcoord, 
-            visible     = visible, 
-            inside      = inside, 
-            opacity     = opacity,
-            fill        = fill,
-            slide       = slide,
-            transform   = transform
-        ), name)
         
     def mesh(self, xs, ys, zs, color=None, texture=None, cw=False, closed=False, **kwds):
         """网格面
@@ -887,27 +784,17 @@ class Region:
         
         vs = np.dstack((xs, ys, zs))
         rows, cols = vs.shape[:2]
+        vs = vs.reshape(-1,3)
         
         idx = np.arange(rows*cols).reshape(rows, cols)
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
+        indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
         
-        if cw:
-            indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel()) # XOY平面网格
-            normal = np.cross(vs[1:,:-1]-vs[:-1,:-1], vs[:-1,1:]-vs[:-1,:-1])
-        else:
-            indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel()) # XOZ平面网格
-            normal = np.cross(vs[:-1,1:]-vs[:-1,:-1], vs[1:,:-1]-vs[:-1,:-1])
-        
-        if closed:
-            normal = np.hstack((normal, normal[:,:1]))
-            normal = np.vstack((normal, np.tile(np.sum(normal[-1], axis=0)/normal.shape[1], (1,normal.shape[1],1))))
-        else:
-            normal = np.hstack((normal, normal[:,-1:]))
-            normal = np.vstack((normal, normal[-1:]))
-        normal = np.float32(normal.reshape(-1,3))
-        
-        vs = vs.reshape(-1,3)
-        #normal = self._get_normal(GL_TRIANGLES, vs, indices)
+        normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
+        normal[0] += normal[-1]
+        normal[-1] = normal[0]
+        normal[:,0] += normal[:,-1]
+        normal[:,-1] = normal[:,0]
         
         if color is None:
             u = np.linspace(0, 1, cols)
@@ -1175,7 +1062,7 @@ class Region:
         
         cm          - 调色板名称
         drange      - 值域范围或刻度序列：长度大于1的元组或列表
-        box         - 调色板位置：左上、左下、右下、右上的坐标
+        box         - 调色板位置：左上、左下、右上、右下的坐标
         mode        - 水平或垂直模式：可选项：'H'|'V'
         kwds        - 关键字参数
                             subject         - 标题
@@ -1213,7 +1100,7 @@ class Region:
         else:
             ticks = ticks[1:-1]
         
-        texcoord = np.array(((0,1),(0,0),(1,0),(1,1)), dtype=np.float32)
+        texcoord = np.array(((0,1),(0,0),(1,1),(1,0)), dtype=np.float32)
         colors = util.CM.cmap(np.linspace(dmin, dmax, 256), cm)
         
         if mode == 'H':
@@ -1222,14 +1109,14 @@ class Region:
             texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1))
         
         if mode == 'V':
-            u = box[3,0] - box[0,0]
+            u = box[2,0] - box[0,0]
             h = box[0,1] - box[1,1]
             if not subject is None:
                 vs_subject = np.array([
                     [box[0,0], box[0,1]+1.2*u],
                     [box[0,0], box[0,1]+0.4*u],
-                    [box[3,0], box[3,1]+0.4*u],
-                    [box[3,0], box[3,1]+1.2*u]
+                    [box[2,0], box[2,1]+0.4*u],
+                    [box[2,0], box[2,1]+1.2*u]
                 ])
                 self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False)
             
@@ -1237,25 +1124,25 @@ class Region:
             dashes = list()
             for t in ticks:
                 y = (t-dmin)*tk + box[1,1]
-                dashes.extend([[box[3,0], y], [box[3,0]+0.4*u, y]])
+                dashes.extend([[box[2,0], y], [box[2,0]+0.4*u, y]])
                 vs_tick = np.array([
-                    [box[3,0]+0.6*u, y+0.25*u],
-                    [box[3,0]+0.6*u, y-0.25*u],
-                    [box[3,0]+3*u, y-0.25*u],
-                    [box[3,0]+3*u, y+0.25*u]
+                    [box[2,0]+0.6*u, y+0.25*u],
+                    [box[2,0]+0.6*u, y-0.25*u],
+                    [box[2,0]+3*u, y-0.25*u],
+                    [box[2,0]+3*u, y+0.25*u]
                 ])
                 self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False)
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         else:
             u = box[0,1] - box[1,1]
-            w = box[3,0] - box[0,0]
+            w = box[2,0] - box[0,0]
             if not subject is None:
                 vs_subject = np.array([
                     [box[0,0], box[0,1]+1.4*u],
                     [box[0,0], box[0,1]+0.3*u],
-                    [box[3,0], box[3,1]+0.3*u],
-                    [box[3,0], box[3,1]+1.4*u]
+                    [box[2,0], box[2,1]+0.3*u],
+                    [box[2,0], box[2,1]+1.4*u]
                 ])
                 self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False)
             
@@ -1274,7 +1161,7 @@ class Region:
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         
-        self.quad(box, texture=texture, texcoord=texcoord, inside=False)
+        self.surface(box, texture=texture, texcoord=texcoord, method='strip', inside=False)
         
     def ticks3d(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
         """绘制3D网格和刻度
@@ -1426,19 +1313,19 @@ class Region:
         self.line(np.array(vs_zmax), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['front'], visible=visible)
         self.line(np.array(vs_zmin), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['back'], visible=visible)
         
-        vs_top = [[xx[0],yy[-1],zz[0]], [xx[0],yy[-1],zz[-1]], [xx[-1],yy[-1],zz[-1]], [xx[-1],yy[-1],zz[0]]]
-        vs_bottom = [[xx[0],yy[0],zz[0]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[0],zz[-1]], [xx[-1],yy[0],zz[0]]]
-        vs_left = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[0],yy[0],zz[-1]], [xx[0],yy[-1],zz[-1]]]
-        vs_right = [[xx[-1],yy[-1],zz[0]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[0],zz[-1]], [xx[-1],yy[-1],zz[-1]]]
-        vs_front = [[xx[0],yy[-1],zz[-1]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[0],zz[-1]], [xx[-1],yy[-1],zz[-1]]]
-        vs_back = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[-1],zz[0]]]
+        vs_top = [[xx[0],yy[-1],zz[0]], [xx[0],yy[-1],zz[-1]], [xx[-1],yy[-1],zz[0]], [xx[-1],yy[-1],zz[-1]]]
+        vs_bottom = [[xx[0],yy[0],zz[0]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[0],zz[-1]]]
+        vs_left = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[0],yy[-1],zz[-1]], [xx[0],yy[0],zz[-1]]]
+        vs_right = [[xx[-1],yy[-1],zz[0]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[-1],zz[-1]], [xx[-1],yy[0],zz[-1]]]
+        vs_front = [[xx[0],yy[-1],zz[-1]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[-1],zz[-1]], [xx[-1],yy[0],zz[-1]]]
+        vs_back = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[-1],yy[-1],zz[0]], [xx[-1],yy[0],zz[0]]]
         
-        self.quad(vs_top, color=bg, inside=False, opacity=False, name=self.ticks['top'], visible=visible)
-        self.quad(vs_bottom, color=bg, inside=False, opacity=False, name=self.ticks['bottom'], visible=visible)
-        self.quad(vs_left, color=bg, inside=False, opacity=False, name=self.ticks['left'], visible=visible)
-        self.quad(vs_right, color=bg, inside=False, opacity=False, name=self.ticks['right'], visible=visible)
-        self.quad(vs_front, color=bg, inside=False, opacity=False, name=self.ticks['front'], visible=visible)
-        self.quad(vs_back, color=bg, inside=False, opacity=False, name=self.ticks['back'], visible=visible)
+        self.surface(vs_top, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['top'], visible=visible)
+        self.surface(vs_bottom, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['bottom'], visible=visible)
+        self.surface(vs_left, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['left'], visible=visible)
+        self.surface(vs_right, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['right'], visible=visible)
+        self.surface(vs_front, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['front'], visible=visible)
+        self.surface(vs_back, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['back'], visible=visible)
         
         for x in xx[1:-1]:
             self.text(xf(x), pos=(x, yy[0]-u, zz[-1]+u), size=tick_size, loc='center-top', inside=False, name=self.ticks['x_ymin_zmax'], visible=visible)

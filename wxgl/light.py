@@ -167,10 +167,10 @@ class BaseLight:
                     case 0:
                         if (gl_VertexID == 1) {
                             gl_Position.y -= u_TextHeight;
-                        } else if (gl_VertexID == 2) {
+                        } else if (gl_VertexID == 3) {
                             gl_Position.y -= u_TextHeight;
                             gl_Position.x += u_TextWidth;
-                        } else if (gl_VertexID == 3) {
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth;
                         }
                         break;
@@ -179,10 +179,10 @@ class BaseLight:
                             gl_Position.y += u_TextHeight/2;
                         } else if (gl_VertexID == 1) {
                             gl_Position.y -= u_TextHeight/2;
-                        } else if (gl_VertexID == 2) {
+                        } else if (gl_VertexID == 3) {
                             gl_Position.x += u_TextWidth;
                             gl_Position.y -= u_TextHeight/2;
-                        } else if (gl_VertexID == 3) {
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth;
                             gl_Position.y += u_TextHeight/2;
                         }
@@ -190,9 +190,9 @@ class BaseLight:
                     case 2:
                         if (gl_VertexID == 0) {
                             gl_Position.y += u_TextHeight;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextWidth;
                         } else if (gl_VertexID == 3) {
+                            gl_Position.x += u_TextWidth;
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth;
                             gl_Position.y += u_TextHeight;
                         }
@@ -203,10 +203,10 @@ class BaseLight:
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth/2;
                             gl_Position.y -= u_TextHeight;
-                        } else if (gl_VertexID == 2) {
+                        } else if (gl_VertexID == 3) {
                             gl_Position.x += u_TextWidth/2;
                             gl_Position.y -= u_TextHeight;
-                        } else if (gl_VertexID == 3) {
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth/2;
                         }
                         break;
@@ -217,10 +217,10 @@ class BaseLight:
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth/2;
                             gl_Position.y -= u_TextHeight/2;
-                        } else if (gl_VertexID == 2) {
+                        } else if (gl_VertexID == 3) {
                             gl_Position.x += u_TextWidth/2;
                             gl_Position.y -= u_TextHeight/2;
-                        } else if (gl_VertexID == 3) {
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth/2;
                             gl_Position.y += u_TextHeight/2;
                         }
@@ -231,9 +231,9 @@ class BaseLight:
                             gl_Position.y += u_TextHeight;
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextWidth/2;
                         } else if (gl_VertexID == 3) {
+                            gl_Position.x += u_TextWidth/2;
+                        } else if (gl_VertexID == 2) {
                             gl_Position.x += u_TextWidth/2;
                             gl_Position.y += u_TextHeight;
                         }
@@ -244,7 +244,7 @@ class BaseLight:
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth;
                             gl_Position.y -= u_TextHeight;
-                        } else if (gl_VertexID == 2) {
+                        } else if (gl_VertexID == 3) {
                             gl_Position.y -= u_TextHeight;
                         }
                         break;
@@ -255,9 +255,9 @@ class BaseLight:
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth;
                             gl_Position.y -= u_TextHeight/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.y -= u_TextHeight/2;
                         } else if (gl_VertexID == 3) {
+                            gl_Position.y -= u_TextHeight/2;
+                        } else if (gl_VertexID == 2) {
                             gl_Position.y += u_TextHeight/2;
                         }
                         break;
@@ -267,7 +267,7 @@ class BaseLight:
                             gl_Position.y += u_TextHeight;
                         } else if (gl_VertexID == 1) {
                             gl_Position.x -= u_TextWidth;
-                        } else if (gl_VertexID == 3) {
+                        } else if (gl_VertexID == 2) {
                             gl_Position.y += u_TextHeight;
                         }
                 }
