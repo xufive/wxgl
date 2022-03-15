@@ -129,6 +129,8 @@ class Scene(glcanvas.GLCanvas):
         
         self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)                      # 绑定鼠标左键按下事件
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)                          # 绑定鼠标左键弹起事件                   
+        self.Bind(wx.EVT_RIGHT_DOWN, self.on_right_down)                    # 绑定鼠标右键按下事件
+        self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)                        # 绑定鼠标右键弹起事件                   
         self.Bind(wx.EVT_MOTION, self.on_mouse_motion)                      # 绑定鼠标移动事件
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)                   # 绑定鼠标滚轮事件
     
@@ -254,36 +256,62 @@ class Scene(glcanvas.GLCanvas):
         except:
             pass
         
+    def on_right_down(self, evt):
+        """响应鼠标右键按下事件"""
+        
+        self.CaptureMouse()
+        self.mpos = evt.GetPosition()
+        
+    def on_right_up(self, evt):
+        """响应鼠标右键弹起事件"""
+        
+        try:
+            self.ReleaseMouse()
+        except:
+            pass
+        
     def on_mouse_motion(self, evt):
         """响应鼠标移动事件"""
         
-        if evt.Dragging() and evt.LeftIsDown():
+        if evt.Dragging():
             pos = evt.GetPosition()
             dx, dy = pos - self.mpos
             self.mpos = pos
             
-            azim = self.azim - self.up[1]*(180*dx/self.csize[0])
-            elev = self.elev + 90*dy/self.csize[1]
+            if evt.LeftIsDown():
+                azim = self.azim - self.up[1]*(180*dx/self.csize[0])
+                elev = self.elev + 90*dy/self.csize[1]
+                self._update_pos_and_up(azim=azim, elev=elev)
+            elif evt.RightIsDown(): 
+                oecs = [self.oecs[0]-dx/self.csize[0], self.oecs[1]+dy/self.csize[1], self.oecs[2]]
+                self._update_pos_and_up(oecs=oecs)
             
-            self._update_pos_and_up(azim=azim, elev=elev)
             self.update_ticks()
             self.render()
         
     def on_mouse_wheel(self, evt):
         """响应鼠标滚轮事件"""
         
-        if evt.WheelRotation < 0:
-            self.zoom *= 1.05
-            if self.zoom > 100:
-                self.zoom = 100
+        if evt.RightIsDown():
+            if evt.WheelRotation < 0:
+                dist = self.dist * 1.01
+            else:
+                dist = self.dist * 0.99
+            
+            self._update_pos_and_up(dist=dist)
         else:
-            self.zoom *= 0.95
-            if self.zoom < 0.01:
-                self.zoom = 0.01
-        
-        for reg in self.regions:
-            reg.pmat[:] = reg.get_pmat()
-        
+            if evt.WheelRotation < 0:
+                self.zoom *= 1.05
+                if self.zoom > 100:
+                    self.zoom = 100
+            else:
+                self.zoom *= 0.95
+                if self.zoom < 0.01:
+                    self.zoom = 0.01
+            
+            for reg in self.regions:
+                reg.pmat[:] = reg.get_pmat()
+            
         self.render()
     
     def render(self):

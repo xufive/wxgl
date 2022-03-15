@@ -146,7 +146,7 @@ def text2image(text, size, color, family=None, weight='normal'):
     
     text        - 文本字符串
     size        - 字号，整型，默认32
-    color       - 文本颜色，浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
+    color       - 文本颜色，浮点型元组、列表或numpy数组，值域范围[0,1]
     family      - 字体，None表示当前默认的字体
     weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
     """

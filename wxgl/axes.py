@@ -453,7 +453,7 @@ class Axes:
         
         self.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
     
-    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
+    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
         """由三角面描述的曲面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
@@ -501,6 +501,7 @@ class Axes:
             texcoord    = texcoord, 
             method      = method, 
             indices     = indices, 
+            closed      = closed,
             **kwds
         )
         
@@ -603,7 +604,7 @@ class Axes:
     #    
     #    self.add_widget(self.reg_main, 'polygon', vs, color=color, texture=texture, texcoord=texcoord, xflip=xflip, yflip=yflip, **kwds)
     
-    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, closed=False, **kwds):
+    def mesh(self, xs, ys, zs=None, color=None, cm=None, texture=None, cw=False, uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
@@ -649,6 +650,9 @@ class Axes:
         self.add_widget(self.reg_main, 'mesh', xs, ys, zs, 
             color       = color, 
             texture     = texture,
+            cw          = cw,
+            uclosed     = uclosed,
+            vclosed     = vclosed,
             **kwds
         )
     

@@ -211,7 +211,7 @@ class Region:
             if r_z[1] > self.r_z[1]:
                 self.r_z[1] = r_z[1]
         
-        dx, dy = self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0]
+        dx, dy, dz = self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0]
         if dx == 0:
             dx = 1e-10
         if dy == 0:
@@ -221,6 +221,9 @@ class Region:
             self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
         else:
             self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+        
+        if self.scale * dz > 4:
+            self.scale = 4/dz
         
         self.shift = np.array((-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2), dtype=np.float32)
         self.mmat[:] = util.model_matrix(self.shift, self.scale)
@@ -427,6 +430,12 @@ class Region:
         
         if color is None:
             color = self.scene.style[1]
+        elif isinstance(color, (tuple, list, np.ndarray)):
+            color = np.float32(color)
+            if color.shape != (3,) and color.shape != (4,):
+                raise KeyError('期望color参数为浮点类型RGB或RGBA颜色')
+        else:
+            raise KeyError('期望color参数为浮点类型元组、列表或numpy数组')
         
         box = np.tile(np.array(pos, dtype=np.float32), (4,1))
         texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
@@ -508,6 +517,12 @@ class Region:
         
         if color is None:
             color = self.scene.style[1]
+        elif isinstance(color, (tuple, list, np.ndarray)):
+            color = np.float32(color)
+            if color.shape != (3,) and color.shape != (4,):
+                raise KeyError('期望color参数为浮点类型RGB或RGBA颜色')
+        else:
+            raise KeyError('期望color参数为浮点类型元组、列表或numpy数组')
          
         im_text = util.text2image(text, size, color, family, weight)
         texture = wxTexture.Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
@@ -601,10 +616,15 @@ class Region:
         if color.ndim == 1:
             color = np.tile(color, (len(vs),1))
         
+        if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
+            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
+        
         if isinstance(size, (int, float)):
             size = np.ones(len(vs), dtype=np.float32) * size
         else:
             size = np.float32(size)
+            if size.ndim != 1 or size.shape[0] != vs.shape[0]:
+                raise KeyError('期望size参数为长度等于%d的浮点型数组'%vs.shape[0])
         
         light = wxLight.BaseLight(ambient)
         self.add_model(light.get_model(GL_POINTS, vs, 
@@ -657,6 +677,9 @@ class Region:
         if color.ndim == 1:
             color = np.tile(color, (len(vs),1))
         
+        if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
+            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
+        
         method = method.upper()
         if method == "ISOLATE":
             gltype = GL_LINES
@@ -679,7 +702,7 @@ class Region:
             transform   = transform
         ), name)
     
-    def surface(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, **kwds):
+    def surface(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
         """曲面
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
@@ -691,6 +714,7 @@ class Region:
             'strip'         - 带状三角面
             'fan'           - 扇面
         indices     - 顶点索引集，默认None，表示不使用索引
+        uclosed     - 带状三角面或扇面两端闭合：布尔型
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -731,10 +755,39 @@ class Region:
         vs = np.array(vs, dtype=np.float32)
         normal = self._get_normal(gltype, vs, indices)
         
-        if not color is None:
+        if closed:
+            if gltype == GL_TRIANGLE_STRIP:
+                normal[0] += normal[-2]
+                normal[1] += normal[-1]
+                normal[-2] = normal[0]
+                normal[-1] = normal[1]
+            if gltype == GL_TRIANGLE_FAN:
+                normal[1] += normal[-1]
+                normal[-1] = normal[1]
+        
+        if color is None and texture is None:
+            raise KeyError('缺少颜色或纹理参数')
+        
+        if color is None:
+            if not isinstance(texture, wxgl.Texture):
+                raise KeyError('期望纹理参数为wxgl.Texture类型')
+            
+            if texcoord is None:
+                raise KeyError('缺少纹理坐标参数')
+            
+            texcoord = np.float32(texcoord)
+            if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] != 2:
+                raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
+        else:
+            if not isinstance(color, (tuple, list, np.ndarray)):
+                raise KeyError('期望颜色参数为元组、列表或numpy数组类型')
+            
             color = np.array(color, dtype=np.float32)
             if color.ndim == 1:
-                color = np.tile(color, (len(vs),1))
+                color = np.tile(color, (vs.shape[0],1))
+            
+            if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
+                raise KeyError('期望颜色参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
         
         self.add_model(light.get_model(gltype, vs,
             indices     = indices,
@@ -750,14 +803,15 @@ class Region:
             transform   = transform
         ), name)
         
-    def mesh(self, xs, ys, zs, color=None, texture=None, cw=False, closed=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, texture=None, cw=False, uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
         color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理：wxgl.Texture对象
         cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
-        closed      - 网格闭合：布尔型。该参数仅用于使用经纬度网格生成球
+        uclosed     - u方向网格两端闭合：布尔型
+        vclosed     - v方向网格两端闭合：布尔型
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -786,21 +840,20 @@ class Region:
         rows, cols = vs.shape[:2]
         vs = vs.reshape(-1,3)
         
-        idx = np.arange(rows*cols).reshape(rows, cols)
-        idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
-        indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
-        
-        normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
-        normal[0] += normal[-1]
-        normal[-1] = normal[0]
-        normal[:,0] += normal[:,-1]
-        normal[:,-1] = normal[:,0]
+        if color is None and texture is None:
+            raise KeyError('缺少颜色或纹理参数')
         
         if color is None:
+            if not isinstance(texture, wxgl.Texture):
+                raise KeyError('期望纹理参数为wxgl.Texture类型')
+            
             u = np.linspace(0, 1, cols)
             v = np.linspace(1, 0, rows)
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)).reshape(-1,2))
         else:
+            if not isinstance(color, (tuple, list, np.ndarray)):
+                raise KeyError('期望颜色参数为元组、列表或numpy数组类型')
+            
             texcoord = None
             color = np.array(color, dtype=np.float32)
             
@@ -809,6 +862,24 @@ class Region:
             
             if color.ndim > 2:
                 color = color.reshape(-1, color.shape[-1])
+        
+        idx = np.arange(rows*cols).reshape(rows, cols)
+        idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
+        
+        if cw:
+            indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
+        else:
+            indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
+        
+        normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
+        
+        if vclosed:
+            normal[0] += normal[-1]
+            normal[-1] = normal[0]
+        
+        if uclosed:
+            normal[:,0] += normal[:,-1]
+            normal[:,-1] = normal[:,0]
         
         self.add_model(light.get_model(GL_TRIANGLES, vs,
             indices     = indices,
