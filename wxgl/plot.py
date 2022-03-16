@@ -123,20 +123,20 @@ def point(*args, **kwds):
     fig.curr_ax.point(*args, **kwds)
 
 @current_axes
-def mesh(*args, **kwds):
-    fig.curr_ax.mesh(*args, **kwds)
-
-@current_axes
 def surface(*args, **kwds):
     fig.curr_ax.surface(*args, **kwds)
 
 @current_axes
-def quad(*args, **kwds):
-    fig.curr_ax.quad(*args, **kwds)
+def mesh(*args, **kwds):
+    fig.curr_ax.mesh(*args, **kwds)
 
 @current_axes
-def polygon(*args, **kwds):
-    fig.curr_ax.polygon(*args, **kwds)
+def cylinder(*args, **kwds):
+    fig.curr_ax.cylinder(*args, **kwds)
+
+@current_axes
+def torus(*args, **kwds):
+    fig.curr_ax.torus(*args, **kwds)
 
 @current_axes
 def uvsphere(*args, **kwds):
@@ -147,16 +147,16 @@ def isosphere(*args, **kwds):
     fig.curr_ax.isosphere(*args, **kwds)
 
 @current_axes
+def circle(*args, **kwds):
+    fig.curr_ax.circle(*args, **kwds)
+
+@current_axes
 def cone(*args, **kwds):
     fig.curr_ax.cone(*args, **kwds)
 
 @current_axes
-def cylinder(*args, **kwds):
-    fig.curr_ax.cylinder(*args, **kwds)
-
-@current_axes
-def cylinder(*args, **kwds):
-    fig.curr_ax.cylinder(*args, **kwds)
+def cube(*args, **kwds):
+    fig.curr_ax.cube(*args, **kwds)
 
 @current_axes
 def isosurface(*args, **kwds):

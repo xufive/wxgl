@@ -714,7 +714,7 @@ class Region:
             'strip'         - 带状三角面
             'fan'           - 扇面
         indices     - 顶点索引集，默认None，表示不使用索引
-        uclosed     - 带状三角面或扇面两端闭合：布尔型
+        closed      - 带状三角面或扇面两端闭合：布尔型
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -803,15 +803,17 @@ class Region:
             transform   = transform
         ), name)
         
-    def mesh(self, xs, ys, zs, color=None, texture=None, cw=False, uclosed=False, vclosed=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, cw=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
         color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理：wxgl.Texture对象
-        cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
+        utr         - u方向纹理坐标范围
+        vtr         - v方向纹理坐标范围
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
+        cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -847,8 +849,8 @@ class Region:
             if not isinstance(texture, wxgl.Texture):
                 raise KeyError('期望纹理参数为wxgl.Texture类型')
             
-            u = np.linspace(0, 1, cols)
-            v = np.linspace(1, 0, rows)
+            u = np.linspace(utr[0], utr[1], cols)
+            v = np.linspace(vtr[1], vtr[0], rows)
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)).reshape(-1,2))
         else:
             if not isinstance(color, (tuple, list, np.ndarray)):
@@ -867,9 +869,9 @@ class Region:
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
         
         if cw:
-            indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
-        else:
             indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
+        else:
+            indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
         
         normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
         
@@ -894,53 +896,146 @@ class Region:
             slide       = slide,
             transform   = transform
         ), name)
+
+    def cylinder(self, c1, c2, r, color=None, texture=None, arc=(0,360), cell=5, **kwds):
+        """圆柱
         
-    def uvsphere(self, center, r, lon=(0,360), lat=(-90,90), color=None, texture=None, slices=90, **kwds):
+        c1          - 圆柱端面圆心：元组、列表或numpy数组
+        c2          - 圆柱端面圆心：元组、列表或numpy数组
+        r           - 圆柱半径：浮点型
+        color       - 颜色：浮点型元组、列表或numpy数组
+        texture     - 纹理：wxgl.Texture对象
+        arc         - 弧度角范围：默认0°~360°
+        cell        - 网格精度：默认5°
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            fill            - 填充，默认None（使用当前设置）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        c1 = np.array(c1)
+        c2 = np.array(c2)
+        m_rotate = util.y2v(c1 - c2)
+        
+        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        slices = round(abs(arc_0-arc_1)/cell)
+        
+        theta = np.linspace(arc_0, arc_1, slices)
+        xs = r * np.cos(theta)
+        zs = -r * np.sin(theta)
+        ys = np.zeros_like(theta)
+        vs = np.stack((xs,ys,zs), axis=1)
+        vs = np.dot(vs, m_rotate)
+        
+        vs1 = vs + c1
+        vs2 = vs + c2
+        vs = np.stack((vs1, vs2), axis=1).reshape(-1,3)
+        
+        if color is None and texture is None:
+            color = self.scene.style[1]
+        
+        if color is None:
+            u = np.linspace(0, 1, vs.shape[0]//2)
+            v = np.linspace(1, 0, 2)
+            texcoord = np.float32(np.stack((np.repeat(u, 2), np.tile(v, vs.shape[0]//2)), axis=1))
+        else:
+            texcoord = None
+        
+        self.surface(vs, color=color, texture=texture, texcoord=texcoord, method='strip', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
+
+    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, u=(0,360), v=(0,360), cell=5, **kwds):
+        """球环
+        
+        center      - 球环中心坐标：元组、列表或numpy数组
+        r1          - 球半径：浮点型
+        r2          - 环半径：浮点型
+        vec         - 环面法向量
+        color       - 颜色：浮点型元组、列表或numpy数组
+        texture     - 纹理：wxgl.Texture对象
+        u           - u方向范围：默认0°~360°
+        v           - v方向范围：默认-90°~90°
+        cell        - 网格精度：默认5°
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            fill            - 填充，默认None（使用当前设置）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        u_0, u_1 = np.radians(u[0]), np.radians(u[1])
+        v_0, v_1 = np.radians(v[0]), np.radians(v[1])
+        cell = np.radians(cell)
+        u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
+        gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
+        
+        xs = (r2 + r1 * np.cos(gv)) * np.cos(gu)
+        zs = -(r2 + r1 * np.cos(gv)) * np.sin(gu)
+        ys = r1 * np.sin(gv)
+        
+        m_rotate = util.y2v(vec)
+        vs = np.dot(np.dstack((xs, ys, zs)), m_rotate) + center
+        xs, ys, zs = vs[...,0], vs[...,1], vs[...,2]
+        
+        uclosed = abs(u[0]-u[1])==360
+        vclosed = abs(v[0]-v[1])==360
+        
+        if color is None and texture is None:
+            color = self.scene.style[1]
+        
+        self.mesh(xs, ys, zs, color=color, texture=texture, uclosed=uclosed, vclosed=vclosed, **kwds)
+    
+    def uvsphere(self, center, r, color=None, texture=None, u=(0,360), v=(-90,90), cell=5, **kwds):
         """使用经纬度网格生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        lon         - 经度范围：默认0°~360°
-        lat         - 纬度范围：默认-90°~90°
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：浮点型元组、列表或numpy数组
         texture     - 纹理：wxgl.Texture对象
-        slices      - 圆周分片数：整型
-        xflip       - 2D纹理左右翻转：布尔型，默认False
-        yflip       - 2D纹理上下翻转：布尔型，False
+        u           - u方向范围：默认0°~360°
+        v           - v方向范围：默认-90°~90°
+        cell        - 网格精度：默认5°
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
             fill            - 填充，默认None（使用当前设置）
-            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
-        for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
-                raise KeyError('不支持的关键字参数：%s'%key)
         
-        lon_0, lon_1 = np.radians(lon[0]), np.radians(lon[1])
-        lat_0, lat_1 = np.radians(lat[0]), np.radians(lat[1])
-        lats, lons = np.mgrid[lat_0:lat_1:complex(0,slices//2+1), lon_0:lon_1:complex(0,slices+1)]
+        u_0, u_1 = np.radians(u[0]), np.radians(u[1])
+        v_0, v_1 = np.radians(v[0]), np.radians(v[1])
+        cell = np.radians(cell)
+        u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
+        gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
         
-        zs = -r * np.cos(lats)*np.cos(lons) + center[2]
-        xs = r * np.cos(lats)*np.sin(lons) + center[0]
-        ys = r * np.sin(lats) + center[1]
+        zs = -r * np.cos(gv)*np.cos(gu) + center[2]
+        xs = r * np.cos(gv)*np.sin(gu) + center[0]
+        ys = r * np.sin(gv) + center[1]
         
-        self.mesh(xs, ys, zs, color=color, texture=texture, **kwds)
+        if color is None and texture is None:
+            color = self.scene.style[1]
         
+        self.mesh(xs, ys, zs, color=color, texture=texture, uclosed=abs(u[0]-u[1])==360, **kwds)
+
     def isosphere(self, center, r, color=None, iterations=5, **kwds):
         """通过对正八面体的迭代细分生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：浮点型元组、列表或numpy数组
         iterations  - 迭代次数：整型
         kwds        - 关键字参数
             name            - 模型名
@@ -950,21 +1045,8 @@ class Region:
             fill            - 填充，默认None（使用当前设置）
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+            light           - 光照情景模式，默认太阳光照情景模式
         """
-        
-        for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'fill', 'slide', 'transform', 'light']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        name = kwds.get('name')
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
-        light = kwds.get('light', wxLight.SunLight())
         
         vs = np.array([[r,0,0], [0,r,0], [-r,0,0], [0,-r,0], [0,0,r], [0,0,-r]])
         idx = np.array([4,0,1,4,1,2,4,2,3,4,3,0,5,0,3,5,3,2,5,2,1,5,1,0])
@@ -980,145 +1062,150 @@ class Region:
             vs = np.stack((vs[::3],p0,p2,vs[1::3],p1,p0,vs[2::3],p2,p1,p0,p1,p2),axis=1).reshape(-1,3)
         vs += np.array(center)
         
-        color = np.array(color, dtype=np.float32)
-        if color.ndim == 1:
-            color = np.tile(color, (len(vs),1))
+        if color is None:
+            color = self.scene.style[1]
         
-        gltype = GL_TRIANGLES
-        normal = self._get_normal(gltype, vs)
+        self.surface(vs, color=color, method='isolate', **kwds)
+
+    def circle(self, center, r, vec=(0,1,0), color=None, arc=(0,360), cell=5, **kwds):
+        """圆
         
-        self.add_model(light.get_model(gltype, vs,
-            normal      = normal, 
-            color       = color,
-            visible     = visible, 
-            inside      = inside, 
-            opacity     = opacity,
-            fill        = fill,
-            slide       = slide,
-            transform   = transform
-        ), name)
-    
-    def cone(self, spire, center, r, color=None, base=True, slices=90, **kwds):
-        """圆锥
+        center      - 锥底圆心：元组、列表或numpy数组
+        r           - 锥底半径：浮点型
+        vec         - 圆面法向量
+        color       - 颜色：浮点型元组、列表或numpy数组
+        arc         - 弧度角范围：默认0°~360°
+        cell        - 网格精度：默认5°
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            fill            - 填充，默认None（使用当前设置）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        center = np.array(center)
+        m_rotate = util.y2v(vec)
+        
+        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        slices = round(abs(arc_0-arc_1)/cell)
+        
+        theta = np.linspace(arc_0, arc_1, slices)
+        xs = r * np.cos(theta)
+        zs = -r * np.sin(theta)
+        ys = np.zeros_like(theta)
+        
+        vs = np.stack((xs,ys,zs), axis=1)
+        vs = np.dot(vs, m_rotate) + center
+        vs = np.vstack((center, vs))
+        
+        if color is None:
+            color = self.scene.style[1]
+        
+        self.surface(vs, color=color, method='fan', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
+
+    def cone(self, spire, center, r, color=None, arc=(0,360), cell=5, **kwds):
+        """锥
         
         spire       - 锥尖：元组、列表或numpy数组
         center      - 锥底圆心：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
-        base        - 是否绘制锥底：默认True
-        slices      - 圆周分片数：整型
+        color       - 颜色：浮点型元组、列表或numpy数组
+        arc         - 弧度角范围：默认0°~360°
+        cell        - 网格精度：默认5°
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
             fill            - 填充，默认None（使用当前设置）
-            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
-        
-        for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        if 'name' not in kwds:
-            kwds.update({'name': uuid.uuid1().hex})
         
         spire = np.array(spire)
         center = np.array(center)
         m_rotate = util.y2v(spire - center)
         
-        theta = np.linspace(0, 2*np.pi, slices+1)
+        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        slices = round(abs(arc_0-arc_1)/cell)
+        
+        theta = np.linspace(arc_0, arc_1, slices)
         xs = r * np.cos(theta)
         zs = -r * np.sin(theta)
         ys = np.zeros_like(theta)
+        
         vs = np.stack((xs,ys,zs), axis=1)
         vs = np.dot(vs, m_rotate) + center
+        vs = np.vstack((spire, vs))
         
-        self.surface(np.vstack((spire, vs)), color=color, method='fan', **kwds)
-        if base:
-            self.surface(np.vstack((center, vs)), color=color, method='fan', **kwds)
-    
-    def cylinder(self, c1, c2, r, color=None, base=True, slices=90, **kwds):
-        """圆柱
+        if color is None:
+            color = self.scene.style[1]
         
-        c1          - 圆柱端面圆心：元组、列表或numpy数组
-        c2          - 圆柱端面圆心：元组、列表或numpy数组
-        r           - 圆柱半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
-        base        - 是否绘制圆柱端面：默认True
-        slices      - 圆周分片数：整型
+        self.surface(vs, color=color, method='fan', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
+
+    def cube(self, center, side, vec=(0,1,0), color=None, **kwds):
+        """绘制六面体
+        
+        center      - 中心坐标，元组、列表或numpy数组
+        side        - 棱长：数值或长度为3的元组、列表、numpy数组
+        vec         - 六面体上表面法向量
+        color       - 颜色：浮点型元组、列表或numpy数组
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
             fill            - 填充，默认None（使用当前设置）
-            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
-        for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
-                raise KeyError('不支持的关键字参数：%s'%key)
+        if isinstance(side, (tuple, list, np.ndarray)):
+            x, y, z = side[0]/2, side[1]/2, side[2]/2
+        else:
+            x, y, z = side/2, side/2, side/2
         
-        if 'name' not in kwds:
-            kwds.update({'name': uuid.uuid1().hex})
+        vs_front = np.array(((-x,y,z),(-x,-y,z),(x,-y,z),(x,-y,z),(x,y,z),(-x,y,z)))
+        vs_back = np.array(((x,y,-z),(x,-y,-z),(-x,-y,-z),(-x,-y,-z),(-x,y,-z),(x,y,-z)))
+        vs_top = np.array(((-x,y,-z),(-x,y,z),(x,y,z),(x,y,z),(x,y,-z),(-x,y,-z)))
+        vs_bottom = np.array(((-x,-y,z),(-x,-y,-z),(x,-y,-z),(x,-y,-z),(x,-y,z),(-x,-y,z)))
+        vs_left = np.array(((-x,y,-z),(-x,-y,-z),(-x,-y,z),(-x,-y,z),(-x,y,z),(-x,y,-z)))
+        vs_right = np.array(((x,y,z),(x,-y,z),(x,-y,-z),(x,-y,-z),(x,y,-z),(x,y,z)))
         
-        c1 = np.array(c1)
-        c2 = np.array(c2)
-        m_rotate = util.y2v(c1 - c2)
+        vs = np.vstack((vs_front, vs_back, vs_top, vs_bottom, vs_left, vs_right))
+        m_rotate = util.y2v(vec)
+        vs = np.dot(vs, m_rotate) + center
         
-        theta = np.linspace(0, 2*np.pi, slices+1)
-        xs = r * np.cos(theta)
-        zs = -r * np.sin(theta)
-        ys = np.zeros_like(theta)
-        vs = np.stack((xs,ys,zs), axis=1)
-        vs = np.dot(vs, m_rotate)
+        if color is None:
+            color = self.scene.style[1]
         
-        vs1 = vs + c1
-        vs2 = vs + c2
-        
-        self.surface(np.stack((vs1, vs2), axis=1).reshape(-1,3), color=color, method='strip', **kwds)
-        if base:
-            self.surface(np.vstack((c1, vs1)), color=color, method='fan', **kwds)
-            self.surface(np.vstack((c2, vs2)), color=color, method='fan', **kwds)
-    
-    def isosurface(self, data, level, color, x=None, y=None, z=None, **kwds):
+        self.surface(vs, color=color, method='isolate', indices=None, **kwds)
+
+    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
         """三维等值面
         
         data        - 数据集：三维numpy数组
-        level       - 阈值：浮点型。data数据集中小于level的数据将被忽略
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        level       - 阈值：浮点型
+        color       - 颜色：浮点型元组、列表或numpy数组
         x/y/z       - 数据集对应的点的x/y/z轴的动态范围
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
             fill            - 填充，默认None（使用当前设置）
-            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
-        for key in kwds:
-            if key not in ['name', 'visible', 'slide', 'inside', 'opacity', 'transform', 'fill', 'ambient', 'light', 'light_color', 'shininess']:
-                raise KeyError('不支持的关键字参数：%s'%key)
-        
-        vs, ids = util.isosurface(data, level)
-        #ids = np.stack((ids[:,0], ids[:,2], ids[:,1]), axis=1)
+        vs, ids = util._isosurface(data, level)
         indices = ids.ravel()
         
         xs = vs[:,0] if x is None else (x[1] - x[0]) * vs[:,0] / data.shape[0] + x[0]
@@ -1126,7 +1213,10 @@ class Region:
         zs = vs[:,2] if z is None else (z[1] - z[0]) * vs[:,2] / data.shape[2] + z[0]
         vs = np.stack((xs, ys, zs), axis=1)
         
-        self.surface(vs[indices], color=color, indices=None, **kwds)
+        if color is None:
+            color = self.scene.style[1]
+        
+        self.surface(vs, color=color, method='isolate', indices=indices, **kwds)
     
     def colorbar(self, cm, drange, box, mode='V', **kwds):
         """绘制colorBar 

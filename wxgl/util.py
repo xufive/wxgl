@@ -202,7 +202,7 @@ def cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None,
     
     return CM.cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False)
 
-def isosurface(data, level):
+def _isosurface(data, level):
     """返回基于MarchingCube算法的等值面"""
     
     data = np.ascontiguousarray(data)
@@ -591,3 +591,4 @@ def _get_data_cache():
         face_shift_tables.append(edge_shifts[faceTableI])
         
     return face_shift_tables, edge_shifts, edge_table, n_table_faces
+    
