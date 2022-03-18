@@ -212,15 +212,16 @@ class Region:
                 self.r_z[1] = r_z[1]
         
         dx, dy, dz = self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0]
-        if dx == 0:
-            dx = 1e-10
-        if dy == 0:
-            dy = 1e-10
         
-        if self.aspect > dx/dy:
-            self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
-        else:
+        if dx > 0 and dy > 0:
+            if self.aspect > dx/dy:
+                self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
+            else:
+                self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+        elif dx > 0 and dy <= 0:
             self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+        elif dx <= 0 and dy > 0:
+            self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
         
         if self.scale * dz > 4:
             self.scale = 4/dz
@@ -609,22 +610,25 @@ class Region:
         transform = kwds.get('transform')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
         
+        vs = np.array(vs, dtype=np.float32)
+        n = vs.shape[0]
+        
         if color is None:
             color = self.scene.style[1]
         
         color = np.array(color, dtype=np.float32)
         if color.ndim == 1:
-            color = np.tile(color, (len(vs),1))
+            color = np.tile(color, (n,1))
         
-        if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
-            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
+        if color.ndim != 2 or color.shape[0] != n or color.shape[1] not in (3,4):
+            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%n)
         
         if isinstance(size, (int, float)):
-            size = np.ones(len(vs), dtype=np.float32) * size
+            size = np.ones(n, dtype=np.float32) * size
         else:
             size = np.float32(size)
-            if size.ndim != 1 or size.shape[0] != vs.shape[0]:
-                raise KeyError('期望size参数为长度等于%d的浮点型数组'%vs.shape[0])
+            if size.ndim != 1 or size.shape[0] != n:
+                raise KeyError('期望size参数为长度等于%d的浮点型数组'%n)
         
         light = wxLight.BaseLight(ambient)
         self.add_model(light.get_model(GL_POINTS, vs, 
@@ -670,15 +674,18 @@ class Region:
         transform = kwds.get('transform')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
         
+        vs = np.array(vs, dtype=np.float32)
+        n = vs.shape[0]
+        
         if color is None:
             color = self.scene.style[1]
         
         color = np.array(color, dtype=np.float32)
         if color.ndim == 1:
-            color = np.tile(color, (len(vs),1))
+            color = np.tile(color, (n,1))
         
-        if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
-            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
+        if color.ndim != 2 or color.shape[0] != n or color.shape[1] not in (3,4):
+            raise KeyError('期望color参数为%d个RGB或RGBA颜色组成的浮点型数组'%n)
         
         method = method.upper()
         if method == "ISOLATE":
@@ -860,7 +867,7 @@ class Region:
             color = np.array(color, dtype=np.float32)
             
             if color.ndim == 1:
-                color = np.tile(color, (len(vs),1))
+                color = np.tile(color, (rows*cols,1))
             
             if color.ndim > 2:
                 color = color.reshape(-1, color.shape[-1])
@@ -1262,9 +1269,9 @@ class Region:
         colors = util.CM.cmap(np.linspace(dmin, dmax, 256), cm)
         
         if mode == 'H':
-            texture = np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,-1))
+            texture = wxTexture.Texture(np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,-1)))
         else:
-            texture = np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1))
+            texture = wxTexture.Texture(np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1)))
         
         if mode == 'V':
             u = box[2,0] - box[0,0]
@@ -1273,10 +1280,10 @@ class Region:
                 vs_subject = np.array([
                     [box[0,0], box[0,1]+1.2*u],
                     [box[0,0], box[0,1]+0.4*u],
-                    [box[2,0], box[2,1]+0.4*u],
-                    [box[2,0], box[2,1]+1.2*u]
+                    [box[2,0], box[2,1]+1.2*u],
+                    [box[2,0], box[2,1]+0.4*u]
                 ])
-                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False)
+                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
             
             tk = h/(dmax-dmin)
             dashes = list()
@@ -1286,10 +1293,10 @@ class Region:
                 vs_tick = np.array([
                     [box[2,0]+0.6*u, y+0.25*u],
                     [box[2,0]+0.6*u, y-0.25*u],
-                    [box[2,0]+3*u, y-0.25*u],
-                    [box[2,0]+3*u, y+0.25*u]
+                    [box[2,0]+3*u, y+0.25*u],
+                    [box[2,0]+3*u, y-0.25*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False)
+                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         else:
@@ -1299,10 +1306,10 @@ class Region:
                 vs_subject = np.array([
                     [box[0,0], box[0,1]+1.4*u],
                     [box[0,0], box[0,1]+0.3*u],
-                    [box[2,0], box[2,1]+0.3*u],
-                    [box[2,0], box[2,1]+1.4*u]
+                    [box[2,0], box[2,1]+1.4*u],
+                    [box[2,0], box[2,1]+0.3*u]
                 ])
-                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False)
+                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
             
             tk = w/(dmax-dmin)
             dashes = list()
@@ -1312,10 +1319,10 @@ class Region:
                 vs_tick = np.array([
                     [x-u, box[1,1]-0.65*u],
                     [x-u, box[1,1]-1.35*u],
-                    [x+u, box[1,1]-1.35*u],
-                    [x+u, box[1,1]-0.65*u]
+                    [x+u, box[1,1]-0.65*u],
+                    [x+u, box[1,1]-1.35*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False)
+                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         

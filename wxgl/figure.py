@@ -189,16 +189,15 @@ class Figure:
         for ax in self.axes_list:
             ax._layout() # 子图布局
         
-        #try:
         self._draw()
+        
         if self.ff.scene.islive:
             self.ff.tb.EnableTool(self.ff.ID_PAUSE, True)
             self.ff.cb_export.Enable(True)
+        
         self.ff.Show()
         self.app.MainLoop()
-        #except Exception as e:
-        #    print('画布显示异常，请通知xufive@gmail.com，并附上如下信息：\n%s'%str(e))
-        #finally:
+        
         self._destroy_frame()
     
     def savefig(self, fn):
@@ -212,14 +211,10 @@ class Figure:
         for ax in self.axes_list:
             ax._layout() # 子图布局
         
-        try: 
-            self._draw()
-            self.ff.scene.render()
-            self.ff.scene.save_scene(fn, alpha=os.path.splitext(fn)[-1]=='.png')
-        except Exception as e:
-            print('画布显示异常，请通知xufive@gmail.com，并附上如下信息：\n%s'%str(e))
-        finally:
-            self._destroy_frame()
+        self._draw()
+        self.ff.scene.render()
+        self.ff.scene.save_scene(fn, alpha=os.path.splitext(fn)[-1]=='.png')
+        self._destroy_frame()
     
     def capture(self, out_file, fps=25, loop=0, fn=50):
         """生成mp4、avi、wmv或gif文件
@@ -242,15 +237,11 @@ class Figure:
         for ax in self.axes_list:
             ax._layout() # 子图布局
         
-        try:
-            self._draw()
-            self.ff.scene.start_record(out_file, fps, loop=loop, fn=fn)
-            self.ff.capture_timer.Start(100)
-            self.app.MainLoop()
-        except Exception as e:
-            print('画布显示异常，请通知xufive@gmail.com，并附上如下信息：\n%s'%str(e))
-        finally:
-            self._destroy_frame()
+        self._draw()
+        self.ff.scene.start_record(out_file, fps, loop=loop, fn=fn)
+        self.ff.capture_timer.Start(100)
+        self.app.MainLoop()
+        self._destroy_frame()
     
     def add_axes(self, pos=111):
         """添加子图

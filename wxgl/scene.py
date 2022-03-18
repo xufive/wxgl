@@ -42,7 +42,6 @@ import imageio
 import queue
 import threading
 from OpenGL.GL import *
-from OpenGL.GLU import *
 
 from . import region
 from . import util

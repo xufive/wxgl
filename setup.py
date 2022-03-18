@@ -22,7 +22,6 @@ setuptools.setup(
     ],
     data_files = [
         ('lib/site-packages/wxgl/res', [
-            'wxgl/res/info.png', 
             'wxgl/res/tb_config_32.png', 
             'wxgl/res/tb_hide_32.png', 
             'wxgl/res/tb_show_32.png', 

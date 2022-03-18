@@ -6,6 +6,7 @@ from scipy import ndimage
 
 from . import region
 from . import util
+from . import light as wxLight
 
 
 class Axes:
@@ -125,7 +126,8 @@ class Axes:
                 'weight':       self.title_dict['weight'], 
                 'align':        'center', 
                 'valign':       'fill', 
-                'inside':       False
+                'inside':       False,
+                'light':        wxLight.BaseLight()
             }
             
             self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
@@ -225,7 +227,7 @@ class Axes:
         margin_left = kwds.get('margin_left', 0.0)
         margin_right = kwds.get('margin_right', 0.0)
         
-        height = size/1000
+        height = size/1000 # 标题文字高度与Axes高度之比
         size = int(round(pow(size/64, 0.5) * 64))
         color = util.color2c(color)
         
