@@ -45,6 +45,7 @@ class BaseLight:
                     m.set_argument('u_TextWidth', tw)
                     m.set_argument('u_TextHeight', th)
                     m.set_argument('u_Corner', loc)
+                    m.set_picked('u_Picked')
                     m.set_proj_matrix('u_ProjMatrix')
                     m.set_view_matrix('u_ViewMatrix')
                     m.set_model_matrix('u_ModelMatrix', transform)
@@ -58,6 +59,7 @@ class BaseLight:
                     m.set_texcoord('a_Texcoord', texcoord)
                     m.add_texture('u_Texture', texture)
                     m.set_argument('u_AmbientColor', self.ambient)
+                    m.set_picked('u_Picked')
                     m.set_proj_matrix('u_ProjMatrix')
                     m.set_view_matrix('u_ViewMatrix')
                     m.set_model_matrix('u_ModelMatrix', transform)
@@ -71,6 +73,7 @@ class BaseLight:
                 m.set_vertex('a_Position', vs, indices)
                 m.set_color('a_Color', color)
                 m.set_argument('u_AmbientColor', self.ambient)
+                m.set_picked('u_Picked')
                 m.set_proj_matrix('u_ProjMatrix')
                 m.set_view_matrix('u_ViewMatrix')
                 m.set_model_matrix('u_ModelMatrix', transform)
@@ -85,6 +88,7 @@ class BaseLight:
             m.set_vertex('a_Position', vs, indices)
             m.set_color('a_Color', color)
             m.set_psize('a_Psize', psize)
+            m.set_picked('u_Picked')
             m.set_argument('u_AmbientColor', self.ambient)
             m.set_proj_matrix('u_ProjMatrix')
             m.set_view_matrix('u_ViewMatrix')
@@ -132,6 +136,7 @@ class BaseLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec4 a_Color;
             in float a_Psize;
@@ -139,6 +144,7 @@ class BaseLight:
             uniform mat4 u_ViewMatrix;
             uniform mat4 u_ModelMatrix;
             out vec4 v_Color;
+            
             void main() { 
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
                 gl_PointSize = a_Psize;
@@ -151,6 +157,7 @@ class BaseLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec2 a_Texcoord;
             uniform mat4 u_ProjMatrix;
@@ -160,6 +167,7 @@ class BaseLight:
             uniform float u_TextHeight;
             uniform int u_Corner;
             out vec2 v_Texcoord;
+            
             void main() {
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 
@@ -281,10 +289,17 @@ class BaseLight:
         
         return """
             #version 330 core
+            
             in vec4 v_Color;
             uniform vec3 u_AmbientColor;
+            uniform int u_Picked;
+            
             void main() { 
-                gl_FragColor = vec4(v_Color.rgb * u_AmbientColor, v_Color.a); 
+                vec3 rgb = v_Color.rgb * u_AmbientColor;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a); 
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
             } 
         """
         
@@ -293,12 +308,19 @@ class BaseLight:
         
         return """
             #version 330 core
+            
             in vec2 v_Texcoord;
             uniform vec3 u_AmbientColor;
             uniform sampler2D u_Texture;
+            uniform int u_Picked;
+            
             void main() { 
                 vec4 color = texture2D(u_Texture, v_Texcoord);
-                gl_FragColor = vec4(color.rgb * u_AmbientColor, color.a);
+                vec3 rgb = color.rgb * u_AmbientColor;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
         
@@ -307,14 +329,21 @@ class BaseLight:
         
         return """
             #version 330 core
+            
             in vec4 v_Color;
             uniform vec3 u_AmbientColor;
+            uniform int u_Picked;
+            
             void main() { 
                 vec2 temp = gl_PointCoord - vec2(0.5);
                 if (dot(temp, temp) > 0.25) {
                     discard;
                 } else {
-                    gl_FragColor = vec4(v_Color.rgb * u_AmbientColor, v_Color.a);
+                    vec3 rgb = v_Color.rgb * u_AmbientColor;
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
                 }
             } 
         """
@@ -366,6 +395,7 @@ class SunLight:
         m.set_vertex('a_Position', vs, indices)
         m.set_normal('a_Normal', normal)
         m.set_cam_pos('u_CamPos')
+        m.set_picked('u_Picked')
         m.set_argument('u_AmbientColor', self.ambient)
         m.set_argument('u_LightDir', self.direction)
         m.set_argument('u_LightColor', self.color)
@@ -386,6 +416,7 @@ class SunLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec4 a_Color;
@@ -395,6 +426,7 @@ class SunLight:
             out vec4 v_Color;
             out vec3 v_Position;
             out vec3 v_Normal;
+            
             void main() { 
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 v_Color = a_Color;
@@ -410,6 +442,7 @@ class SunLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec2 a_Texcoord;
@@ -419,6 +452,7 @@ class SunLight:
             out vec2 v_Texcoord;
             out vec3 v_Position;
             out vec3 v_Normal;
+            
             void main() { 
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 v_Texcoord = a_Texcoord;
@@ -434,6 +468,7 @@ class SunLight:
         
         return """
             #version 330 core
+            
             in vec4 v_Color;
             in vec3 v_Position;
             in vec3 v_Normal;
@@ -441,10 +476,12 @@ class SunLight:
             uniform vec3 u_LightColor; // 定向光颜色
             uniform vec3 u_AmbientColor; // 环境光颜色
             uniform vec3 u_CamPos; // 相机位置
+            uniform int u_Picked; // 拾取标志
             uniform float u_Shininess; // 光洁度
             uniform float u_Roughness; // 粗糙度
             uniform float u_Metalness; // 金属度
             uniform float u_Pellucidness; // 透光度
+            
             void main() { 
                 vec3 lightDir = normalize(u_LightDir); // 光线向量
                 vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
@@ -459,7 +496,11 @@ class SunLight:
                 vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
                 vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                 vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
-                gl_FragColor = vec4(rgb, v_Color.a);
+                
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a);
+                else
+                    gl_FragColor = vec4(min(rgb * 1.5, vec3(1.0)), v_Color.a);
             }
         """
     
@@ -468,6 +509,7 @@ class SunLight:
         
         return """
             #version 330 core
+            
             in vec2 v_Texcoord;
             in vec3 v_Position;
             in vec3 v_Normal;
@@ -476,10 +518,12 @@ class SunLight:
             uniform vec3 u_LightColor; // 定向光颜色
             uniform vec3 u_AmbientColor; // 环境光颜色
             uniform vec3 u_CamPos; // 相机位置
+            uniform int u_Picked; // 拾取标志
             uniform float u_Shininess; // 光洁度
             uniform float u_Roughness; // 粗糙度
             uniform float u_Metalness; // 金属度
             uniform float u_Pellucidness; // 透光度
+            
             void main() { 
                 vec3 lightDir = normalize(u_LightDir); // 光线向量
                 vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
@@ -500,7 +544,11 @@ class SunLight:
                 vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
                 vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                 vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
-                gl_FragColor = vec4(rgb, color.a);
+                
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
 
@@ -551,6 +599,7 @@ class LampLight:
         m.set_vertex('a_Position', vs, indices)
         m.set_normal('a_Normal', normal)
         m.set_cam_pos('u_CamPos')
+        m.set_picked('u_Picked')
         m.set_argument('u_AmbientColor', self.ambient)
         m.set_argument('u_LightPos', self.position)
         m.set_argument('u_LightColor', self.color)
@@ -626,6 +675,7 @@ class LampLight:
             uniform vec3 u_LightColor; // 光源颜色
             uniform vec3 u_AmbientColor; // 环境光颜色
             uniform vec3 u_CamPos; // 相机位置
+            uniform int u_Picked; // 拾取标志
             uniform float u_Shininess; // 光洁度
             uniform float u_Roughness; // 粗糙度
             uniform float u_Metalness; // 金属度
@@ -644,7 +694,11 @@ class LampLight:
                 vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
                 vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                 vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
-                gl_FragColor = vec4(rgb, v_Color.a);
+                
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
             }
         """
     
@@ -661,6 +715,7 @@ class LampLight:
             uniform vec3 u_LightColor; // 光源颜色
             uniform vec3 u_AmbientColor; // 环境光颜色
             uniform vec3 u_CamPos; // 相机位置
+            uniform int u_Picked; // 拾取标志
             uniform float u_Shininess; // 光洁度
             uniform float u_Roughness; // 粗糙度
             uniform float u_Metalness; // 金属度
@@ -685,7 +740,11 @@ class LampLight:
                 vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
                 vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                 vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
-                gl_FragColor = vec4(rgb, color.a);
+                
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
 
@@ -734,6 +793,7 @@ class SkyLight:
         m.set_argument('u_LightDir', self.direction)
         m.set_argument('u_SkyColor', self.sky)
         m.set_argument('u_GroundColor', self.ground)
+        m.set_picked('u_Picked')
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
         m.set_model_matrix('u_ModelMatrix', transform)
@@ -747,6 +807,7 @@ class SkyLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec4 a_Color;
@@ -755,6 +816,7 @@ class SkyLight:
             uniform mat4 u_ModelMatrix;
             out vec3 v_Normal;
             out vec4 v_Color;
+            
             void main() { 
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 v_Color = a_Color;
@@ -769,6 +831,7 @@ class SkyLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec2 a_Texcoord;
@@ -777,6 +840,7 @@ class SkyLight:
             uniform mat4 u_ModelMatrix;
             out vec3 v_Normal;
             out vec2 v_Texcoord;
+            
             void main() { 
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 v_Texcoord = a_Texcoord;
@@ -791,15 +855,23 @@ class SkyLight:
         
         return """
             #version 330 core
+            
             in vec4 v_Color;
             in vec3 v_Normal;
             uniform vec3 u_LightDir; // 定向光方向
             uniform vec3 u_SkyColor; // 天空光线颜色
             uniform vec3 u_GroundColor; // 地面光线颜色
+            uniform int u_Picked; // 拾取标志
+            
             void main() { 
                 float costheta = dot(v_Normal, normalize(u_LightDir)) * 0.5 + 0.5;
                 if (!gl_FrontFacing) costheta *= 0.5;
-                gl_FragColor = vec4(mix(u_GroundColor, u_SkyColor, costheta) * v_Color.rgb, v_Color.a);
+                
+                vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * v_Color.rgb;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
             } 
         """
     
@@ -808,17 +880,25 @@ class SkyLight:
         
         return """
             #version 330 core
+            
             in vec3 v_Normal;
             in vec2 v_Texcoord;
             uniform sampler2D u_Texture;
             uniform vec3 u_LightDir; // 定向光方向
             uniform vec3 u_SkyColor; // 天空光线颜色
             uniform vec3 u_GroundColor; // 地面光线颜色
+            uniform int u_Picked; // 拾取标志
+            
             void main() { 
                 float costheta = dot(v_Normal, normalize(u_LightDir)) * 0.5 + 0.5;
                 if (!gl_FrontFacing) costheta *= 0.5;
                 vec4 color = texture2D(u_Texture, v_Texcoord);
-                gl_FragColor = vec4(mix(u_GroundColor, u_SkyColor, costheta) * color.rgb, color.a);
+                vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * color.rgb;
+                
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
         
@@ -993,7 +1073,7 @@ class SphereLight:
         
         m.set_vertex('a_Position', vs, indices)
         m.set_normal('a_Normal', normal)
-        m.set_cam_pos('u_CamPos')
+        m.set_picked('u_Picked')
         m.set_argument('u_ScaleFactor', self.factor)
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
@@ -1008,6 +1088,7 @@ class SphereLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec4 a_Color;
@@ -1016,6 +1097,7 @@ class SphereLight:
             uniform mat4 u_ModelMatrix;
             out vec4 v_Color;
             out vec3 v_Normal;
+            
             void main() { 
                 mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
                 v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
@@ -1029,6 +1111,7 @@ class SphereLight:
         
         return """
             #version 330 core
+            
             in vec4 a_Position;
             in vec3 a_Normal;
             in vec2 a_Texcoord;
@@ -1037,6 +1120,7 @@ class SphereLight:
             uniform mat4 u_ModelMatrix;
             out vec2 v_Texcoord;
             out vec3 v_Normal;
+            
             void main() { 
                 mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
                 v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
@@ -1050,6 +1134,7 @@ class SphereLight:
         
         return """
             #version 330 core
+            
             in vec4 v_Color;
             in vec3 v_Normal;
             const float C1 = 0.429043;
@@ -1059,6 +1144,8 @@ class SphereLight:
             const float C5 = 0.247708;
             %s
             uniform float u_ScaleFactor;
+            uniform int u_Picked;
+            
             void main() { 
                 vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
                         + C3 * L20 * v_Normal.z * v_Normal.z
@@ -1072,7 +1159,11 @@ class SphereLight:
                         + 2.0 * C2 * L10 * v_Normal.z;
                 
                 diffuse *= u_ScaleFactor;
-                gl_FragColor = vec4(v_Color.rgb * diffuse, v_Color.a);
+                vec3 rgb = v_Color.rgb * diffuse;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
             } 
         """ % self.parameter
     
@@ -1081,6 +1172,7 @@ class SphereLight:
         
         return """
             #version 330 core
+            
             in vec2 v_Texcoord;
             in vec3 v_Normal;
             const float C1 = 0.429043;
@@ -1091,6 +1183,8 @@ class SphereLight:
             %s
             uniform sampler2D u_Texture;
             uniform float u_ScaleFactor;
+            uniform int u_Picked;
+            
             void main() { 
                 vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
                         + C3 * L20 * v_Normal.z * v_Normal.z
@@ -1105,7 +1199,11 @@ class SphereLight:
                 
                 diffuse *= u_ScaleFactor;
                 vec4 color = texture2D(u_Texture, v_Texcoord);
-                gl_FragColor = vec4(color.rgb * diffuse, color.a);
+                vec3 rgb = color.rgb * diffuse;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """ % self.parameter
         

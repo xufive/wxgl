@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import os, time
+import os
 import wx
 import numpy as np
 from PIL import Image
@@ -313,7 +313,7 @@ class Region:
         
         wx.CallAfter(self.scene.render)
     
-    def _get_normal(self, gltype, vs, indices=None, cw=False):
+    def _get_normal(self, gltype, vs, indices=None):
         """返回法线集"""
         
         if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN):
@@ -769,7 +769,7 @@ class Region:
             raise KeyError('缺少颜色或纹理参数')
         
         if color is None:
-            if not isinstance(texture, wxgl.Texture):
+            if not isinstance(texture, wxTexture.Texture):
                 raise KeyError('期望纹理参数为wxgl.Texture类型')
             
             if texcoord is None:
@@ -803,7 +803,7 @@ class Region:
             transform   = transform
         ), name)
         
-    def mesh(self, xs, ys, zs, color=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, cw=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, xoy=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
@@ -813,7 +813,7 @@ class Region:
         vtr         - v方向纹理坐标范围
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
-        cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
+        xoy         - 网格在xoy平面：布尔型
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -846,8 +846,8 @@ class Region:
             raise KeyError('缺少颜色或纹理参数')
         
         if color is None:
-            if not isinstance(texture, wxgl.Texture):
-                raise KeyError('期望纹理参数为wxgl.Texture类型')
+            if not isinstance(texture, wxTexture.Texture):
+                raise KeyError('期望纹理参数为wxTexture.Texture类型')
             
             u = np.linspace(utr[0], utr[1], cols)
             v = np.linspace(vtr[1], vtr[0], rows)
@@ -868,7 +868,7 @@ class Region:
         idx = np.arange(rows*cols).reshape(rows, cols)
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
         
-        if cw:
+        if xoy:
             indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
         else:
             indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
@@ -922,7 +922,7 @@ class Region:
         c2 = np.array(c2)
         m_rotate = util.y2v(c1 - c2)
         
-        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        arc_0, arc_1, cell = np.radians(min(arc)), np.radians(max(arc)), np.radians(cell)
         slices = round(abs(arc_0-arc_1)/cell)
         
         theta = np.linspace(arc_0, arc_1, slices)
@@ -931,10 +931,7 @@ class Region:
         ys = np.zeros_like(theta)
         vs = np.stack((xs,ys,zs), axis=1)
         vs = np.dot(vs, m_rotate)
-        
-        vs1 = vs + c1
-        vs2 = vs + c2
-        vs = np.stack((vs1, vs2), axis=1).reshape(-1,3)
+        vs = np.stack((vs+c1, vs+c2), axis=1).reshape(-1,3)
         
         if color is None and texture is None:
             color = self.scene.style[1]
@@ -971,8 +968,8 @@ class Region:
             light           - 光照情景模式，默认太阳光照情景模式
         """
         
-        u_0, u_1 = np.radians(u[0]), np.radians(u[1])
-        v_0, v_1 = np.radians(v[0]), np.radians(v[1])
+        u_0, u_1 = np.radians(min(u)), np.radians(max(u))
+        v_0, v_1 = np.radians(min(v)), np.radians(max(v))
         cell = np.radians(cell)
         u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
         gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
@@ -1015,8 +1012,8 @@ class Region:
         """
         
         
-        u_0, u_1 = np.radians(u[0]), np.radians(u[1])
-        v_0, v_1 = np.radians(v[0]), np.radians(v[1])
+        u_0, u_1 = np.radians(min(u)), np.radians(max(u))
+        v_0, v_1 = np.radians(min(v)), np.radians(max(v))
         cell = np.radians(cell)
         u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
         gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
@@ -1090,7 +1087,7 @@ class Region:
         center = np.array(center)
         m_rotate = util.y2v(vec)
         
-        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        arc_0, arc_1, cell = np.radians(min(arc)), np.radians(max(arc)), np.radians(cell)
         slices = round(abs(arc_0-arc_1)/cell)
         
         theta = np.linspace(arc_0, arc_1, slices)
@@ -1131,7 +1128,7 @@ class Region:
         center = np.array(center)
         m_rotate = util.y2v(spire - center)
         
-        arc_0, arc_1, cell = np.radians(arc[0]), np.radians(arc[1]), np.radians(cell)
+        arc_0, arc_1, cell = np.radians(min(arc)), np.radians(max(arc)), np.radians(cell)
         slices = round(abs(arc_0-arc_1)/cell)
         
         theta = np.linspace(arc_0, arc_1, slices)

@@ -508,7 +508,7 @@ class Axes:
             **kwds
         )
     
-    def mesh(self, xs, ys, zs, color=None, cm=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, cw=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, cm=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, xoy=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
@@ -519,7 +519,7 @@ class Axes:
         vtr         - v方向纹理坐标范围
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
-        cw          - 三角面顶点索引顺序：布尔型，True表示顺时针，False表示逆时针
+        xoy         - 网格在xoy平面：布尔型
         kwds        - 关键字参数
                         name            - 模型名
                         visible         - 是否可见，默认True
@@ -556,7 +556,7 @@ class Axes:
             vtr         = vtr,
             uclosed     = uclosed,
             vclosed     = vclosed,
-            cw          = cw,
+            xoy         = xoy,
             **kwds
         )
     

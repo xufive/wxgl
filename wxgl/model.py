@@ -26,12 +26,9 @@ class Model:
             GL_LINES,	        # 绘制线段
             GL_LINE_STRIP,	    # 绘制连续线段
             GL_LINE_LOOP,	    # 绘制闭合的线段
-            GL_POLYGON,	        # 绘制多边形
             GL_TRIANGLES,	    # 绘制一个或多个三角形
             GL_TRIANGLE_STRIP,	# 绘制连续三角形
             GL_TRIANGLE_FAN,    # 绘制多个三角形组成的扇形
-            GL_QUADS,	        # 绘制一个或多个四边形
-            GL_QUAD_STRIP       # 四边形条带
         )
         
         if gltype not in gltypes:
@@ -46,6 +43,7 @@ class Model:
         self.slide = None                               # 幻灯片函数
         self.depth = None                               # 深度轴均值
         self.islive = False                             # 模型是否有动画函数
+        self.picked = False                             # 模型被拾取
         
         self.program = None                             # 着色器程序
         self.cshaders = list()                          # 编译后的着色器
@@ -189,6 +187,14 @@ class Model:
         """
         
         self.uniform.update({var_name: {'tag':'campos'}})
+    
+    def set_picked(self, var_name):
+        """设置拾取状态
+        
+        var_name        - 拾取状态在着色器中的变量名
+        """
+        
+        self.uniform.update({var_name: {'tag':'picked'}})
     
     def set_mvp_matrix(self, var_name):
         """设置模型、视点、投影三合一矩阵

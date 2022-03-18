@@ -41,6 +41,8 @@ setuptools.setup(
         'matplotlib>=3.1.2', 
         'wxpython>=4.0.7.post2',
         'pillow>=8.2.0',
-        'freetype-py>=2.2.0'
+        'freetype-py>=2.2.0',
+        'pynput>=1.7.6',
+        'imageio>=2.8.0'
     ]
 )

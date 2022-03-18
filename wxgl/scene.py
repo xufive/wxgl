@@ -33,6 +33,7 @@ WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
 
 
 import os, time
+from pynput import keyboard
 import wx
 from wx import glcanvas
 import numpy as np
@@ -41,6 +42,7 @@ import imageio
 import queue
 import threading
 from OpenGL.GL import *
+from OpenGL.GLU import *
 
 from . import region
 from . import util
@@ -107,6 +109,8 @@ class Scene(glcanvas.GLCanvas):
         self.context = glcanvas.GLContext(self)                             # OpenGL上下文
         self.regions = list()                                               # 视区列表
         self.mpos = wx._core.Point()                                        # 鼠标位置
+        self.leftdown = False                                               # 鼠标左键按下
+        self.ctr = False                                                    # Ctr键按下
         
         self.tn = 0                                                         # 计数器
         self.tstamp = None                                                  # 开始渲染时的时间戳
@@ -129,10 +133,12 @@ class Scene(glcanvas.GLCanvas):
         
         self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)                      # 绑定鼠标左键按下事件
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)                          # 绑定鼠标左键弹起事件                   
-        self.Bind(wx.EVT_RIGHT_DOWN, self.on_right_down)                    # 绑定鼠标右键按下事件
         self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)                        # 绑定鼠标右键弹起事件                   
         self.Bind(wx.EVT_MOTION, self.on_mouse_motion)                      # 绑定鼠标移动事件
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)                   # 绑定鼠标滚轮事件
+        
+        monitor_k = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        monitor_k.start()
     
     def _set_style(self, style):
         """设置风格，返回背景色和前景色"""
@@ -245,46 +251,35 @@ class Scene(glcanvas.GLCanvas):
     def on_left_down(self, evt):
         """响应鼠标左键按下事件"""
         
-        self.CaptureMouse()
+        self.leftdown = True
         self.mpos = evt.GetPosition()
         
     def on_left_up(self, evt):
         """响应鼠标左键弹起事件"""
         
-        try:
-            self.ReleaseMouse()
-        except:
-            pass
-        
-    def on_right_down(self, evt):
-        """响应鼠标右键按下事件"""
-        
-        self.CaptureMouse()
-        self.mpos = evt.GetPosition()
+        self.leftdown = False
         
     def on_right_up(self, evt):
         """响应鼠标右键弹起事件"""
         
-        try:
-            self.ReleaseMouse()
-        except:
-            pass
+        x, y = evt.GetPosition()
+        self.render_pick(x, self.csize[1]-y)
         
     def on_mouse_motion(self, evt):
         """响应鼠标移动事件"""
         
-        if evt.Dragging():
+        if evt.Dragging() and self.leftdown:
             pos = evt.GetPosition()
             dx, dy = pos - self.mpos
             self.mpos = pos
             
-            if evt.LeftIsDown():
+            if self.ctr:
+                oecs = [self.oecs[0]-dx/self.csize[0], self.oecs[1]+dy/self.csize[1], self.oecs[2]]
+                self._update_pos_and_up(oecs=oecs)
+            else:
                 azim = self.azim - self.up[1]*(180*dx/self.csize[0])
                 elev = self.elev + 90*dy/self.csize[1]
                 self._update_pos_and_up(azim=azim, elev=elev)
-            elif evt.RightIsDown(): 
-                oecs = [self.oecs[0]-dx/self.csize[0], self.oecs[1]+dy/self.csize[1], self.oecs[2]]
-                self._update_pos_and_up(oecs=oecs)
             
             self.update_ticks()
             self.render()
@@ -292,7 +287,7 @@ class Scene(glcanvas.GLCanvas):
     def on_mouse_wheel(self, evt):
         """响应鼠标滚轮事件"""
         
-        if evt.RightIsDown():
+        if self.ctr:
             if evt.WheelRotation < 0:
                 dist = self.dist * 1.01
             else:
@@ -314,6 +309,20 @@ class Scene(glcanvas.GLCanvas):
             
         self.render()
     
+    def on_press(self, key):
+        """键按下"""
+        
+        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+            self.ctr = True
+    
+    def on_release(self, key):
+        """键弹起"""
+        
+        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+            self.ctr = False
+        elif key == keyboard.Key.esc:
+            wx.CallAfter(self.restore_posture)
+    
     def render(self):
         """模型渲染器"""
         
@@ -326,15 +335,15 @@ class Scene(glcanvas.GLCanvas):
         for reg in self.regions:
             glViewport(*reg.pos, *reg.size) # 设置视口
             
-            for name, idx, depth in reg.mnames[0]:
+            for name, idx, zmean in reg.mnames[0]:
                 self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             
             glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
             if self.up[1] > 0 and -90 <= self.azim < 90 or self.up[1] < 0 and (self.azim < -90 or self.azim >= 90):
-                for name, idx, depth in reg.mnames[1]:
+                for name, idx, zmean in reg.mnames[1]:
                     self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             else:
-                for name, idx, depth in reg.mnames[1][::-1]:
+                for name, idx, zmean in reg.mnames[1][::-1]:
                     self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
             glDepthMask(True) # 释放深度缓冲区
         
@@ -388,6 +397,8 @@ class Scene(glcanvas.GLCanvas):
                 glBindTexture(m.uniform[key]['data'].ttype, m.uniform[key]['tid'])
                 glUniform1i(loc, tsid)
                 tsid += 1
+            elif tag == 'picked':
+                glUniform1i(loc, m.picked)
             elif tag == 'mvpmat':
                 pvmmat = np.dot(np.dot(mat_model, mat_view), mat_proj)
                 glUniformMatrix4fv(loc, 1, GL_FALSE, pvmmat, None)
@@ -422,6 +433,32 @@ class Scene(glcanvas.GLCanvas):
             glcmd(*args)
         
         glUseProgram(0)
+    
+    def render_pick(self, x, y):
+        """拾取渲染器"""
+        
+        if self.cam_cruise:
+            v = self.cam_cruise(self.duration)
+            self.set_posture(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+        
+        for reg in self.regions:
+            glViewport(*reg.pos, *reg.size)
+            name_hit, depth_hit, idx_hit = None, 1, 0
+            
+            for i in (0, 1):
+                for name, idx, zmean in reg.mnames[i]:
+                    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+                    self._render_core(reg.models[name][idx], reg.pmat, reg.vmat, reg.mmat)
+                    
+                    d = glReadPixels(x, y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, outputType=None)[0,0]
+                    if d < depth_hit:
+                        name_hit, depth_hit, idx_hit = name, d, idx
+            
+            if name_hit:
+                reg.models[name_hit][idx_hit].picked = not reg.models[name_hit][idx_hit].picked
+                break
+        
+        self.render()
     
     def update_ticks(self):
         """刷新坐标轴和刻度网格"""
