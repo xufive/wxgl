@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from scipy.spatial.transform import Rotation as sstr
-from OpenGL.GL import *
 
 from . import text
 from . import cmap
@@ -13,20 +11,29 @@ CM = cmap.ColorManager()
 def y2v(v):
     """返回y轴正方向到向量v的旋转矩阵"""
     
+    # *** 右手坐标系旋转矩阵 ***
+    # r_x = np.array([[1, 0, 0], [0, np.cos(), np.sin()], [0, -np.sin(), np.cos()]])
+    # r_y = np.array([[np.cos(), 0, -np.sin()], [0, 1, 0], [np.sin(), 0, np.cos()]])
+    # r_z = np.array([[np.cos(), np.sin(), 0], [-np.sin(), np.cos, 0], [0, 0, 1]])
+    
     h =  np.linalg.norm(v)
-    a_z = np.arccos(v[1]/h)
+    a_z = -np.arccos(v[1]/h)
     
     if v[0] == 0:
         if v[2] == 0:
-            a_x = 0
+            a_y = 0
         elif v[2] > 0:
-            a_x = -np.pi/2
+            a_y = -np.pi/2
         else:
-            a_x = np.pi/2
+            a_y = np.pi/2
     else:
-        a_x = np.arctan(-v[2]/v[0]) + (np.pi if v[0] < 0 else 0)
+        a_y = np.arctan(-v[2]/v[0]) + (np.pi if v[0] < 0 else 0)
     
-    return np.float32(sstr.from_euler('zxy', [a_z, a_x, 0], degrees=False).as_matrix())
+    r_y_0 = np.array([[np.cos(-a_y), 0, -np.sin(-a_y)], [0, 1, 0], [np.sin(-a_y), 0, np.cos(-a_y)]])
+    r_z = np.array([[np.cos(a_z), np.sin(a_z), 0], [-np.sin(a_z), np.cos(a_z), 0], [0, 0, 1]])
+    r_y = np.array([[np.cos(a_y), 0, -np.sin(a_y)], [0, 1, 0], [np.sin(a_y), 0, np.cos(a_y)]])
+    
+    return np.dot(r_y_0, np.dot(r_z, r_y))
 
 def rotate(axis_angle):
     """返回旋转矩阵
@@ -34,8 +41,17 @@ def rotate(axis_angle):
     axis_angle  - 轴角，由旋转向量和旋转角度组成的元组、列表或numpy数组。旋转方向使用右手定则
     """
     
-    a, v = -axis_angle[3], np.array(axis_angle[:3])
-    m = sstr.from_rotvec(np.radians(a)*v/np.linalg.norm(v)).as_matrix()
+    v, a = np.array(axis_angle[:3]), np.radians(-axis_angle[3]), 
+    v = v/np.linalg.norm(v)
+    x, y, z = v
+    
+    # 轴角转旋转矩阵
+    m = np.array([
+		[np.cos(a)+x*x*(1-np.cos(a)), -z*np.sin(a)+x*y*(1-np.cos(a)), y*np.sin(a)+x*z*(1-np.cos(a))],
+		[z*np.sin(a)+x*y*(1-np.cos(a)), np.cos(a)+y*y*(1-np.cos(a)), -x*np.sin(a)+y*z*(1-np.cos(a))],
+		[-y*np.sin(a)+x*z*(1-np.cos(a)), x*np.sin(a)+y*z*(1-np.cos(a)), np.cos(a)+z*z*(1-np.cos(a))]
+    ])
+    
     m = np.hstack((m, np.array([[0.0], [0.0], [0.0]])))
     m = np.vstack((m, np.array([0.0, 0.0, 0.0, 1.0])))
     
@@ -200,7 +216,7 @@ def cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None,
     drop        - 舍弃alpha通道
     """
     
-    return CM.cmap(data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False)
+    return CM.cmap(data, cm, invalid=invalid, invalid_c=invalid_c, drange=drange, alpha=alpha, drop=drop)
 
 def _isosurface(data, level):
     """返回基于MarchingCube算法的等值面"""

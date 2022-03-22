@@ -2,11 +2,9 @@
 
 import re
 import numpy as np
-from scipy import ndimage
 
-from . import region
 from . import util
-from . import light as wxLight
+from . light import BaseLight
 
 
 class Axes:
@@ -54,9 +52,6 @@ class Axes:
         self.xn = 'X'                                       # x轴名称
         self.yn = 'Y'                                       # y轴名称
         self.zn = 'Z'                                       # z轴名称
-        self.xr = None                                      # x轴范围
-        self.yr = None                                      # y轴范围
-        self.zr = None                                      # z轴范围
         self.xf = str                                       # x轴标注格式化函数
         self.yf = str                                       # y轴标注格式化函数
         self.zf = str                                       # z轴标注格式化函数
@@ -127,7 +122,7 @@ class Axes:
                 'align':        'center', 
                 'valign':       'fill', 
                 'inside':       False,
-                'light':        wxLight.BaseLight()
+                'light':        BaseLight()
             }
             
             self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
@@ -379,12 +374,46 @@ class Axes:
             **kwds
         )
     
-    def line(self, vs, color=None, cm=None, width=None, style='solid', method='strip', **kwds):
+    def point(self, vs, color=None, cm=None, alpha=None, size=1.0, **kwds):
+        """散点
+        
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
+        alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
+        size        - 点或每个点的大小：数值，或数值型的元组、列表、numpy数组
+        kwds        - 关键字参数
+                        name            - 模型名
+                        visible         - 是否可见，默认True
+                        slide           - 幻灯片函数，默认None
+                        inside          - 模型顶点是否影响模型空间，默认True
+                        opacity         - 模型不透明属性，默认True（不透明）
+                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+        """
+        
+        if cm is None:
+            if color is None:
+                color = self.get_color()
+            color = util.color2c(color, outsize=len(vs))
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)): 
+                color = np.array(color, dtype=np.float32)
+                if color.ndim == 1 and len(color) == len(vs):
+                    color = util.cmap(color, cm, alpha=alpha)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的一维数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
+    
+    def line(self, vs, color=None, cm=None, alpha=None, width=None, style='solid', method='strip', **kwds):
         """线段
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
         cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
+        alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         width       - 线宽，0.0~10.0之间，None使用默认设置
         style       - 线型, 默认实线
                         'solid'         - 实线 
@@ -410,10 +439,14 @@ class Axes:
                 color = self.get_color()
             color = util.color2c(color, outsize=len(vs))
         else:
-            if not color is None and isinstance(color, (tuple, list, np.ndarray)) and len(color) == len(vs):
-                color = util.cmap(np.array(color), cm)
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)): 
+                color = np.array(color, dtype=np.float32)
+                if color.ndim == 1 and len(color) == len(vs):
+                    color = util.cmap(color, cm, alpha=alpha)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的一维数组')
             else:
-                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+                raise ValueError('当参数cm有效时，期望color是元组、列表或numpy数组')
         
         stipple = {
             'solid':    (1, 0xFFFF),
@@ -429,40 +462,13 @@ class Axes:
             **kwds
         )
     
-    def point(self, vs, color=None, cm=None, size=1.0, **kwds):
-        """散点
-        
-        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
-        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
-        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
-        size        - 点或每个点的大小：数值，或数值型的元组、列表、numpy数组
-        kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        slide           - 幻灯片函数，默认None
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认True（不透明）
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-        """
-        
-        if cm is None:
-            if color is None:
-                color = self.get_color()
-            color = util.color2c(color, outsize=len(vs))
-        else:
-            if not color is None and isinstance(color, (tuple, list, np.ndarray)) and len(color) == len(vs):
-                color = util.cmap(np.array(color), cm)
-            else:
-                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
-        
-        self.add_widget(self.reg_main, 'point', vs, color, size=size, **kwds)
-    
-    def surface(self, vs, color=None, cm=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
+    def surface(self, vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
         """由三角面描述的曲面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
         cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         texture     - 纹理：wxgl.Texture对象
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         method      - 绘制方法
@@ -494,7 +500,7 @@ class Axes:
             if not color is None and isinstance(color, (tuple, list, np.ndarray)):
                 color = np.array(color)
                 if color.shape == (len(vs),):
-                    color = util.cmap(color, cm)
+                    color = util.cmap(color, cm, alpha=alpha)
                 else:
                     raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
             else:
@@ -510,18 +516,18 @@ class Axes:
             **kwds
         )
     
-    def mesh(self, xs, ys, zs, color=None, cm=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, xoy=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, cm=None, alpha=None, texture=None, ur=(0,1), vr=(0,1), uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，shape=(m,n)
         cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         texture     - 纹理：wxgl.Texture对象
-        utr         - u方向纹理坐标范围
-        vtr         - v方向纹理坐标范围
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
-        xoy         - 网格在xoy平面：布尔型
         kwds        - 关键字参数
                         name            - 模型名
                         visible         - 是否可见，默认True
@@ -545,7 +551,7 @@ class Axes:
             if not color is None and isinstance(color, (tuple, list, np.ndarray)):
                 color = np.array(color)
                 if color.shape == xs.shape:
-                    color = util.cmap(color, cm)
+                    color = util.cmap(color, cm, alpha=alpha)
                 else:
                     raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
             else:
@@ -554,15 +560,14 @@ class Axes:
         self.add_widget(self.reg_main, 'mesh', xs, ys, zs, 
             color       = color, 
             texture     = texture,
-            utr         = utr,
-            vtr         = vtr,
+            ur          = ur,
+            vr          = vr,
             uclosed     = uclosed,
             vclosed     = vclosed,
-            xoy         = xoy,
             **kwds
         )
     
-    def cylinder(self, c1, c2, r, color=None, texture=None, arc=(0,360), cell=5, **kwds):
+    def cylinder(self, c1, c2, r, color=None, texture=None, ur=(0,1), vr=(0,1), arc=(0,360), cell=5, **kwds):
         """圆柱
         
         c1          - 圆柱端面圆心：元组、列表或numpy数组
@@ -587,9 +592,9 @@ class Axes:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'cylinder', c1, c2, r, color=color, texture=texture, arc=arc, cell=cell, **kwds)
+        self.add_widget(self.reg_main, 'cylinder', c1, c2, r, color=color, texture=texture, ur=ur, vr=vr, arc=arc, cell=cell, **kwds)
 
-    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, u=(0,360), v=(0,360), cell=5, **kwds):
+    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-180,180), cell=5, **kwds):
         """球环
         
         center      - 球环中心坐标：元组、列表或numpy数组
@@ -599,7 +604,7 @@ class Axes:
         color       - 颜色：浮点型元组、列表或numpy数组
         texture     - 纹理：wxgl.Texture对象
         u           - u方向范围：默认0°~360°
-        v           - v方向范围：默认-90°~90°
+        v           - v方向范围：默认-180°~180°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
             name            - 模型名
@@ -616,17 +621,18 @@ class Axes:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'torus', center, r1, r2, vec=vec, color=color, texture=texture, u=u, v=v, cell=cell, **kwds)
+        self.add_widget(self.reg_main, 'torus', center, r1, r2, vec=vec, color=color, texture=texture, ur=ur, vr=vr, u=u, v=v, cell=cell, **kwds)
     
-    def uvsphere(self, center, r, u=(0,360), v=(-90,90), color=None, texture=None, cell=5, **kwds):
+    def uvsphere(self, center, r, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-90,90), cell=5, **kwds):
         """使用经纬度网格生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        u           - 经度范围：默认0°~360°
-        v           - 纬度范围：默认-90°~90°
+        vec         - 轴向量
         color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理：wxgl.Texture对象
+        u           - 经度范围：默认0°~360°
+        v           - 纬度范围：默认-90°~90°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
                         name            - 模型名
@@ -643,7 +649,7 @@ class Axes:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'uvsphere', center, r, u=u, v=v, color=color, texture=texture, cell=cell, **kwds)
+        self.add_widget(self.reg_main, 'uvsphere', center, r, vec=vec, color=color, texture=texture, ur=ur, vr=vr, u=u, v=v, cell=cell, **kwds)
     
     def isosphere(self, center, r, color=None, iterations=5, **kwds):
         """通过对正八面体的迭代细分生成球
@@ -794,17 +800,17 @@ class Axes:
     def xrange(self, xrange):
         """设置x轴范围"""
         
-        self.xr = xrange
+        self.reg_main.set_range(r_x=xrange)
     
     def yrange(self, yrange):
         """设置y轴范围"""
         
-        self.yr = yrange
+        self.reg_main.set_range(r_y=yrange)
     
     def zrange(self, zrange):
         """设置z轴范围"""
         
-        self.zr = zrange
+        self.reg_main.set_range(r_z=zrange)
     
     def xformat(self, xf):
         """格式化x轴的标注"""

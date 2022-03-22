@@ -351,7 +351,7 @@ class BaseLight:
 class SunLight:
     """太阳光照情景模式"""
     
-    def __init__(self, direction=(-5,-1,-5), color=(1,1,1), ambient=(0.5,0.5,0.5), roughness=0, metalness=0, pellucidness=0.5, shininess=30):
+    def __init__(self, direction=(-5,-1,-5), color=(1,1,1), ambient=(0.5,0.5,0.5), roughness=0.2, metalness=0.2, pellucidness=0.2, shininess=30):
         """构造函数"""
         
         self.direction = direction          # 光的方向
@@ -555,7 +555,7 @@ class SunLight:
 class LampLight:
     """室内光照情景模式"""
     
-    def __init__(self, position=(5,1,5), color=(1,1,1), ambient=(0.5,0.5,0.5), roughness=0, metalness=0, pellucidness=0.5, shininess=30):
+    def __init__(self, position=(5,1,5), color=(1,1,1), ambient=(0.5,0.5,0.5), roughness=0.2, metalness=0.2, pellucidness=0.2, shininess=30):
         """构造函数"""
         
         self.position = position            # 光源位置

@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import re, uuid
+import re
 import numpy as np
 from OpenGL.GL import *
-from OpenGL.GL import shaders
-from OpenGL.arrays import vbo
 
 class Model:
     """模型类"""

@@ -9,8 +9,8 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 from OpenGL.arrays import vbo
 
-from . import texture as wxTexture
-from . import light as wxLight
+from . texture import Texture
+from . light import *
 from . import util
 
 class Region:
@@ -346,9 +346,21 @@ class Region:
         c = primitive[2::3]
         normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
         
+        if indices is None and gltype == GL_TRIANGLES:
+            return normal
+        
         #uniind = idx.size -1 - np.unique(np.flipud(idx), return_index=True)[1]
-        uniind = np.unique(idx, return_index=True)[1]
-        result = normal[uniind]
+        #uniind = np.unique(idx, return_index=True)[1]
+        #result = normal[uniind]
+        #return result
+        
+        result = np.zeros((n,3), dtype=np.float32)
+        idx_arg = np.argsort(idx)
+        rise = np.where(np.diff(idx[idx_arg])==1)[0]+1
+        rise = np.hstack((0,rise,len(idx)))
+        
+        for i in range(n):
+            result[i] = np.sum(normal[idx_arg[rise[i]:rise[i+1]]], axis=0)
         return result
     
     def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
@@ -453,14 +465,14 @@ class Region:
             'right-bottom':     8
         }.get(loc, 2)
         
-        th = 0.1 * size/32
+        th = 0.15 * size/32
         size = int(round(pow(size/64, 0.5) * 64))
         
         im_text = util.text2image(text, size, color, family, weight)
         tw = th * im_text.shape[1]/im_text.shape[0] * self.size[1]/self.size[0]
-        texture = wxTexture.Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+        texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         
-        light = wxLight.BaseLight(ambient)
+        light = BaseLight(ambient)
         self.add_model(light.get_model(GL_TRIANGLE_STRIP, box, 
             texture     = texture, 
             texcoord    = texcoord, 
@@ -510,7 +522,7 @@ class Region:
         inside = kwds.get('inside', True)
         slide = kwds.get('slide')
         transform = kwds.get('transform')
-        light = kwds.get('light', wxLight.SunLight())
+        light = kwds.get('light', SunLight())
         
         gltype = GL_TRIANGLE_STRIP
         box = np.array(box, dtype=np.float32)
@@ -526,7 +538,7 @@ class Region:
             raise KeyError('期望color参数为浮点类型元组、列表或numpy数组')
          
         im_text = util.text2image(text, size, color, family, weight)
-        texture = wxTexture.Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+        texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
         
         box_width = np.linalg.norm(box[2] - box[0])
@@ -630,7 +642,7 @@ class Region:
             if size.ndim != 1 or size.shape[0] != n:
                 raise KeyError('期望size参数为长度等于%d的浮点型数组'%n)
         
-        light = wxLight.BaseLight(ambient)
+        light = BaseLight(ambient)
         self.add_model(light.get_model(GL_POINTS, vs, 
             color       = color, 
             psize       = size, 
@@ -697,7 +709,7 @@ class Region:
         else:
             raise ValueError('不支持的线段方法：%s'%method)
         
-        light = wxLight.BaseLight(ambient)
+        light = BaseLight(ambient)
         self.add_model(light.get_model(gltype, vs, 
             color       = color,
             lw          = width,
@@ -744,7 +756,7 @@ class Region:
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
-        light = kwds.get('light', wxLight.SunLight())
+        light = kwds.get('light', SunLight())
         
         method = method.upper()
         if method == "ISOLATE":
@@ -776,7 +788,7 @@ class Region:
             raise KeyError('缺少颜色或纹理参数')
         
         if color is None:
-            if not isinstance(texture, wxTexture.Texture):
+            if not isinstance(texture, Texture):
                 raise KeyError('期望纹理参数为wxgl.Texture类型')
             
             if texcoord is None:
@@ -810,17 +822,16 @@ class Region:
             transform   = transform
         ), name)
         
-    def mesh(self, xs, ys, zs, color=None, texture=None, utr=(0,1), vtr=(0,1), uclosed=False, vclosed=False, xoy=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, texture=None, ur=(0,1), vr=(0,1), uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
         color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
         texture     - 纹理：wxgl.Texture对象
-        utr         - u方向纹理坐标范围
-        vtr         - v方向纹理坐标范围
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
-        xoy         - 网格在xoy平面：布尔型
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -843,7 +854,7 @@ class Region:
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
-        light = kwds.get('light', wxLight.SunLight())
+        light = kwds.get('light', SunLight())
         
         vs = np.dstack((xs, ys, zs))
         rows, cols = vs.shape[:2]
@@ -853,11 +864,11 @@ class Region:
             raise KeyError('缺少颜色或纹理参数')
         
         if color is None:
-            if not isinstance(texture, wxTexture.Texture):
+            if not isinstance(texture, Texture):
                 raise KeyError('期望纹理参数为wxTexture.Texture类型')
             
-            u = np.linspace(utr[0], utr[1], cols)
-            v = np.linspace(vtr[1], vtr[0], rows)
+            u = np.linspace(ur[0], ur[1], cols)
+            v = np.linspace(vr[0], vr[1], rows)
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)).reshape(-1,2))
         else:
             if not isinstance(color, (tuple, list, np.ndarray)):
@@ -874,12 +885,7 @@ class Region:
         
         idx = np.arange(rows*cols).reshape(rows, cols)
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
-        
-        if xoy:
-            indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
-        else:
-            indices = np.int32(np.dstack((idx_a, idx_d, idx_b, idx_c, idx_b, idx_d)).ravel())
-        
+        indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
         normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
         
         if vclosed:
@@ -904,7 +910,7 @@ class Region:
             transform   = transform
         ), name)
 
-    def cylinder(self, c1, c2, r, color=None, texture=None, arc=(0,360), cell=5, **kwds):
+    def cylinder(self, c1, c2, r, color=None, texture=None, ur=(0,1), vr=(0,1), arc=(0,360), cell=5, **kwds):
         """圆柱
         
         c1          - 圆柱端面圆心：元组、列表或numpy数组
@@ -912,6 +918,8 @@ class Region:
         r           - 圆柱半径：浮点型
         color       - 颜色：浮点型元组、列表或numpy数组
         texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
@@ -938,21 +946,18 @@ class Region:
         ys = np.zeros_like(theta)
         vs = np.stack((xs,ys,zs), axis=1)
         vs = np.dot(vs, m_rotate)
-        vs = np.stack((vs+c1, vs+c2), axis=1).reshape(-1,3)
+        vs = np.stack((vs+c1, vs+c2), axis=0)
+        
+        xs = vs[..., 0]
+        ys = vs[..., 1]
+        zs = vs[..., 2]
         
         if color is None and texture is None:
             color = self.scene.style[1]
         
-        if color is None:
-            u = np.linspace(0, 1, vs.shape[0]//2)
-            v = np.linspace(1, 0, 2)
-            texcoord = np.float32(np.stack((np.repeat(u, 2), np.tile(v, vs.shape[0]//2)), axis=1))
-        else:
-            texcoord = None
-        
-        self.surface(vs, color=color, texture=texture, texcoord=texcoord, method='strip', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
+        self.mesh(xs, ys, zs, color=color, texture=texture, ur=ur, vr=vr, uclosed=abs(arc[0]-arc[1])==360, **kwds)
 
-    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, u=(0,360), v=(0,360), cell=5, **kwds):
+    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-180,180), cell=5, **kwds):
         """球环
         
         center      - 球环中心坐标：元组、列表或numpy数组
@@ -961,6 +966,8 @@ class Region:
         vec         - 环面法向量
         color       - 颜色：浮点型元组、列表或numpy数组
         texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         u           - u方向范围：默认0°~360°
         v           - v方向范围：默认-90°~90°
         cell        - 网格精度：默认5°
@@ -976,7 +983,7 @@ class Region:
         """
         
         u_0, u_1 = np.radians(min(u)), np.radians(max(u))
-        v_0, v_1 = np.radians(min(v)), np.radians(max(v))
+        v_0, v_1 = np.radians(max(v)), np.radians(min(v))
         cell = np.radians(cell)
         u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
         gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
@@ -995,15 +1002,18 @@ class Region:
         if color is None and texture is None:
             color = self.scene.style[1]
         
-        self.mesh(xs, ys, zs, color=color, texture=texture, uclosed=uclosed, vclosed=vclosed, **kwds)
+        self.mesh(xs, ys, zs, color=color, texture=texture, ur=ur, vr=vr, uclosed=uclosed, vclosed=vclosed, **kwds)
     
-    def uvsphere(self, center, r, color=None, texture=None, u=(0,360), v=(-90,90), cell=5, **kwds):
+    def uvsphere(self, center, r, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-90,90), cell=5, **kwds):
         """使用经纬度网格生成球
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
+        vec         - 轴向量
         color       - 颜色：浮点型元组、列表或numpy数组
         texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         u           - u方向范围：默认0°~360°
         v           - v方向范围：默认-90°~90°
         cell        - 网格精度：默认5°
@@ -1020,19 +1030,23 @@ class Region:
         
         
         u_0, u_1 = np.radians(min(u)), np.radians(max(u))
-        v_0, v_1 = np.radians(min(v)), np.radians(max(v))
+        v_0, v_1 = np.radians(max(v)), np.radians(min(v))
         cell = np.radians(cell)
         u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
         gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
         
-        zs = -r * np.cos(gv)*np.cos(gu) + center[2]
-        xs = r * np.cos(gv)*np.sin(gu) + center[0]
-        ys = r * np.sin(gv) + center[1]
+        zs = -r * np.cos(gv)*np.sin(gu)
+        xs = r * np.cos(gv)*np.cos(gu)
+        ys = r * np.sin(gv)
+        
+        m_rotate = util.y2v(vec)
+        vs = np.dot(np.dstack((xs, ys, zs)), m_rotate) + center
+        xs, ys, zs = vs[...,0], vs[...,1], vs[...,2]
         
         if color is None and texture is None:
             color = self.scene.style[1]
         
-        self.mesh(xs, ys, zs, color=color, texture=texture, uclosed=abs(u[0]-u[1])==360, **kwds)
+        self.mesh(xs, ys, zs, color=color, texture=texture, ur=ur, vr=vr, uclosed=abs(u[0]-u[1])==360, **kwds)
 
     def isosphere(self, center, r, color=None, iterations=5, **kwds):
         """通过对正八面体的迭代细分生成球
@@ -1269,9 +1283,9 @@ class Region:
         colors = util.CM.cmap(np.linspace(dmin, dmax, 256), cm)
         
         if mode == 'H':
-            texture = wxTexture.Texture(np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,-1)))
+            texture = Texture(np.uint8(np.tile(255*colors, (2,1)).reshape(2,256,-1)))
         else:
-            texture = wxTexture.Texture(np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1)))
+            texture = Texture(np.uint8(np.tile(255*colors[::-1], 2).reshape(256,2,-1)))
         
         if mode == 'V':
             u = box[2,0] - box[0,0]
@@ -1283,7 +1297,7 @@ class Region:
                     [box[2,0], box[2,1]+1.2*u],
                     [box[2,0], box[2,1]+0.4*u]
                 ])
-                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
+                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False, light=BaseLight())
             
             tk = h/(dmax-dmin)
             dashes = list()
@@ -1296,7 +1310,7 @@ class Region:
                     [box[2,0]+3*u, y+0.25*u],
                     [box[2,0]+3*u, y-0.25*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
+                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False, light=BaseLight())
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         else:
@@ -1309,7 +1323,7 @@ class Region:
                     [box[2,0], box[2,1]+1.4*u],
                     [box[2,0], box[2,1]+0.3*u]
                 ])
-                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
+                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False, light=BaseLight())
             
             tk = w/(dmax-dmin)
             dashes = list()
@@ -1322,7 +1336,7 @@ class Region:
                     [x+u, box[1,1]-0.65*u],
                     [x+u, box[1,1]-1.35*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False, light=wxLight.BaseLight())
+                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False, light=BaseLight())
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         
@@ -1336,9 +1350,6 @@ class Region:
         zlabel      - z轴名称，默认'Z'
         kwds        - 关键字参数
                             visible         - 是否可见，默认可见
-                            xr              - x轴范围或刻度标注序列，元组，默认None
-                            yr              - y轴范围或刻度标注序列，元组，默认None
-                            zr              - z轴范围或刻度标注序列，元组，默认None
                             xf              - x轴刻度标注格式化函数，默认str
                             yf              - y轴刻度标注格式化函数，默认str
                             zf              - z轴刻度标注格式化函数，默认str
@@ -1363,9 +1374,6 @@ class Region:
         self.ticks.clear()
         
         visible = kwds.get('visible', True)
-        xr = kwds.get('xr', None)
-        yr = kwds.get('yr', None)
-        zr = kwds.get('zr', None)
         xf = kwds.get('xf', str)
         yf = kwds.get('yf', str)
         zf = kwds.get('zf', str)
@@ -1383,35 +1391,20 @@ class Region:
         yd = max(-2, yd)
         zd = max(-2, zd)
         
-        if xr is None:
-            if self.r_x[0] >= self.r_x[-1]:
-                return # '模型空间不存在，返回
-            dx = (self.r_x[1] - self.r_x[0]) * 0.1
-            xx = self._get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd, extend=extend)
-        elif len(xr) == 2:
-            xx = self._get_tick_label(xr[0], xr[-1], s_min=4+xd, s_max=6+xd, extend=extend)
-        else:
-            xx = xr
+        if self.r_x[0] >= self.r_x[-1]:
+            return # '模型空间不存在，返回
+        dx = (self.r_x[1] - self.r_x[0]) * 0.1
+        xx = self._get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd, extend=extend)
         
-        if yr is None:
-            if self.r_y[0] >= self.r_y[-1]:
-                return # '模型空间不存在，返回
-            dy = (self.r_y[1] - self.r_y[0]) * 0.1
-            yy = self._get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd, extend=extend)
-        elif len(yr) == 2:
-            yy = self._get_tick_label(yr[0], yr[-1], s_min=4+yd, s_max=6+yd, extend=extend)
-        else:
-            yy = yr
+        if self.r_y[0] >= self.r_y[-1]:
+            return # '模型空间不存在，返回
+        dy = (self.r_y[1] - self.r_y[0]) * 0.1
+        yy = self._get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd, extend=extend)
         
-        if zr is None:
-            if self.r_z[0] >= self.r_z[-1]:
-                return # '模型空间不存在，返回
-            dz = (self.r_z[1] - self.r_z[0]) * 0.1
-            zz = self._get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd, extend=extend)
-        elif len(zr) == 2:
-            zz = self._get_tick_label(zr[0], zr[-1], s_min=4+zd, s_max=6+zd, extend=extend)
-        else:
-            zz = xr
+        if self.r_z[0] >= self.r_z[-1]:
+            return # '模型空间不存在，返回
+        dz = (self.r_z[1] - self.r_z[0]) * 0.1
+        zz = self._get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd, extend=extend)
         
         u = max((xx[-1]-xx[0]), (yy[-1]-yy[0]), (zz[-1]-zz[0])) * 0.02 # 调整间隙的基本单位
         

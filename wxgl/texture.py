@@ -42,9 +42,9 @@ class Texture:
         self.level = kwds.get('level', 1)
         self.min_filter = kwds.get('min_filter', GL_LINEAR_MIPMAP_NEAREST)
         self.mag_filter = kwds.get('mag_filter', GL_LINEAR)
-        self.s_tile = kwds.get('s_tile', GL_CLAMP_TO_EDGE)
-        self.t_tile = kwds.get('t_tile', GL_CLAMP_TO_EDGE)
-        self.r_tile = kwds.get('r_tile', GL_CLAMP_TO_EDGE)
+        self.s_tile = kwds.get('s_tile', GL_REPEAT)
+        self.t_tile = kwds.get('t_tile', GL_REPEAT)
+        self.r_tile = kwds.get('r_tile', GL_REPEAT)
         self.xflip = kwds.get('xflip', False)
         self.yflip = kwds.get('yflip', False)
     

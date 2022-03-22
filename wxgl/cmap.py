@@ -4,7 +4,6 @@ import re
 import numpy as np
 import matplotlib
 from matplotlib import cm as mcm
-#from scipy.ndimage import filters
 
 class ColorManager:
     """颜色管理类"""
@@ -187,15 +186,15 @@ class ColorManager:
         data[data>dmax] = dmax
         
         cmo = mcm.get_cmap(cm)
-        cmap, k = list(), 256/cmo.N
+        cs, k = list(), 256/cmo.N
         for i in range(cmo.N):
             c = cmo(i)
             for j in range(int(i*k), int((i+1)*k)):
-                cmap.append(c)
-        cmap = np.array(cmap)
+                cs.append(c)
+        cs = np.array(cs)
         
         data = np.uint8(255*(data-dmin)/(dmax-dmin))
-        color = cmap[data]
+        color = cs[data]
         color[invalid_pos] = invalid_c
         
         if isinstance(alpha, (int, float)) and 0 <= alpha <= 1:
@@ -203,12 +202,7 @@ class ColorManager:
         
         if drop:
             color = color[..., :-1]
-        #else:
-        #    if color.ndim == 3:
-        #        a = np.uint8(color[..., -1]*255)
-        #        a = filters.gaussian_filter(a, 0.5)
-        #        color[..., -1] = np.float64(a)/255
-        #
+        
         return color
 
 if __name__  == '__main__':

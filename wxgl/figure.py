@@ -7,8 +7,8 @@ import wx.lib.agw.aui as aui
 import wx.lib.buttons as wxbtn
 import configparser
 
-from . import scene
-from . import axes
+from . scene import Scene
+from . axes import Axes
 
 
 BASE_PATH = os.path.dirname(__file__)
@@ -167,7 +167,6 @@ class Figure:
             ax.reg_main.ticks3d(
                 visible=self.ff.scene.ticks_is_show, 
                 xlabel=ax.xn, ylabel=ax.yn, zlabel=ax.zn, 
-                xr=ax.xr, yr=ax.yr, zr=ax.zr, 
                 xf=ax.xf, yf=ax.yf, zf=ax.zf, 
                 xd=ax.xd, yd=ax.yd, zd=ax.zd
             )
@@ -252,7 +251,7 @@ class Figure:
         """
         
         self._create_frame()
-        self.curr_ax = axes.Axes(self.ff.scene, pos)
+        self.curr_ax = Axes(self.ff.scene, pos)
         self.axes_list.append(self.curr_ax)
     
     def cruise(self, func_cruise):
@@ -288,7 +287,7 @@ class FigureFrame(wx.Frame):
         self.SetSize(self.fig.size)
         self.Center()
         
-        self.scene = scene.Scene(self, **self.fig.kwds3d)
+        self.scene = Scene(self, **self.fig.kwds3d)
         
         self.gauge = None                                   # 保存文件的进度条窗口
         self.export = False                                 # 播放动画时生成GIF或视频文件

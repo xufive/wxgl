@@ -13,7 +13,6 @@ WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块�
  
 * pyopengl - 推荐版本:3.1.5或更高 
 * numpy - 推荐版本:1.18.2或更高 
-* scipy - 推荐版本:1.4.1或更高
 * matplotlib - 推荐版本:3.1.2或更高  
 * pillow - 推荐版本:8.2.0或更高
 * wxpython - 推荐版本:4.0.7.post2或更高 
@@ -26,11 +25,11 @@ WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块�
 * 下面这几行代码，绘制了一个中心在三维坐标系原点半径为1的纯色圆球。忽略模块名的话，这些代码和Matplotlib的风格几乎是完全一致的。
 
 ```python
-import wxgl.wxplot as plt
+import wxgl.glplot as glt
 
-plt.uvsphere((0,0,0), 1, color='cyan')
-plt.title('快速体验：$x^2+y^2=1$')
-plt.show()
+glt.uvsphere((0,0,0), 1, color='cyan')
+glt.title('快速体验：$x^2+y^2=1$')
+glt.show()
 ```
 
 ![色球](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_01.png)
@@ -39,15 +38,16 @@ plt.show()
 * 在一张画布上可以任意放置多个子图。下面的代码演示了子图布局函数subplot的经典用法。实际上，这个函数比Matplotlib的同名函数更灵活和便捷。
 
 ```python
-import wxgl.wxplot as plt
+import wxgl
+import wxgl.glplot as glt
 
-plt.subplot(121)
-plt.title('经纬度网格生成球体')
-plt.uvsphere((0,0,0), 1, lon=(180,-180), lat=(90,-90), texture='res/earth.jpg')
-plt.subplot(122)
-plt.title('正八面体迭代细分生成球体', color='cyan')
-plt.isosphere((0,0,0), 1, color=(0,1,1), iterations=5)
-plt.show()
+glt.subplot(121)
+glt.title('经纬度网格生成球体')
+glt.uvsphere((0,0,0), 1, texture=wxgl.Texture('res/earth.jpg'))
+glt.subplot(122)
+glt.title('正八面体迭代细分生成球体')
+glt.isosphere((0,0,0), 1, color=(0,1,1), iterations=5)
+glt.show()
 ```
 
 ![子图布局](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_02.png)
@@ -57,16 +57,16 @@ plt.show()
 
 ```python
 import numpy as np
-import wxgl.wxplot as plt
+import wxgl.glplot as glt
 
 vs = np.random.random((300, 3))*2-1
 color = np.random.random(300)
 size = np.random.randint(3, 15, size=300)
-plt.scatter(vs, color, 'jet', size=size)
-plt.colorbar('jet', [-1, 1], loc='right')
-plt.colorbar('Paired', [-5, 5], loc='bottom', subject='温度')
-plt.colorbar('rainbow', [0, 77], loc='bottom', subject='速度')
-plt.show()
+glt.point(vs, color, cm='jet', alpha=0.9, size=size)
+glt.colorbar('jet', [-1, 1], loc='right')
+glt.colorbar('Paired', [-5, 5], loc='bottom', subject='温度')
+glt.colorbar('rainbow', [0, 77], loc='bottom', subject='速度')
+glt.show()
 ```
 
 ![调色板](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_03.png)
@@ -76,7 +76,8 @@ plt.show()
 
 ```python
 import numpy as np
-import wxgl.wxplot as plt
+import wxgl
+import wxgl.glplot as glt
 
 r = 1 # 花灯半径为1
 theta = np.linspace(0, 2*np.pi, 361) 
@@ -85,9 +86,10 @@ zs = r * np.tile(-np.sin(theta), (150,1))
 ys = np.repeat(np.linspace(1.35, -1.35, 150), 361).reshape(150,361)
 
 tf = lambda duration : ((0, 1, 0, (-0.02*duration)%360),)
+tx = wxgl.Texture('res/bull.jpg')
 
-plt.mesh(xs, ys, zs, texture='res/bull.jpg', transform=tf, light=None)
-plt.show()
+glt.mesh(xs, ys, zs, texture=tx, transform=tf, light=wxgl.BaseLight())
+glt.show()
 ```
 
 ![动画函数](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_04.png)
@@ -97,7 +99,7 @@ plt.show()
 
 ```python
 import wxgl
-import wxgl.wxplot as plt
+import wxgl.glplot as glt
 
 vshader = """
 	#version 330 core
@@ -119,14 +121,14 @@ fshader = """
 	} 
 """
 
-m = wxgl.Model(wxgl.QUADS, vshader, fshader) # 实例化模型，设置绘图方法和着色器源码
-m.set_vertex('a_Position', [[-1,1,0],[-1,-1,0],[1,-1,0],[1,1,0]]) # 4个顶点坐标
+m = wxgl.Model(wxgl.TRIANGLE_STRIP, vshader, fshader) # 实例化模型，设置绘图方法和着色器源码
+m.set_vertex('a_Position', [[-1,1,0],[-1,-1,0],[1,1,0],[1,-1,0]]) # 4个顶点坐标
 m.set_color('a_Color', [[1,0,0],[0,1,0],[0,0,1],[0,1,1]]) # 4个顶点的颜色
 m.set_mvp_matrix('u_MVPMatrix') # 设置模型矩阵、视点矩阵和投影矩阵
 
-plt.cruise(lambda duration : {'azim':(0.02*duration)%360}) # 相机巡航（绕y轴逆时针旋转）
-plt.model(m) # 添加模型到画布
-plt.show() # 显示画布
+glt.cruise(lambda duration : {'azim':(0.02*duration)%360}) # 相机巡航（绕y轴逆时针旋转）
+glt.model(m) # 添加模型到画布
+glt.show() # 显示画布
 ```
 
 这里使用Model.set_mvp_matrix函数将着色器中的MVP三合一矩阵和WxGL的模型矩阵、视点矩阵和投影矩阵联系起来。Model类还提供了set_model_matrix函数、set_view_matrix函数和set_proj_matrix函数，分别关联着色器中的模型矩阵、视点矩阵和投影矩阵。另外，这段代码还演示了相机动画函数的使用方式，和前面的模型动画基本类似。

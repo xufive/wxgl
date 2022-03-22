@@ -36,7 +36,6 @@ setuptools.setup(
     install_requires = [ 
         'pyopengl>=3.1.5',
         'numpy>=1.20.2', 
-        'scipy>=1.4.1', 
         'matplotlib>=3.1.2', 
         'wxpython>=4.0.7.post2',
         'pillow>=8.2.0',
