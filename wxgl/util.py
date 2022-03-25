@@ -130,7 +130,7 @@ def view_matrix(cam_pos, cam_up, oecs):
 def proj_matrix(proj, hexa, zoom):
     """返回投影矩阵
     
-    proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影
+    proj        - 投影模式，'O' - 正射投影，'P' - 透视投影
     hexa        - 视锥体的左右下上距离中心线的距离以及前后面距离相机的距离组成的元组
     zoom        - 视口缩放因子
     csize       - GL窗口宽高元组
@@ -140,7 +140,7 @@ def proj_matrix(proj, hexa, zoom):
     left, right, bottom, top = zoom*left, zoom*right, zoom*bottom, zoom*top
     rw, rh, rd = 1/(right - left), 1/(top - bottom), 1/(far - near)
     
-    if proj == 'ortho':
+    if proj[0].upper() == 'O':
         m = np.array([
             [2 * rw, 0, 0, 0],
             [0, 2 * rh, 0, 0],

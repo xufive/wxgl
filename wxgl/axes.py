@@ -19,9 +19,9 @@ class Axes:
                         四元组      - 以画布左下角为原点，宽度和高度都是1。四元组分别表示子图左下角在画布上的水平、垂直位置和宽度、高度
         """
         
-        self.scene = scene
-        self.ff = self.scene.parent
-        self.fig = self.ff.fig
+        self.scene = scene                                                  # 场景对象
+        self.ff = self.scene.parent                                         # 窗口对象
+        self.fig = self.ff.fig                                              # 画布对象
         
         w, h = self.scene.csize
         margin, padding = 0.02, 0.01
@@ -36,28 +36,28 @@ class Axes:
         else:
             raise ValueError("期望参数pos是三个数字组成的整数或字符串，或者长度为4的元组或列表")
         
-        self.reg_main = self.scene.add_region(self.box)     # 主视区
-        self.reg_title = None                               # 标题视区
-        self.reg_cbr = None                                 # 右侧色条视区
-        self.reg_cbb = None                                 # 底部色条视区
+        self.reg_main = self.scene.add_region(self.box, **self.fig.args)    # 主视区
+        self.reg_title = None                                               # 标题视区
+        self.reg_cbr = None                                                 # 右侧色条视区
+        self.reg_cbb = None                                                 # 底部色条视区
         
-        self.title_dict = dict()                            # 保存标题信息的字典
-        self.cbr_list = list()                              # 保存右侧色条信息的列表
-        self.cbb_list = list()                              # 保存底部色条信息的列表
-        self.cbr_uk = 1.0                                   # 右侧色条基本单位缩放系数
-        self.cbb_uk = 1.5                                   # 底部色条基本单位缩放系数
-        self.assembly = list()                              # 生成模型的函数及参数列表
-        self.ci = 0                                         # 默认颜色选择指针
+        self.title_dict = dict()                                            # 保存标题信息的字典
+        self.cbr_list = list()                                              # 保存右侧色条信息的列表
+        self.cbb_list = list()                                              # 保存底部色条信息的列表
+        self.cbr_uk = 1.0                                                   # 右侧色条基本单位缩放系数
+        self.cbb_uk = 1.5                                                   # 底部色条基本单位缩放系数
+        self.assembly = list()                                              # 生成模型的函数及参数列表
+        self.ci = 0                                                         # 默认颜色选择指针
         
-        self.xn = 'X'                                       # x轴名称
-        self.yn = 'Y'                                       # y轴名称
-        self.zn = 'Z'                                       # z轴名称
-        self.xf = str                                       # x轴标注格式化函数
-        self.yf = str                                       # y轴标注格式化函数
-        self.zf = str                                       # z轴标注格式化函数
-        self.xd = 0                                         # x轴标注密度，整型，值域范围[-2,10], 默认0
-        self.yd = 0                                         # y轴标注密度，整型，值域范围[-2,10], 默认0
-        self.zd = 0                                         # z轴标注密度，整型，值域范围[-2,10], 默认0
+        self.xn = 'X'                                                       # x轴名称
+        self.yn = 'Y'                                                       # y轴名称
+        self.zn = 'Z'                                                       # z轴名称
+        self.xf = str                                                       # x轴标注格式化函数
+        self.yf = str                                                       # y轴标注格式化函数
+        self.zf = str                                                       # z轴标注格式化函数
+        self.xd = 0                                                         # x轴标注密度，整型，值域范围[-2,10], 默认0
+        self.yd = 0                                                         # y轴标注密度，整型，值域范围[-2,10], 默认0
+        self.zd = 0                                                         # z轴标注密度，整型，值域范围[-2,10], 默认0
     
     def _layout(self):
         """画布显示前设置主视区、标题视区和色条视区的布局关系"""
@@ -105,7 +105,7 @@ class Axes:
         # 标题
         if self.title_dict:
             box = (x0, y0+h_main, self.box[2],  h_t*self.box[3])
-            self.reg_title = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建标题视区
+            self.reg_title = self.scene.add_region(box, proj='ortho', fixed=True) # 创建标题视区
             
             w = self.reg_title.size[0]/self.reg_title.size[1]
             top = 1 - 2 * self.title_dict['height'] * self.title_dict['margin_top'] / h_t
@@ -134,7 +134,7 @@ class Axes:
         # 右侧色条
         if self.cbr_list:
             box = (x0+w_main, y0, w_cb*self.box[2], h_main)
-            self.reg_cbr = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建右侧色条视区
+            self.reg_cbr = self.scene.add_region(box, proj='ortho', fixed=True) # 创建右侧色条视区
             
             h = self.reg_cbr.size[1]/self.reg_cbr.size[0]
             start = -1
@@ -160,7 +160,7 @@ class Axes:
         # 底部色带
         if self.cbb_list:
             box = (x0, self.box[1], w_main,  h_cb*self.box[3])
-            self.reg_cbb = self.scene.add_region(box, fixed=True, proj='ortho', zoom=1.0) # 创建底部色条视区
+            self.reg_cbb = self.scene.add_region(box, proj='ortho', fixed=True) # 创建底部色条视区
             
             w = self.reg_cbb.size[0]/self.reg_cbb.size[1]
             section = 2*w/len(self.cbb_list)
@@ -193,6 +193,11 @@ class Axes:
         """添加生成模型的函数及参数"""
         
         self.assembly.append([reg, func, list(args), kwds])
+    
+    def cruise(self, func_cruise):
+        """设置相机巡航函数"""
+        
+        self.reg_main.set_cam_cruise(func_cruise)
     
     def title(self, text, size=40, color=None, **kwds):
         """Axes顶部区水平居中的标题

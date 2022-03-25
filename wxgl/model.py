@@ -194,14 +194,6 @@ class Model:
         
         self.uniform.update({var_name: {'tag':'picked'}})
     
-    def set_mvp_matrix(self, var_name):
-        """设置模型、视点、投影三合一矩阵
-        
-        var_name        - 三合一矩阵在着色器中的变量名
-        """
-        
-        self.uniform.update({var_name: {'tag':'mvpmat'}})
-    
     def set_view_matrix(self, var_name, vmatrix=None):
         """设置视点矩阵
         

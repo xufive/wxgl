@@ -27,6 +27,8 @@ setuptools.setup(
             'wxgl/res/tb_show_32.png', 
             'wxgl/res/tb_play_32.png', 
             'wxgl/res/tb_stop_32.png', 
+            'wxgl/res/tb_rplay_32.png', 
+            'wxgl/res/tb_rstop_32.png', 
             'wxgl/res/tb_restore_32.png', 
             'wxgl/res/tb_save_32.png', 
             'wxgl/res/tb_style_32.png',

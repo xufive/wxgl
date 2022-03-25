@@ -60,23 +60,17 @@ def figure(**kwds):
     
     kwds        - 3D场景参数
         proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影（默认）
-        oecs        - 视点坐标系ECS原点，默认与目标坐标系OCS原点重合
-        dist        - 相机与ECS原点的距离，默认5个长度单位
+        zoom        - 视口缩放因子，默认1.0
         azim        - 方位角，默认0°
         elev        - 仰角，默认0°
-        vision      - 视锥体左右上下四个面距离ECS原点的距离，默认1个长度单位
-        near        - 视锥体前面距离相机的距离，默认3个长度单位
-        far         - 视锥体后面距离相机的距离，默认1000个长度单位
-        zoom        - 视口缩放因子，默认1.0
-        interval    - 动画定时间隔，默认20毫秒
-        smooth      - 直线、多边形和点的反走样开关
         azim_range  - 方位角限位器，默认-180°~180°
         elev_range  - 仰角限位器，默认-180°~180°
+        smooth      - 直线、多边形和点的反走样开关
         style       - 场景风格，默认太空蓝
+            'blue'      - 太空蓝
+            'gray'      - 国际灰
             'white'     - 珍珠白
             'black'     - 石墨黑
-            'gray'      - 国际灰
-            'blue'      - 太空蓝
             'royal'     - 宝石蓝
     """
     
@@ -93,10 +87,11 @@ def subplot(pos):
     
     fig.add_axes(pos)
 
+@current_axes
 def cruise(func):
     """设置相机巡航函数"""
     
-    fig.cruise(func)
+    fig.curr_ax.cruise(func)
 
 @current_axes
 def title(*args, **kwds):

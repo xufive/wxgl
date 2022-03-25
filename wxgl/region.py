@@ -13,42 +13,73 @@ from . texture import Texture
 from . light import *
 from . import util
 
+DIST = 5.0
+NEAR = 3.0
+FAR = 1000.0
+
 class Region:
     """GL视区类"""
     
-    def __init__(self, scene, box, fixed, proj, zoom):
+    def __init__(self, scene, box, **kwds):
         """构造函数
         
         scene       - 视区所属场景对象
         box         - 视区位置四元组：四个元素分别表示视区左下角坐标、宽度、高度，元素值域[0,1]
-        fixed       - 是否锁定相机位置：布尔型
-        proj        - 投影模式：字符串，'ortho' - 正射投影，'frustum' - 透视投影（默认）
-        zoom        - 视口缩放因子：None表示跟随场景缩放
+        kwds        - 关键字参数
+            proj        - 投影模式：'O' - 正射投影，'P' - 透视投影（默认）
+            fixed       - 锁定模式：固定ECS原点、相机位置和角度，以及视口缩放因子等。布尔型，默认False
+            azim        - 方位角：-180°~180°范围内的浮点数，默认0°
+            elev        - 高度角：-180°~180°范围内的浮点数，默认0°
+            azim_range  - 方位角限位器：默认-180°~180°
+            elev_range  - 仰角限位器：默认-180°~180°
+            zoom        - 视口缩放因子：默认1.0
+            name        - 视区名
         """
         
-        self.scene = scene
-        self.box = box
-        self.fixed = fixed
-        self.proj = proj
-        self.zoom = zoom
-        self.pos = None
-        self.size = None
-        self.aspect = None
-        self.vision = None                                      # 视锥体左右下上边距离中心点的距离
-        self.models = dict()                                    # 成品模型（已生成缓冲区对象）字典
-        self.mnames = [list(), list()]                          # 模型名列表：不透明、透明
-        self.ticks = dict()                                     # 刻度线
-        self.r_x = [1e10, -1e10]                                # 数据在x轴上的动态范围
-        self.r_y = [1e10, -1e10]                                # 数据在y轴上的动态范围
-        self.r_z = [1e10, -1e10]                                # 数据在z轴上的动态范围
-        self.scale = 1.0                                        # 模型缩放比例
-        self.shift = np.array((0, 0, 0), dtype=np.float32)      # 模型位移量
+        for key in kwds:
+            if key not in ['proj', 'fixed', 'azim', 'elev', 'azim_range', 'elev_range', 'zoom', 'name']:
+                raise KeyError('不支持的关键字参数：%s'%key)
         
-        self.mmat = self.get_mmat()                             # 模型矩阵
-        self.vmat = self.get_vmat()                             # 视点矩阵
-        self.pmat = None                                        # 投影矩阵
+        self.scene = scene                                                  # 视区所属场景对象
+        self.box = box                                                      # 视区位置四元组
+        
+        self.proj = kwds.get('proj', 'P')[0].upper()                        # 投影模式
+        self.fixed = kwds.get('fixed', False)                               # 锁定模式
+        self.azim = kwds.get('azim', 0.0)                                   # 初始方位角
+        self.elev = kwds.get('elev', 0.0)                                   # 初始高度角
+        self.azim_range = kwds.get('azim_range', (-180, 180))               # 方位角限位器
+        self.elev_range = kwds.get('elev_range', (-180, 180))               # 仰角限位器
+        self.zoom = kwds.get('zoom', 1.0)                                   # 视口缩放因子
+        self.name = kwds.get('name', uuid.uuid1().hex)                      # 视区名
+        
+        self.oecs = [0.0, 0.0, 0.0]                                         # 视点坐标系ECS原点
+        self.dist = DIST                                                    # 相机与ECS原点的距离
+        self.near = NEAR                                                    # 视锥体前面距离相机的距离
+        self.far = FAR                                                      # 视锥体后面距离相机的距离
+        self.scale = 1.0                                                    # 缩放比例
+        self.cam = [0.0, 0.0, 5.0]                                          # 相机位置
+        self.up = [0.0, 1.0, 0.0]                                           # 指向相机上方的单位向量
+        self.cam_cruise = None                                              # 相机巡航函数
+        self.posture = dict()                                               # 存储相机姿态、缩放比例等设置参数的字典
+        
+        self.pos = None                                                     # 视区左下角坐标（像素表示）
+        self.size = None                                                    # 视区大小（像素表示）
+        self.aspect = None                                                  # 视区宽高像素比
+        self.vision = None                                                  # 视锥体左右下上边距离中心点的距离
+        
+        self.models = dict()                                                # 成品模型（已生成缓冲区对象）字典
+        self.mnames = [list(), list()]                                      # 模型名列表：不透明、透明
+        self.ticks = dict()                                                 # 刻度线
+        self.r_x = [1e10, -1e10]                                            # 数据在x轴上的动态范围
+        self.r_y = [1e10, -1e10]                                            # 数据在y轴上的动态范围
+        self.r_z = [1e10, -1e10]                                            # 数据在z轴上的动态范围
+        
+        self.mmat = np.eye(4, dtype=np.float32)                             # 模型矩阵
+        self.vmat = np.eye(4, dtype=np.float32)                             # 视点矩阵
+        self.pmat = np.eye(4, dtype=np.float32)                             # 投影矩阵
         
         self.update_size()
+        self.save_status()
     
     def update_size(self, box=None):
         """设置视区大小"""
@@ -60,40 +91,169 @@ class Region:
         self.size = int(self.scene.csize[0] * self.box[2]), int(self.scene.csize[1] * self.box[3])
         self.aspect = self.size[0]/self.size[1] if self.size[1] > 0 else 10000
         
-        vision = 1 if self.proj == 'ortho' else 0.75
+        self.set_range()
+    
+    def update_cam_and_up(self, oecs=None, dist=None, azim=None, elev=None):
+        """根据当前ECS原点位置、距离、方位角、仰角等参数，重新计算相机位置和up向量"""
+        
+        if not oecs is None:
+            self.oecs = [*oecs,]
+        
+        if not dist is None:
+            self.dist = dist
+        
+        if not azim is None:
+            azim = (azim+180)%360 - 180
+            if azim < self.azim_range[0]:
+                self.azim = self.azim_range[0]
+            elif azim > self.azim_range[1]:
+                self.azim = self.azim_range[1]
+            else:
+                self.azim = azim
+        
+        if not elev is None:
+            elev = (elev+180)%360 - 180
+            if elev < self.elev_range[0]:
+                self.elev = self.elev_range[0]
+            elif elev > self.elev_range[1]:
+                self.elev = self.elev_range[1]
+            else:
+                self.elev = elev
+        
+        azim, elev  = np.radians(self.azim), np.radians(self.elev)
+        d = self.dist * np.cos(elev)
+        
+        self.cam[1] = self.dist * np.sin(elev) + self.oecs[1]
+        self.cam[2] = d * np.cos(azim) + self.oecs[2]
+        self.cam[0] = d * np.sin(azim) + self.oecs[0]
+        self.up[1] = 1.0 if -90 <= self.elev <= 90 else -1.0
+        
+        self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
+    
+    def set_range(self, r_x=None, r_y=None, r_z=None):
+        """设置坐标轴范围
+        
+        r_x         - 二元组，x坐标轴范围
+        r_y         - 二元组，y坐标轴范围
+        r_z         - 二元组，z坐标轴范围
+        """
+        
+        if r_x:
+            if r_x[0] < self.r_x[0]:
+                self.r_x[0] = r_x[0]
+            if r_x[1] > self.r_x[1]:
+                self.r_x[1] = r_x[1]
+        
+        if r_y:
+            if r_y[0] < self.r_y[0]:
+                self.r_y[0] = r_y[0]
+            if r_y[1] > self.r_y[1]:
+                self.r_y[1] = r_y[1]
+        
+        if r_z:
+            if r_z[0] < self.r_z[0]:
+                self.r_z[0] = r_z[0]
+            if r_z[1] > self.r_z[1]:
+                self.r_z[1] = r_z[1]
+        
+        dx, dy, dz = self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0]
+        
+        if dx > 0 and dy > 0:
+            if self.aspect > dx/dy:
+                self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
+            else:
+                self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+        elif dx > 0 and dy <= 0:
+            self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+        elif dx <= 0 and dy > 0:
+            self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
+        
+        if self.scale * dz > 4:
+            self.scale = 4/dz
+        
+        self.near = NEAR/self.scale
+        self.far = FAR/self.scale
+        vision = 1/self.scale if self.proj == 'O' else 0.75/self.scale
         
         if self.aspect > 1:
             self.vision = (-vision*self.aspect, vision*self.aspect, -vision, vision)
         else:
             self.vision = (-vision, vision, -vision/self.aspect, vision/self.aspect)
         
-        if self.pmat is None:
-            self.pmat = self.get_pmat()
-        else:
-            self.pmat[:] = self.get_pmat()
+        self.update_pmat()
         
-        self.set_range()
-    
-    def get_mmat(self):
-        """返回模型矩阵"""
+        oecs = [sum(self.r_x)/2, sum(self.r_y)/2, sum(self.r_z)/2]
+        dist = DIST/self.scale
+        self.update_cam_and_up(oecs=oecs, dist=dist)
+        self.posture.update({'oecs': [*self.oecs,]})
         
-        return util.model_matrix(self.shift, self.scale)
+    def set_cam_cruise(self, func_cruise):
+        """设置相机巡航函数"""
+        
+        if hasattr(func_cruise, '__call__'):
+            self.cam_cruise = func_cruise
+            self.scene.islive = True
     
-    def get_vmat(self):
-        """返回视点矩阵"""
+    def motion(self, ctr, dx, dy):
+        """鼠标移动"""
         
         if self.fixed:
-            return util.view_matrix((0.0,0.0,5.0), (0.0,1.0,0.0), (0.0,0.0,0.0))
+            return
+        
+        if ctr:
+            oecs = [self.oecs[0]-dx/(self.scene.csize[0]*self.scale), self.oecs[1]+dy/(self.scene.csize[1]*self.scale), self.oecs[2]]
+            self.update_cam_and_up(oecs=oecs)
         else:
-            return self.scene.vmat
+            azim = self.azim - self.up[1]*(180*dx/self.scene.csize[0])
+            elev = self.elev + 90*dy/self.scene.csize[1]
+            self.update_cam_and_up(azim=azim, elev=elev)
     
-    def get_pmat(self):
-        """返回投影矩阵"""
+    def wheel(self, ctr, wr):
+        """鼠标滚轮"""
         
-        hexa = (*self.vision, self.scene.near, self.scene.far)
-        zoom = self.scene.zoom if self.zoom is None else self.zoom
+        if self.fixed:
+            return
         
-        return util.proj_matrix(self.proj, hexa, zoom)
+        if ctr:
+            if wr < 0:
+                dist = self.dist * 1.01
+            else:
+                dist = self.dist * 0.99
+            
+            self.update_cam_and_up(dist=dist)
+        else:
+            if wr < 0:
+                self.zoom *= 1.05
+                if self.zoom > 100:
+                    self.zoom = 100
+            else:
+                self.zoom *= 0.95
+                if self.zoom < 0.01:
+                    self.zoom = 0.01
+            
+            self.update_pmat()
+    
+    def save_status(self):
+        """保存当前的相机状态"""
+        
+        self.posture.update({
+            'oecs': [*self.oecs,],
+            'zoom': self.zoom,
+            'azim': self.azim,
+            'elev': self.elev
+        })
+    
+    def restore_posture(self):
+        """还原观察姿态"""
+        
+        self.update_cam_and_up(oecs=self.posture['oecs'], dist=DIST/self.scale, azim=self.posture['azim'], elev=self.posture['elev'])
+        self.zoom = self.posture['zoom']
+        self.update_pmat()
+    
+    def update_pmat(self):
+        """更新投影矩阵"""
+        
+        self.pmat[:] = util.proj_matrix(self.proj, (*self.vision, self.near, self.far), self.zoom)
     
     def clear_buffer(self):
         """删除buffer"""
@@ -130,7 +290,6 @@ class Region:
         self.r_y = [1e10, -1e10]
         self.r_z = [1e10, -1e10]
         self.scale = 1.0
-        self.shift = np.array((0, 0, 0), dtype=np.float32)
         
         wx.CallAfter(self.scene.render)
     
@@ -185,57 +344,6 @@ class Region:
                 
             del self.models[name]
     
-    def set_range(self, r_x=None, r_y=None, r_z=None):
-        """设置坐标轴范围
-        
-        r_x         - 二元组，x坐标轴范围
-        r_y         - 二元组，y坐标轴范围
-        r_z         - 二元组，z坐标轴范围
-        """
-        
-        if r_x:
-            if r_x[0] < self.r_x[0]:
-                self.r_x[0] = r_x[0]
-            if r_x[1] > self.r_x[1]:
-                self.r_x[1] = r_x[1]
-        
-        if r_y:
-            if r_y[0] < self.r_y[0]:
-                self.r_y[0] = r_y[0]
-            if r_y[1] > self.r_y[1]:
-                self.r_y[1] = r_y[1]
-        
-        if r_z:
-            if r_z[0] < self.r_z[0]:
-                self.r_z[0] = r_z[0]
-            if r_z[1] > self.r_z[1]:
-                self.r_z[1] = r_z[1]
-        
-        dx, dy, dz = self.r_x[1]-self.r_x[0], self.r_y[1]-self.r_y[0], self.r_z[1]-self.r_z[0]
-        
-        if dx > 0 and dy > 0:
-            if self.aspect > dx/dy:
-                self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
-            else:
-                self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
-        elif dx > 0 and dy <= 0:
-            self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
-        elif dx <= 0 and dy > 0:
-            self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
-        
-        if self.scale * dz > 4:
-            self.scale = 4/dz
-        
-        self.shift = np.array((-sum(self.r_x)/2, -sum(self.r_y)/2, -sum(self.r_z)/2), dtype=np.float32)
-        self.mmat[:] = util.model_matrix(self.shift, self.scale)
-        
-        for name in self.models:
-            for m in self.models[name]:
-                for key in m.uniform: 
-                    item = m.uniform[key]
-                    if item['tag'] == 'mmat' and 'v' in item:
-                        item.update({'o': np.dot(self.mmat, util.model_matrix(*item['v']))})
-    
     def add_model(self, m, name=None):
         """添加模型
         
@@ -285,11 +393,10 @@ class Region:
                 if 'v' not in item and 'f' not in item:
                     item.update({'v': self.vmat})
             elif item['tag'] == 'mmat':
-                if 'v' in item:
-                    item.update({'o': np.dot(self.mmat, util.model_matrix(*item['v']))})
-                else:
-                    if 'f' not in item:
-                        item.update({'o': self.mmat})
+                if 'v' not in item and 'f' not in item:
+                    item.update({'v': self.mmat})
+                elif 'v' in item:
+                    item.update({'v': util.model_matrix(*item['v'])})
             
             if 'loc' not in item:
                 item.update({'loc': glGetUniformLocation(m.program, key)})
@@ -314,7 +421,7 @@ class Region:
         
         wx.CallAfter(self.scene.render)
     
-    def _get_normal(self, gltype, vs, indices=None):
+    def get_normal(self, gltype, vs, indices=None):
         """返回法线集"""
         
         if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN):
@@ -363,7 +470,7 @@ class Region:
             result[i] = np.sum(normal[idx_arg[rise[i]:rise[i+1]]], axis=0)
         return result
     
-    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
+    def get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
         """返回合适的Colorbar标注值
         
         v_min       - 数据最小值
@@ -526,7 +633,7 @@ class Region:
         
         gltype = GL_TRIANGLE_STRIP
         box = np.array(box, dtype=np.float32)
-        normal = self._get_normal(gltype, box)
+        normal = self.get_normal(gltype, box)
         
         if color is None:
             color = self.scene.style[1]
@@ -772,7 +879,7 @@ class Region:
             raise ValueError('STRIP或FAN不支持indices参数')
         
         vs = np.array(vs, dtype=np.float32)
-        normal = self._get_normal(gltype, vs, indices)
+        normal = self.get_normal(gltype, vs, indices)
         
         if closed:
             if gltype == GL_TRIANGLE_STRIP:
@@ -886,7 +993,7 @@ class Region:
         idx = np.arange(rows*cols).reshape(rows, cols)
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
         indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
-        normal = self._get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
+        normal = self.get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
         
         if vclosed:
             normal[0] += normal[-1]
@@ -1269,7 +1376,7 @@ class Region:
         if len(drange) > 2:
             ticks = drange
         else:
-            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
+            ticks = self.get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
        
         if endpoint:
             if (ticks[1]-ticks[0])/(ticks[2]-ticks[1]) < 0.2:
@@ -1394,17 +1501,17 @@ class Region:
         if self.r_x[0] >= self.r_x[-1]:
             return # '模型空间不存在，返回
         dx = (self.r_x[1] - self.r_x[0]) * 0.1
-        xx = self._get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd, extend=extend)
+        xx = self.get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd, extend=extend)
         
         if self.r_y[0] >= self.r_y[-1]:
             return # '模型空间不存在，返回
         dy = (self.r_y[1] - self.r_y[0]) * 0.1
-        yy = self._get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd, extend=extend)
+        yy = self.get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd, extend=extend)
         
         if self.r_z[0] >= self.r_z[-1]:
             return # '模型空间不存在，返回
         dz = (self.r_z[1] - self.r_z[0]) * 0.1
-        zz = self._get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd, extend=extend)
+        zz = self.get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd, extend=extend)
         
         u = max((xx[-1]-xx[0]), (yy[-1]-yy[0]), (zz[-1]-zz[0])) * 0.02 # 调整间隙的基本单位
         
