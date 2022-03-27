@@ -424,10 +424,10 @@ class Region:
     def get_normal(self, gltype, vs, indices=None):
         """返回法线集"""
         
-        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN):
+        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUADS, GL_QUAD_STRIP):
             raise KeyError('%s不支持法线计算'%(str(gltype)))
         
-        if not indices is None and gltype != GL_TRIANGLES:
+        if not indices is None and gltype != GL_TRIANGLES and gltype != GL_QUADS:
             raise KeyError('当前图元类型不支持indices参数')
         
         n = vs.shape[0]
@@ -442,24 +442,32 @@ class Region:
                 b = np.arange(1, n-1, dtype=np.int32)
                 c = np.stack((np.arange(2, n, 2, dtype=np.int32), np.arange(1, n, 2, dtype=np.int32)[:(n-1)//2]), axis=1).ravel()[:n-2]
                 idx = np.stack((a, b, c), axis=1).ravel()
+            elif gltype == GL_QUAD_STRIP:
+                a = np.arange(0, n-2, 2)
+                b = np.arange(1, n-2, 2)
+                c = np.arange(3, n, 2)
+                d = np.arange(2, n, 2)
+                idx = np.stack((a, b, c, d), axis=1).ravel()
             else:
                 idx = np.arange(n, dtype=np.int32)
         else:
             idx = np.array(indices, dtype=np.int32)
         
         primitive = vs[idx]
-        a = primitive[::3]
-        b = primitive[1::3]
-        c = primitive[2::3]
-        normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
+        if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
+            a = primitive[::4]
+            b = primitive[1::4]
+            c = primitive[2::4]
+            d = primitive[3::4]
+            normal = np.repeat(np.cross(c-a, b-d), 4, axis=0)
+        else:
+            a = primitive[::3]
+            b = primitive[1::3]
+            c = primitive[2::3]
+            normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
         
-        if indices is None and gltype == GL_TRIANGLES:
+        if indices is None and (gltype == GL_TRIANGLES or gltype == GL_QUADS):
             return normal
-        
-        #uniind = idx.size -1 - np.unique(np.flipud(idx), return_index=True)[1]
-        #uniind = np.unique(idx, return_index=True)[1]
-        #result = normal[uniind]
-        #return result
         
         result = np.zeros((n,3), dtype=np.float32)
         idx_arg = np.argsort(idx)
@@ -511,15 +519,13 @@ class Region:
         
         return result
     
-    def text(self, text, pos, color=None, size=32, family=None, weight='normal', loc='left_bottom', **kwds):
+    def text(self, text, pos, color=None, size=32, loc='left_bottom', **kwds):
         """2d文字
         
         text        - 文本字符串
         pos         - 文本位置：元组、列表或numpy数组，shape=(2|3,)
         color       - 文本颜色：浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
         size        - 字号：整型，默认32
-        family      - 字体：None表示当前默认的字体
-        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         loc         - pos对应文本区域的位置
             'left-top'      - 左上
             'left-middle'   - 左中
@@ -536,10 +542,12 @@ class Region:
             inside          - 模型顶点是否影响模型空间，默认True
             slide           - 幻灯片函数，默认None
             ambient         - 环境光，默认(1.0,1.0,1.0)
+            family          - 字体：None表示当前默认的字体
+            weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'slide', 'ambient']:
+            if key not in ['name', 'visible', 'inside', 'slide', 'ambient', 'family', 'weight', '_p']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
@@ -547,6 +555,9 @@ class Region:
         inside = kwds.get('inside', True)
         slide = kwds.get('slide')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
+        family = kwds.get('family')
+        weight = kwds.get('weight', 'normal')
+        _p = kwds.get('_p', 0)
         
         if color is None:
             color = self.scene.style[1]
@@ -572,7 +583,7 @@ class Region:
             'right-bottom':     8
         }.get(loc, 2)
         
-        th = 0.15 * size/32
+        th = self.vision[-1] * 0.2 * size/32
         size = int(round(pow(size/64, 0.5) * 64))
         
         im_text = util.text2image(text, size, color, family, weight)
@@ -589,18 +600,16 @@ class Region:
             visible     = visible, 
             opacity     = False, 
             inside      = inside, 
-            slide       = slide
+            slide       = slide,
+            _p          = _p
         ), name)
     
-    def text3d(self, text, box, color=None, size=64, family=None, weight='normal', align='fill', valign='fill', **kwds):
+    def text3d(self, text, box, color=None, align='fill', valign='fill', **kwds):
         """3d文字
         
         text        - 文本字符串
         box         - 文本显式区域：左上、左下、右上、右下4个点的坐标，浮点型元组、列表或numpy数组，shape=(4,2|3)
         color       - 文本颜色：浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
-        size        - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
-        family      - 字体：None表示当前默认的字体
-        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         align       - 文本宽度方向对齐方式
             'fill'          - 填充
             'left'          - 左对齐
@@ -615,21 +624,29 @@ class Region:
             name            - 模型名
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-            light           - 光照情景模式，默认太阳光照情景模式
+            ambient         - 环境光，默认(1.0,1.0,1.0)
+            family          - 字体：None表示当前默认的字体
+            weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+            size            - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'slide', 'transform', 'light']:
+            if key not in ['name', 'visible', 'inside', 'cull', 'slide', 'transform', 'ambient', 'family', 'weight', 'size']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
+        cull = kwds.get('cull')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
-        light = kwds.get('light', SunLight())
+        ambient = kwds.get('ambient', (1.0,1.0,1.0))
+        family = kwds.get('family')
+        weight = kwds.get('weight', 'normal')
+        size = kwds.get('size', 64)
         
         gltype = GL_TRIANGLE_STRIP
         box = np.array(box, dtype=np.float32)
@@ -690,6 +707,7 @@ class Region:
             box[2] -= offset
             box[3] -= offset
         
+        light = BaseLight(ambient)
         self.add_model(light.get_model(gltype, box,
             normal      = normal, 
             texture     = texture, 
@@ -697,6 +715,7 @@ class Region:
             visible     = visible, 
             opacity     = False, 
             inside      = inside, 
+            cull        = cull,
             slide       = slide,
             transform   = transform
         ), name)
@@ -846,20 +865,22 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认True（不透明）
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'fill', 'slide', 'transform', 'light']:
+            if key not in ['name', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -924,12 +945,110 @@ class Region:
             visible     = visible, 
             inside      = inside, 
             opacity     = opacity,
+            cull        = cull,
+            fill        = fill,
+            slide       = slide,
+            transform   = transform
+        ), name)
+    
+    def quad(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
+        """四角面
+        
+        vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
+        texture     - 纹理：wxgl.Texture对象
+        texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
+        method      - 绘制方法
+            'isolate'       - 独立四角面
+            'strip'         - 带状四角面
+        indices     - 顶点索引集，默认None，表示不使用索引
+        closed      - 带状三角面或扇面两端闭合：布尔型
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        for key in kwds:
+            if key not in ['name', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        name = kwds.get('name')
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
+        fill = kwds.get('fill')
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
+        light = kwds.get('light', SunLight())
+        
+        method = method.upper()
+        if method == "ISOLATE":
+            gltype = GL_QUADS
+        elif method == "STRIP":
+            gltype = GL_QUAD_STRIP
+        else:
+            raise ValueError('不支持的四角面方法：%s'%method)
+        
+        if gltype == GL_QUAD_STRIP and not indices is None:
+            raise ValueError('STRIP不支持indices参数')
+        
+        vs = np.array(vs, dtype=np.float32)
+        normal = self.get_normal(gltype, vs, indices)
+        
+        if closed and gltype == GL_QUAD_STRIP:
+            normal[0] += normal[-2]
+            normal[1] += normal[-1]
+            normal[-2] = normal[0]
+            normal[-1] = normal[1]
+        
+        if color is None and texture is None:
+            raise KeyError('缺少颜色或纹理参数')
+        
+        if color is None:
+            if not isinstance(texture, Texture):
+                raise KeyError('期望纹理参数为wxgl.Texture类型')
+            
+            if texcoord is None:
+                raise KeyError('缺少纹理坐标参数')
+            
+            texcoord = np.float32(texcoord)
+            if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] != 2:
+                raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
+        else:
+            if not isinstance(color, (tuple, list, np.ndarray)):
+                raise KeyError('期望颜色参数为元组、列表或numpy数组类型')
+            
+            color = np.array(color, dtype=np.float32)
+            if color.ndim == 1:
+                color = np.tile(color, (vs.shape[0],1))
+            
+            if color.ndim != 2 or color.shape[0] != vs.shape[0] or color.shape[1] not in (3,4):
+                raise KeyError('期望颜色参数为%d个RGB或RGBA颜色组成的浮点型数组'%vs.shape[0])
+        
+        self.add_model(light.get_model(gltype, vs,
+            indices     = indices,
+            normal      = normal, 
+            color       = color,
+            texture     = texture, 
+            texcoord    = texcoord, 
+            visible     = visible, 
+            inside      = inside, 
+            opacity     = opacity,
+            cull        = cull,
             fill        = fill,
             slide       = slide,
             transform   = transform
         ), name)
         
-    def mesh(self, xs, ys, zs, color=None, texture=None, ur=(0,1), vr=(0,1), uclosed=False, vclosed=False, **kwds):
+    def mesh(self, xs, ys, zs, color=None, texture=None, ur=(0,1), vr=(0,1), method='T', uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)，m为网格行数，n为网格列数
@@ -937,6 +1056,7 @@ class Region:
         texture     - 纹理：wxgl.Texture对象
         ur          - u方向纹理坐标范围
         vr          - v方向纹理坐标范围
+        method      - 绘制网格的方法：可选项：'T'- GL_TRIANGLES, 'Q' - GL_QUADS
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
         kwds        - 关键字参数
@@ -944,20 +1064,22 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'fill', 'slide', 'transform', 'light']:
+            if key not in ['name', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -990,10 +1112,15 @@ class Region:
             if color.ndim > 2:
                 color = color.reshape(-1, color.shape[-1])
         
+        gltype = GL_TRIANGLES if method[0].upper() == 'T' else GL_QUADS
+        
         idx = np.arange(rows*cols).reshape(rows, cols)
         idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
-        indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
-        normal = self.get_normal(GL_TRIANGLES, vs, indices).reshape(rows,cols,-1)
+        if gltype == GL_TRIANGLES:
+            indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
+        else:
+            indices = np.int32(np.dstack((idx_a, idx_b, idx_c, idx_d)).ravel())
+        normal = self.get_normal(gltype, vs, indices).reshape(rows,cols,-1)
         
         if vclosed:
             normal[0] += normal[-1]
@@ -1003,7 +1130,7 @@ class Region:
             normal[:,0] += normal[:,-1]
             normal[:,-1] = normal[:,0]
         
-        self.add_model(light.get_model(GL_TRIANGLES, vs,
+        self.add_model(light.get_model(gltype, vs,
             indices     = indices,
             normal      = normal, 
             color       = color,
@@ -1012,6 +1139,7 @@ class Region:
             visible     = visible, 
             inside      = inside, 
             opacity     = opacity,
+            cull        = cull,
             fill        = fill,
             slide       = slide,
             transform   = transform
@@ -1034,7 +1162,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1083,7 +1212,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1129,7 +1259,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1167,7 +1298,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1206,7 +1338,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1246,7 +1379,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1285,7 +1419,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1312,8 +1447,8 @@ class Region:
         
         self.surface(vs, color=color, method='isolate', indices=None, **kwds)
 
-    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
-        """三维等值面
+    def mcs(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+        """基于MarchingCube算法的三维等值面
         
         data        - 数据集：三维numpy数组
         level       - 阈值：浮点型
@@ -1324,7 +1459,8 @@ class Region:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -1351,10 +1487,10 @@ class Region:
         box         - 调色板位置：左上、左下、右上、右下的坐标
         mode        - 水平或垂直模式：可选项：'H'|'V'
         kwds        - 关键字参数
-                            subject         - 标题
-                            tick_format     - 刻度标注格式化函数，默认str
-                            density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
-                            endpoint        - 刻度是否包含值域范围的两个端点值
+            subject         - 标题
+            tick_format     - 刻度标注格式化函数，默认str
+            density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+            endpoint        - 刻度是否包含值域范围的两个端点值
         """
         
         for key in kwds:
@@ -1404,7 +1540,7 @@ class Region:
                     [box[2,0], box[2,1]+1.2*u],
                     [box[2,0], box[2,1]+0.4*u]
                 ])
-                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False, light=BaseLight())
+                self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False)
             
             tk = h/(dmax-dmin)
             dashes = list()
@@ -1417,7 +1553,7 @@ class Region:
                     [box[2,0]+3*u, y+0.25*u],
                     [box[2,0]+3*u, y-0.25*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False, light=BaseLight())
+                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False)
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         else:
@@ -1430,7 +1566,7 @@ class Region:
                     [box[2,0], box[2,1]+1.4*u],
                     [box[2,0], box[2,1]+0.3*u]
                 ])
-                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False, light=BaseLight())
+                self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False)
             
             tk = w/(dmax-dmin)
             dashes = list()
@@ -1443,188 +1579,130 @@ class Region:
                     [x+u, box[1,1]-0.65*u],
                     [x+u, box[1,1]-1.35*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False, light=BaseLight())
+                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False)
             
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         
         self.surface(box, texture=texture, texcoord=texcoord, method='strip', inside=False)
         
-    def ticks3d(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
-        """绘制3D网格和刻度
+    def grid(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
+        """绘制网格和刻度
         
         xlabel      - x轴名称，默认'X'
         ylabel      - y轴名称，默认'Y'
         zlabel      - z轴名称，默认'Z'
         kwds        - 关键字参数
-                            visible         - 是否可见，默认可见
-                            xf              - x轴刻度标注格式化函数，默认str
-                            yf              - y轴刻度标注格式化函数，默认str
-                            zf              - z轴刻度标注格式化函数，默认str
-                            xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
-                            yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
-                            zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
-                            lc              - 网格线颜色，浮点型元组、列表或numpy数组，值域范围[0,1]，默认使用前景色
-                            lw              - 网格线宽度，默认0.5
-                            bg              - 网格背景色，接受元组、列表或numpy数组形式的RGBA颜色
-                            extend          - 网格外延，默认False
-                            tick_size       - 刻度标注字号，默认32
-                            label_size      - 坐标轴标注字号，默认40
+            xf              - x轴刻度标注格式化函数，默认str
+            yf              - y轴刻度标注格式化函数，默认str
+            zf              - z轴刻度标注格式化函数，默认str
+            xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            xc              - x轴标注文本颜色，默认(1.0,0.3,0)
+            yc              - y轴标注文本颜色，默认(0,1.0,0.3)
+            zc              - z轴标注文本颜色，默认(0,0.3,1.0)
+            lc              - 网格线颜色，默认使用前景色
+            tick_size       - 刻度标注字号，默认32
+            label_size      - 坐标轴标注字号，默认40
         """
         
         for key in kwds:
-            if key not in ['visible', 'xr','yr','zr','xf','yf','zf','xd','yd','zd','lc','lw','bg','extend','tick_size','label_size']:
+            if key not in ['xr','yr','zr','xf','yf','zf','xd','yd','zd','lc','extend','tick_size','label_size']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
-        # 删除当前的刻度模型（如果存在的话）
-        for key in self.ticks:
-            self.drop_model(self.ticks[key])
-        self.ticks.clear()
-        
-        visible = kwds.get('visible', True)
         xf = kwds.get('xf', str)
         yf = kwds.get('yf', str)
         zf = kwds.get('zf', str)
         xd = kwds.get('xd', 0)
         yd = kwds.get('yd', 0)
         zd = kwds.get('zd', 0)
+        xc = kwds.get('xc', (1.0,0.3,0))
+        yc = kwds.get('yc', (0,1.0,0.3))
+        zc = kwds.get('zc', (0,0.3,1.0))
         lc = kwds.get('lc', self.scene.style[1])
-        lw = kwds.get('lw', 0.5)
-        bg = kwds.get('bg', (0.9,1.0,0.6,0.1))
-        extend = kwds.get('extend', False)
-        tick_size = kwds.get('tick_size', 32) + 16
-        label_size = kwds.get('label_size', 40) + 16
+        tick_size = kwds.get('tick_size', 32)
+        label_size = kwds.get('label_size', 40)
         
-        xd = max(-2, xd)
-        yd = max(-2, yd)
-        zd = max(-2, zd)
+        xd, yd, zd = max(-2, xd), max(-2, yd), max(-2, zd)
+        name = uuid.uuid1().hex
         
-        if self.r_x[0] >= self.r_x[-1]:
+        if self.r_x[0] >= self.r_x[-1] or self.r_y[0] >= self.r_y[-1] or self.r_z[0] >= self.r_z[-1]:
             return # '模型空间不存在，返回
+        
         dx = (self.r_x[1] - self.r_x[0]) * 0.1
-        xx = self.get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd, extend=extend)
+        xx = self.get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd)
         
-        if self.r_y[0] >= self.r_y[-1]:
-            return # '模型空间不存在，返回
         dy = (self.r_y[1] - self.r_y[0]) * 0.1
-        yy = self.get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd, extend=extend)
+        yy = self.get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd)
         
-        if self.r_z[0] >= self.r_z[-1]:
-            return # '模型空间不存在，返回
         dz = (self.r_z[1] - self.r_z[0]) * 0.1
-        zz = self.get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd, extend=extend)
+        zz = self.get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd)
         
-        u = max((xx[-1]-xx[0]), (yy[-1]-yy[0]), (zz[-1]-zz[0])) * 0.02 # 调整间隙的基本单位
+        xs, ys = np.meshgrid(xx, yy[::-1])
+        zs = np.ones(xs.shape) * zz[-1]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # front
         
-        self.ticks.update({'top': uuid.uuid1().hex})
-        self.ticks.update({'bottom': uuid.uuid1().hex})
-        self.ticks.update({'left': uuid.uuid1().hex})
-        self.ticks.update({'right': uuid.uuid1().hex})
-        self.ticks.update({'front': uuid.uuid1().hex})
-        self.ticks.update({'back': uuid.uuid1().hex})
+        xs, ys = np.meshgrid(xx[::-1], yy[::-1])
+        zs = np.ones(xs.shape) * zz[0]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # back
         
-        self.ticks.update({'x_ymin_zmin': uuid.uuid1().hex})
-        self.ticks.update({'x_ymin_zmax': uuid.uuid1().hex})
-        self.ticks.update({'x_ymax_zmin': uuid.uuid1().hex})
-        self.ticks.update({'x_ymax_zmax': uuid.uuid1().hex})
-        self.ticks.update({'y_xmin_zmin': uuid.uuid1().hex})
-        self.ticks.update({'y_xmin_zmax': uuid.uuid1().hex})
-        self.ticks.update({'y_xmax_zmin': uuid.uuid1().hex})
-        self.ticks.update({'y_xmax_zmax': uuid.uuid1().hex})
-        self.ticks.update({'z_xmin_ymin': uuid.uuid1().hex})
-        self.ticks.update({'z_xmin_ymax': uuid.uuid1().hex})
-        self.ticks.update({'z_xmax_ymin': uuid.uuid1().hex})
-        self.ticks.update({'z_xmax_ymax': uuid.uuid1().hex})
+        xs, zs = np.meshgrid(xx, zz)
+        ys = np.ones(xs.shape) * yy[-1]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # top
         
-        vs_zmin, vs_zmax = list(), list()
-        for x in xx:
-            vs_zmin.append((x, yy[0], zz[0]))
-            vs_zmin.append((x, yy[-1], zz[0]))
-            vs_zmax.append((x, yy[0], zz[-1]))
-            vs_zmax.append((x, yy[-1], zz[-1]))
-        for y in yy:
-            vs_zmin.append((xx[0], y, zz[0]))
-            vs_zmin.append((xx[-1], y, zz[0]))
-            vs_zmax.append((xx[0], y, zz[-1]))
-            vs_zmax.append((xx[-1], y, zz[-1]))
+        xs, zs = np.meshgrid(xx, zz[::-1])
+        ys = np.ones(xs.shape) * yy[0]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # bottom
         
-        vs_xmin, vs_xmax = list(), list()
-        for y in yy:
-            vs_xmin.append((xx[0], y, zz[0]))
-            vs_xmin.append((xx[0], y, zz[-1]))
-            vs_xmax.append((xx[-1], y, zz[0]))
-            vs_xmax.append((xx[-1], y, zz[-1]))
-        for z in zz:
-            vs_xmin.append((xx[0], yy[0], z))
-            vs_xmin.append((xx[0], yy[-1], z))
-            vs_xmax.append((xx[-1], yy[0], z))
-            vs_xmax.append((xx[-1], yy[-1], z))
+        zs, ys = np.meshgrid(zz, yy[::-1])
+        xs = np.ones(zs.shape) * xx[0]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # left
         
-        vs_ymin, vs_ymax = list(), list()
-        for x in xx:
-            vs_ymin.append((x, yy[0], zz[0]))
-            vs_ymin.append((x, yy[0], zz[-1]))
-            vs_ymax.append((x, yy[-1], zz[0]))
-            vs_ymax.append((x, yy[-1], zz[-1]))
-        for z in zz:
-            vs_ymin.append((xx[0], yy[0], z))
-            vs_ymin.append((xx[-1], yy[0], z))
-            vs_ymax.append((xx[0], yy[-1], z))
-            vs_ymax.append((xx[-1], yy[-1], z))
+        zs, ys = np.meshgrid(zz[::-1], yy[::-1])
+        xs = np.ones(zs.shape) * xx[-1]
+        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # right
         
-        self.line(np.array(vs_ymax), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['top'], visible=visible)
-        self.line(np.array(vs_ymin), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['bottom'], visible=visible)
-        self.line(np.array(vs_xmax), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['right'], visible=visible)
-        self.line(np.array(vs_xmin), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['left'], visible=visible)
-        self.line(np.array(vs_zmax), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['front'], visible=visible)
-        self.line(np.array(vs_zmin), color=lc, width=lw, method='isolate', inside=False, name=self.ticks['back'], visible=visible)
-        
-        vs_top = [[xx[0],yy[-1],zz[0]], [xx[0],yy[-1],zz[-1]], [xx[-1],yy[-1],zz[0]], [xx[-1],yy[-1],zz[-1]]]
-        vs_bottom = [[xx[0],yy[0],zz[0]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[0],zz[-1]]]
-        vs_left = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[0],yy[-1],zz[-1]], [xx[0],yy[0],zz[-1]]]
-        vs_right = [[xx[-1],yy[-1],zz[0]], [xx[-1],yy[0],zz[0]], [xx[-1],yy[-1],zz[-1]], [xx[-1],yy[0],zz[-1]]]
-        vs_front = [[xx[0],yy[-1],zz[-1]], [xx[0],yy[0],zz[-1]], [xx[-1],yy[-1],zz[-1]], [xx[-1],yy[0],zz[-1]]]
-        vs_back = [[xx[0],yy[-1],zz[0]], [xx[0],yy[0],zz[0]], [xx[-1],yy[-1],zz[0]], [xx[-1],yy[0],zz[0]]]
-        
-        self.surface(vs_top, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['top'], visible=visible)
-        self.surface(vs_bottom, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['bottom'], visible=visible)
-        self.surface(vs_left, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['left'], visible=visible)
-        self.surface(vs_right, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['right'], visible=visible)
-        self.surface(vs_front, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['front'], visible=visible)
-        self.surface(vs_back, color=bg, method='strip', inside=False, opacity=False, name=self.ticks['back'], visible=visible)
-        
-        for x in xx[1:-1]:
-            self.text(xf(x), pos=(x, yy[0]-u, zz[-1]+u), size=tick_size, loc='center-top', inside=False, name=self.ticks['x_ymin_zmax'], visible=visible)
-            self.text(xf(x), pos=(x, yy[-1]+u, zz[-1]+u), size=tick_size, loc='center-bottom', inside=False, name=self.ticks['x_ymax_zmax'], visible=visible)
-            self.text(xf(x), pos=(x, yy[0]-u, zz[0]-u), size=tick_size, loc='center-top', inside=False, name=self.ticks['x_ymin_zmin'], visible=visible)
-            self.text(xf(x), pos=(x, yy[-1]+u, zz[0]-u), size=tick_size, loc='center-bottom', inside=False, name=self.ticks['x_ymax_zmin'], visible=visible)
+        u = (xx[2] - xx[1])/2
+        h, g = 0.4 * u, 0.2 * u
         
         for y in yy[1:-1]:
-            self.text(yf(y), pos=(xx[-1]+u, y, zz[-1]+u), size=tick_size, loc='right-middle', inside=False, name=self.ticks['y_xmax_zmax'], visible=visible)
-            self.text(yf(y), pos=(xx[-1]+u, y, zz[0]-u), size=tick_size, loc='right-middle', inside=False, name=self.ticks['y_xmax_zmin'], visible=visible)
-            self.text(yf(y), pos=(xx[0]-u, y, zz[-1]+u), size=tick_size, loc='right-middle', inside=False, name=self.ticks['y_xmin_zmax'], visible=visible)
-            self.text(yf(y), pos=(xx[0]-u, y, zz[0]-u), size=tick_size, loc='right-middle', inside=False, name=self.ticks['y_xmin_zmin'], visible=visible)
+            t = yf(y)
+            self.text(t, (xx[0]-g,y,zz[-1]), color=yc, size=tick_size, loc='right-middle', _p=1, name=name)
+            self.text(t, (xx[-1]+g,y,zz[-1]), color=yc, size=tick_size, loc='right-middle', _p=2, name=name)
+            self.text(t, (xx[-1]+g,y,zz[0]), color=yc, size=tick_size, loc='right-middle', _p=3, name=name)
+            self.text(t, (xx[0]-g,y,zz[0]), color=yc, size=tick_size, loc='right-middle', _p=4, name=name)
+        
+        for x in xx[1:-1]:
+            t = xf(x)
+            self.text(t, (x,yy[0]-h,zz[-1]), color=xc, size=tick_size, loc='center-middle', _p=5, name=name)
+            self.text(t, (x,yy[-1]+h,zz[-1]), color=xc, size=tick_size, loc='center-middle', _p=6, name=name)
+            self.text(t, (x,yy[0]-h,zz[0]), color=xc, size=tick_size, loc='center-middle', _p=7, name=name)
+            self.text(t, (x,yy[-1]+h,zz[0]), color=xc, size=tick_size, loc='center-middle', _p=8, name=name)
         
         for z in zz[1:-1]:
-            self.text(zf(z), pos=(xx[-1]+u, yy[-1]+u, z), size=tick_size, loc='left-middle', inside=False, name=self.ticks['z_xmax_ymax'], visible=visible)
-            self.text(zf(z), pos=(xx[-1]+u, yy[0]-u, z), size=tick_size, loc='left-middle', inside=False, name=self.ticks['z_xmax_ymin'], visible=visible)
-            self.text(zf(z), pos=(xx[0]-u, yy[-1]+u, z), size=tick_size, loc='right-middle', inside=False, name=self.ticks['z_xmin_ymax'], visible=visible)
-            self.text(zf(z), pos=(xx[0]-u, yy[0]-u, z), size=tick_size, loc='right-middle', inside=False, name=self.ticks['z_xmin_ymin'], visible=visible)
-        
-        if xlabel:
-            self.text(xlabel, pos=((xx[0]+xx[-1])/2, yy[-1]+u, zz[0]), size=label_size, loc='center-bottom', inside=False, name=self.ticks['x_ymin_zmax'], visible=visible)
-            self.text(xlabel, pos=((xx[0]+xx[-1])/2, yy[0]-u, zz[0]), size=label_size, loc='center-top', inside=False, name=self.ticks['x_ymax_zmax'], visible=visible)
-            self.text(xlabel, pos=((xx[0]+xx[-1])/2, yy[-1]+u, zz[-1]), size=label_size, loc='center-bottom', inside=False, name=self.ticks['x_ymin_zmin'], visible=visible)
-            self.text(xlabel, pos=((xx[0]+xx[-1])/2, yy[0]-u, zz[-1]), size=label_size, loc='center-top', inside=False, name=self.ticks['x_ymax_zmin'], visible=visible)
+            t = zf(z)
+            self.text(t, (xx[0],yy[0]-h,z), color=zc, size=tick_size, loc='center-middle', _p=9, name=name)
+            self.text(t, (xx[0],yy[-1]+h,z), color=zc, size=tick_size, loc='center-middle', _p=10, name=name)
+            self.text(t, (xx[-1],yy[0]-h,z), color=zc, size=tick_size, loc='center-middle', _p=11, name=name)
+            self.text(t, (xx[-1],yy[-1]+h,z), color=zc, size=tick_size, loc='center-middle', _p=12, name=name)
         
         if ylabel:
-            self.text(ylabel, pos=(xx[0], (yy[0]+yy[-1])/2, zz[0]-u), size=label_size, loc='left-middle', inside=False, name=self.ticks['y_xmax_zmax'], visible=visible)
-            self.text(ylabel, pos=(xx[0]-u, (yy[0]+yy[-1])/2, zz[-1]), size=label_size, loc='left-middle', inside=False, name=self.ticks['y_xmax_zmin'], visible=visible)
-            self.text(ylabel, pos=(xx[-1]+u, (yy[0]+yy[-1])/2, zz[0]), size=label_size, loc='left-middle', inside=False, name=self.ticks['y_xmin_zmax'], visible=visible)
-            self.text(ylabel, pos=(xx[-1]+u, (yy[0]+yy[-1])/2, zz[-1]), size=label_size, loc='left-middle', inside=False, name=self.ticks['y_xmin_zmin'], visible=visible)
+            self.text(ylabel, (xx[0]-g,yy[-1],zz[-1]), color=yc, size=label_size, loc='right-middle', _p=1, name=name)
+            self.text(ylabel, (xx[-1]+g,yy[-1],zz[-1]), color=yc, size=label_size, loc='right-middle', _p=2, name=name)
+            self.text(ylabel, (xx[-1]+g,yy[-1],zz[0]), color=yc, size=label_size, loc='right-middle', _p=3, name=name)
+            self.text(ylabel, (xx[0]-g,yy[-1],zz[0]), color=yc, size=label_size, loc='right-middle', _p=4, name=name)
+        
+        if xlabel:
+            x = (xx[0]+xx[-1])/2
+            self.text(xlabel, (x,yy[0]-2.5*h,zz[-1]), color=xc, size=label_size, loc='center-middle', _p=5, name=name)
+            self.text(xlabel, (x,yy[-1]+2.5*h,zz[-1]), color=xc, size=label_size, loc='center-middle', _p=6, name=name)
+            self.text(xlabel, (x,yy[0]-2.5*h,zz[0]), color=xc, size=label_size, loc='center-middle', _p=7, name=name)
+            self.text(xlabel, (x,yy[-1]+2.5*h,zz[0]), color=xc, size=label_size, loc='center-middle', _p=8, name=name)
         
         if zlabel:
-            self.text(zlabel, pos=(xx[0], yy[0]-u, (zz[0]+zz[-1])/2), size=label_size, loc='center-top', inside=False, name=self.ticks['z_xmax_ymax'], visible=visible)
-            self.text(zlabel, pos=(xx[0], yy[-1]+u, (zz[0]+zz[-1])/2), size=label_size, loc='center-bottom', inside=False, name=self.ticks['z_xmax_ymin'], visible=visible)
-            self.text(zlabel, pos=(xx[-1], yy[0]-u, (zz[0]+zz[-1])/2), size=label_size, loc='center-top', inside=False, name=self.ticks['z_xmin_ymax'], visible=visible)
-            self.text(zlabel, pos=(xx[-1], yy[-1]+u, (zz[0]+zz[-1])/2), size=label_size, loc='center-bottom', inside=False, name=self.ticks['z_xmin_ymin'], visible=visible)
+            z = (zz[0]+zz[-1])/2
+            self.text(zlabel, (xx[0],yy[0]-2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=9, name=name)
+            self.text(zlabel, (xx[0],yy[-1]+2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=10, name=name)
+            self.text(zlabel, (xx[-1],yy[0]-2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=11, name=name)
+            self.text(zlabel, (xx[-1],yy[-1]+2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=12, name=name)
     

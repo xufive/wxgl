@@ -27,6 +27,8 @@ class Model:
             GL_TRIANGLES,	    # 绘制一个或多个三角形
             GL_TRIANGLE_STRIP,	# 绘制连续三角形
             GL_TRIANGLE_FAN,    # 绘制多个三角形组成的扇形
+            GL_QUADS,	        # 绘制一个或多个四边形
+            GL_QUAD_STRIP       # 四边形条带
         )
         
         if gltype not in gltypes:
@@ -186,6 +188,14 @@ class Model:
         
         self.uniform.update({var_name: {'tag':'campos'}})
     
+    def set_ae(self, var_name):
+        """设置相机方位角和高度角
+        
+        var_name        - 相机方位角和高度角在着色器中的变量名
+        """
+        
+        self.uniform.update({var_name: {'tag':'ae'}})
+    
     def set_picked(self, var_name):
         """设置拾取状态
         
@@ -263,6 +273,26 @@ class Model:
                 self.before.append((glEnable, (GL_LINE_STIPPLE,)))
                 self.before.append((glLineStipple, stipple))
             self.after.append((glPopAttrib, ()))
+    
+    def set_cull_mode(self, mode):
+        """设置面剔除模式
+        
+        mode            - 剔除的面：'front' | 'back'
+        """
+        
+        if mode is None:
+            return
+        
+        if isinstance(mode, str):
+            mode = mode.upper()
+        
+        if mode in ('FRONT', 'BACK'):
+            self.before.append((glPushAttrib, (GL_ALL_ATTRIB_BITS,)))
+            self.before.append((glEnable, (GL_CULL_FACE,)))
+            self.before.append((glCullFace, (GL_FRONT if mode=='FRONT' else GL_BACK,)))
+            self.after.append((glPopAttrib, ()))
+        else:
+            raise ValueError('不支持的面剔除参数：%s'%mode)
     
     def set_fill_mode(self, mode):
         """设置填充方式

@@ -23,19 +23,21 @@ class BaseLight:
         loc = kwds.get('loc')
         tw = kwds.get('tw')
         th = kwds.get('th')
+        _p = kwds.get('_p', 0)
         
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
         
         if psize is None:
             if color is None:
-                if loc:
+                if not loc is None:
                     vshader = self.get_text2d_vshader()
-                    fshader = self.get_texture_fshader()
+                    fshader = self.get_ticks_fshader()
                     
                     m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
                     m.set_vertex('a_Position', vs, indices)
@@ -45,6 +47,8 @@ class BaseLight:
                     m.set_argument('u_TextWidth', tw)
                     m.set_argument('u_TextHeight', th)
                     m.set_argument('u_Corner', loc)
+                    m.set_argument('u_Tick', _p)
+                    m.set_ae('u_Ae')
                     m.set_picked('u_Picked')
                     m.set_proj_matrix('u_ProjMatrix')
                     m.set_view_matrix('u_ViewMatrix')
@@ -63,6 +67,7 @@ class BaseLight:
                     m.set_proj_matrix('u_ProjMatrix')
                     m.set_view_matrix('u_ViewMatrix')
                     m.set_model_matrix('u_ModelMatrix', transform)
+                    m.set_cull_mode(cull)
                     m.set_fill_mode(fill)
                     m.set_slide(slide)
             else:
@@ -78,6 +83,7 @@ class BaseLight:
                 m.set_view_matrix('u_ViewMatrix')
                 m.set_model_matrix('u_ModelMatrix', transform)
                 m.set_line_style(lw, ls)
+                m.set_cull_mode(cull)
                 m.set_fill_mode(fill)
                 m.set_slide(slide) 
         else:
@@ -324,6 +330,71 @@ class BaseLight:
             } 
         """
         
+    def get_ticks_fshader(self):
+        """返回标注文本的片元着色器源码"""
+        
+        return """
+            #version 330 core
+            
+            in vec2 v_Texcoord;
+            uniform vec3 u_AmbientColor;
+            uniform sampler2D u_Texture;
+            uniform int u_Picked;
+            uniform vec2 u_Ae;
+            uniform int u_Tick;
+            
+            void main() { 
+                bool up = u_Ae.y > -90 && u_Ae.y < 90; 
+                switch (u_Tick) {
+                    case 1:
+                        if (u_Ae.x < 0 || u_Ae.x >= 90) discard;
+                        break;
+                    case 2:
+                        if (u_Ae.x < 90 || u_Ae.x >= 180) discard;
+                        break;
+                    case 3:
+                        if (u_Ae.x >= -90 || u_Ae.x < -180) discard;
+                        break;
+                    case 4:
+                        if (u_Ae.x >= 0 || u_Ae.x < -90) discard;
+                        break;
+                    case 5:
+                        if (u_Ae.y < 0 || (up && (u_Ae.x <= -90 || u_Ae.x >= 90)) || (!up && u_Ae.x >= -90 && u_Ae.x <= 90)) discard;
+                        break;
+                    case 6:
+                        if (u_Ae.y >= 0 || (up && (u_Ae.x <= -90 || u_Ae.x >= 90)) || (!up && u_Ae.x >= -90 && u_Ae.x <= 90)) discard;
+                        break;
+                    case 7:
+                        if (u_Ae.y < 0 || (up && u_Ae.x >= -90 && u_Ae.x <= 90) || (!up && (u_Ae.x <= -90 || u_Ae.x >= 90))) discard;
+                        break;
+                    case 8:
+                        if (u_Ae.y >= 0 || (up && u_Ae.x >= -90 && u_Ae.x <= 90) || (!up && (u_Ae.x <= -90 || u_Ae.x >= 90))) discard;
+                        break;
+                    case 9:
+                        if (u_Ae.y < 0 || (up && u_Ae.x >= 0 && u_Ae.x <= 180) || (!up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        break;
+                    case 10:
+                        if (u_Ae.y >= 0 || (up && u_Ae.x >= 0 && u_Ae.x <= 180) || (!up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        break;
+                    case 11:
+                        if (u_Ae.y < 0 || (!up && u_Ae.x >= 0 && u_Ae.x <= 180) || (up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        break;
+                    case 12:
+                        if (u_Ae.y >= 0 || (!up && u_Ae.x >= 0 && u_Ae.x <= 180) || (up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        break;
+                    default:
+                        break;
+                }
+                
+                vec4 color = texture2D(u_Texture, v_Texcoord);
+                vec3 rgb = color.rgb * u_AmbientColor;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
+            } 
+        """
+        
     def get_point_fshader(self):
         """返回散点的片元着色器源码"""
         
@@ -374,6 +445,7 @@ class SunLight:
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -406,6 +478,7 @@ class SunLight:
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
         m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_cull_mode(cull)
         m.set_fill_mode(fill)
         m.set_slide(slide)
         
@@ -578,6 +651,7 @@ class LampLight:
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -610,6 +684,7 @@ class LampLight:
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
         m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_cull_mode(cull)
         m.set_fill_mode(fill)
         m.set_slide(slide)
         
@@ -770,6 +845,7 @@ class SkyLight:
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -797,6 +873,7 @@ class SkyLight:
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
         m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_cull_mode(cull)
         m.set_fill_mode(fill)
         m.set_slide(slide)
         
@@ -1053,6 +1130,7 @@ class SphereLight:
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
+        cull = kwds.get('cull')
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
@@ -1078,6 +1156,7 @@ class SphereLight:
         m.set_proj_matrix('u_ProjMatrix')
         m.set_view_matrix('u_ViewMatrix')
         m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_cull_mode(cull)
         m.set_fill_mode(fill)
         m.set_slide(slide)
         

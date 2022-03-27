@@ -155,15 +155,6 @@ class Figure:
         for ax in self.axes_list:
             for item in ax.assembly:
                 getattr(item[0], item[1])(*item[2], **item[3])
-            
-            #ax.reg_main.ticks3d(
-            #    visible=self.ff.scene.ticks_is_show, 
-            #    xlabel=ax.xn, ylabel=ax.yn, zlabel=ax.zn, 
-            #    xf=ax.xf, yf=ax.yf, zf=ax.zf, 
-            #    xd=ax.xd, yd=ax.yd, zd=ax.zd
-            #)
-        
-        self.ff.scene.update_ticks()
     
     def redraw(self):
         """重新绘制"""
@@ -285,7 +276,6 @@ class GltScene(Scene):
             for reg in self.regions:
                 reg.motion(self.ctr, dx, dy)
             
-            self.update_ticks()
             self.render()
         else:
             x, y = evt.GetPosition()
@@ -646,26 +636,11 @@ class FigureFrame(wx.Frame):
     def on_select(self, evt):
         """显示/隐藏模型"""
         
-        #self.scene.ticks_is_show = not self.scene.ticks_is_show
-        #if self.scene.ticks_is_show:
-        #    self.tb.SetToolBitmap(self.ID_SELECT, self.bmp_hide)
-        #    self.tb.SetToolShortHelp(self.ID_SELECT, '隐藏选中的模型')
-        #else:
-        #    self.tb.SetToolBitmap(self.ID_SELECT, self.bmp_show)
-        #    self.tb.SetToolShortHelp(self.ID_SELECT, '显示隐藏的模型')
-        #self.tb.Realize()
-        #
-        #for ax in self.fig.axes_list:
-        #    for key in ax.reg_main.ticks:
-        #        ax.reg_main.set_model_visible(ax.reg_main.ticks[key], self.scene.ticks_is_show)
-        #
-        #self.scene.update_ticks()
-        #self.scene.render()
-        
         if len(self.scene.selected) > 0:
-            for reg, name, idx in self.scene.selected:
-                reg.models[name][idx].picked = False
-                reg.models[name][idx].visible = False
+            for reg, name in self.scene.selected:
+                for m in reg.models[name]:
+                    m.picked = False
+                    m.visible = False
             
             self.scene.selected.clear()
             self.sb.SetStatusText('选中：0', 2)

@@ -8,8 +8,8 @@ from wxgl.light import *
 from wxgl.util import *
 
 name = 'wxgl'
-version = '0.8.7'
-version_info = (0, 8, 7, 0)
+version = '0.9.0'
+version_info = (0, 9, 0, 0)
 
 VERTEX_SHADER                   = GL_VERTEX_SHADER
 TESS_CONTROL_SHADER             = GL_TESS_CONTROL_SHADER

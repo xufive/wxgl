@@ -91,7 +91,6 @@ class Scene(glcanvas.GLCanvas):
         self.cn = 0                                                         # 已完成帧数
         self.q = None                                                       # PIL对象数据队列
         
-        self.ticks_is_show = False                                          # 显示坐标轴及刻度网格
         self._init_gl()                                                     # 画布初始化
         
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)                   # 绑定canvas销毁事件
@@ -121,7 +120,7 @@ class Scene(glcanvas.GLCanvas):
         if style == 'blue':
             return (0.0, 0.0, 0.2, 1.0), (0.9, 1.0, 1.0)
         if style == 'royal':
-            return (0.133, 0.302, 0.361, 1.0), (1.0, 1.0, 0.9)
+            return (0.133, 0.302, 0.361, 1.0), (1.0, 1.0, 0.7)
     
     def _init_gl(self):
         """初始化GL"""
@@ -193,7 +192,6 @@ class Scene(glcanvas.GLCanvas):
             for reg in self.regions:
                 reg.motion(self.ctr, dx, dy)
             
-            self.update_ticks()
             self.render()
         
     def on_mouse_wheel(self, evt):
@@ -231,15 +229,15 @@ class Scene(glcanvas.GLCanvas):
                 reg.update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
             
             for name, idx, zmean in reg.mnames[0]:
-                self._render_core(reg.models[name][idx], reg.cam)
+                self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
             
             glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
             if reg.up[1] > 0 and -90 <= reg.azim < 90 or reg.up[1] < 0 and (reg.azim < -90 or reg.azim >= 90):
                 for name, idx, zmean in reg.mnames[1]:
-                    self._render_core(reg.models[name][idx], reg.cam)
+                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
             else:
                 for name, idx, zmean in reg.mnames[1][::-1]:
-                    self._render_core(reg.models[name][idx], reg.cam)
+                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
             glDepthMask(True) # 释放深度缓冲区
         
         self.SwapBuffers() # 切换缓冲区，以显示绘制内容
@@ -252,7 +250,7 @@ class Scene(glcanvas.GLCanvas):
             else:
                 self.stop_record()
     
-    def _render_core(self, m, campos):
+    def _render_core(self, m, campos, azim, elev):
         """模型渲染核函数"""
         
         if not m.visible or m.slide and not m.slide(self.duration):
@@ -292,10 +290,12 @@ class Scene(glcanvas.GLCanvas):
                 glBindTexture(m.uniform[key]['data'].ttype, m.uniform[key]['tid'])
                 glUniform1i(loc, tsid)
                 tsid += 1
-            elif tag == 'campos':
-                glUniform3f(loc, *campos)
             elif tag == 'picked':
                 glUniform1i(loc, m.picked)
+            elif tag == 'campos':
+                glUniform3f(loc, *campos)
+            elif tag == 'ae':
+                glUniform2f(loc, azim, elev)
             else:
                 value = m.uniform[key].get('v')
                 if value is None:
@@ -344,182 +344,24 @@ class Scene(glcanvas.GLCanvas):
             for i in (0, 1):
                 for name, idx, zmean in reg.mnames[i]:
                     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-                    self._render_core(reg.models[name][idx], reg.cam)
+                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
                     
                     d = glReadPixels(x, y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, outputType=None)[0,0]
                     if d < depth_hit:
                         name_hit, depth_hit, idx_hit = name, d, idx
             
             if name_hit:
-                reg.models[name_hit][idx_hit].picked = not reg.models[name_hit][idx_hit].picked
+                for m in reg.models[name_hit]:
+                    m.picked = not m.picked
                 
                 if reg.models[name_hit][idx_hit].picked:
-                    self.selected.append((reg, name_hit, idx_hit))
+                    self.selected.append((reg, name_hit))
                 else:
-                    self.selected.remove((reg, name_hit, idx_hit))
+                    self.selected.remove((reg, name_hit))
                 
                 break
         
         self.render()
-    
-    def update_ticks(self):
-        """刷新坐标轴和刻度网格"""
-        
-        if not self.ticks_is_show:
-            return
-        
-        for reg in self.regions: 
-            if not reg.ticks:
-                continue
-            
-            if -90 <= reg.azim < 90 and reg.up[1] > 0 or (reg.azim <-90 or reg.azim >= 90) and reg.up[1] < 0:
-                reg.show_model(reg.ticks['back'])
-                reg.hide_model(reg.ticks['front'])
-            else:
-                reg.show_model(reg.ticks['front'])
-                reg.hide_model(reg.ticks['back'])
-            
-            if 0 <= reg.azim < 180 and reg.up[1] > 0 or -180 <= reg.azim < 0 and reg.up[1] < 0:
-                reg.show_model(reg.ticks['left'])
-                reg.hide_model(reg.ticks['right'])
-            else:
-                reg.show_model(reg.ticks['right'])
-                reg.hide_model(reg.ticks['left'])
-            
-            if reg.elev < 0:
-                reg.show_model(reg.ticks['top'])
-                reg.hide_model(reg.ticks['bottom'])
-            else:
-                reg.hide_model(reg.ticks['top'])
-                reg.show_model(reg.ticks['bottom'])
-            
-            if 0 <= reg.azim < 90:
-                reg.hide_model(reg.ticks['y_xmax_zmax'])
-                reg.show_model(reg.ticks['y_xmin_zmax']) 
-                reg.hide_model(reg.ticks['y_xmax_zmin']) 
-                reg.hide_model(reg.ticks['y_xmin_zmin']) 
-            elif 90 <= reg.azim < 180:
-                reg.show_model(reg.ticks['y_xmax_zmax'])
-                reg.hide_model(reg.ticks['y_xmin_zmax']) 
-                reg.hide_model(reg.ticks['y_xmax_zmin']) 
-                reg.hide_model(reg.ticks['y_xmin_zmin']) 
-            elif -90 <= reg.azim < 0:
-                reg.hide_model(reg.ticks['y_xmax_zmax'])
-                reg.hide_model(reg.ticks['y_xmin_zmax']) 
-                reg.hide_model(reg.ticks['y_xmax_zmin']) 
-                reg.show_model(reg.ticks['y_xmin_zmin']) 
-            else:
-                reg.hide_model(reg.ticks['y_xmax_zmax'])
-                reg.hide_model(reg.ticks['y_xmin_zmax']) 
-                reg.show_model(reg.ticks['y_xmax_zmin']) 
-                reg.hide_model(reg.ticks['y_xmin_zmin'])
-            
-            if reg.up[1] > 0:
-                if reg.elev < 0:
-                    reg.hide_model(reg.ticks['x_ymin_zmin'])
-                    reg.hide_model(reg.ticks['x_ymin_zmax'])
-                    reg.hide_model(reg.ticks['z_xmin_ymin'])
-                    reg.hide_model(reg.ticks['z_xmax_ymin'])
-                    
-                    if 0 <= reg.azim < 90:
-                        reg.show_model(reg.ticks['x_ymax_zmax'])
-                        reg.hide_model(reg.ticks['x_ymax_zmin'])
-                        reg.show_model(reg.ticks['z_xmax_ymax'])
-                        reg.hide_model(reg.ticks['z_xmin_ymax'])
-                    elif 90 <= reg.azim < 180:
-                        reg.show_model(reg.ticks['x_ymax_zmin'])
-                        reg.hide_model(reg.ticks['x_ymax_zmax'])
-                        reg.show_model(reg.ticks['z_xmax_ymax'])
-                        reg.hide_model(reg.ticks['z_xmin_ymax'])
-                    elif -90 <= reg.azim < 0:
-                        reg.show_model(reg.ticks['x_ymax_zmax'])
-                        reg.hide_model(reg.ticks['x_ymax_zmin'])
-                        reg.show_model(reg.ticks['z_xmin_ymax'])
-                        reg.hide_model(reg.ticks['z_xmax_ymax'])
-                    else:
-                        reg.show_model(reg.ticks['x_ymax_zmin'])
-                        reg.hide_model(reg.ticks['x_ymax_zmax'])
-                        reg.show_model(reg.ticks['z_xmin_ymax'])
-                        reg.hide_model(reg.ticks['z_xmax_ymax'])
-                else:
-                    reg.hide_model(reg.ticks['x_ymax_zmin'])
-                    reg.hide_model(reg.ticks['x_ymax_zmax'])
-                    reg.hide_model(reg.ticks['z_xmin_ymax'])
-                    reg.hide_model(reg.ticks['z_xmax_ymax'])
-                    
-                    if 0 <= reg.azim < 90:
-                        reg.show_model(reg.ticks['x_ymin_zmax'])
-                        reg.hide_model(reg.ticks['x_ymin_zmin'])
-                        reg.show_model(reg.ticks['z_xmax_ymin'])
-                        reg.hide_model(reg.ticks['z_xmin_ymin'])
-                    elif 90 <= reg.azim < 180:
-                        reg.show_model(reg.ticks['x_ymin_zmin'])
-                        reg.hide_model(reg.ticks['x_ymin_zmax'])
-                        reg.show_model(reg.ticks['z_xmax_ymin'])
-                        reg.hide_model(reg.ticks['z_xmin_ymin'])
-                    elif -90 <= reg.azim < 0:
-                        reg.show_model(reg.ticks['x_ymin_zmax'])
-                        reg.hide_model(reg.ticks['x_ymin_zmin'])
-                        reg.show_model(reg.ticks['z_xmin_ymin'])
-                        reg.hide_model(reg.ticks['z_xmax_ymin'])
-                    else:
-                        reg.show_model(reg.ticks['x_ymin_zmin'])
-                        reg.hide_model(reg.ticks['x_ymin_zmax'])
-                        reg.show_model(reg.ticks['z_xmin_ymin'])
-                        reg.hide_model(reg.ticks['z_xmax_ymin'])
-            else:
-                if reg.elev < 0:
-                    reg.hide_model(reg.ticks['x_ymin_zmin'])
-                    reg.hide_model(reg.ticks['x_ymin_zmax'])
-                    reg.hide_model(reg.ticks['z_xmin_ymin'])
-                    reg.hide_model(reg.ticks['z_xmax_ymin'])
-                    
-                    if 0 <= reg.azim < 90:
-                        reg.show_model(reg.ticks['x_ymax_zmin'])
-                        reg.hide_model(reg.ticks['x_ymax_zmax'])
-                        reg.show_model(reg.ticks['z_xmin_ymax'])
-                        reg.hide_model(reg.ticks['z_xmax_ymax'])
-                    elif 90 <= reg.azim < 180:
-                        reg.show_model(reg.ticks['x_ymax_zmax'])
-                        reg.hide_model(reg.ticks['x_ymax_zmin'])
-                        reg.show_model(reg.ticks['z_xmin_ymax'])
-                        reg.hide_model(reg.ticks['z_xmax_ymax'])
-                    elif -90 <= reg.azim < 0:
-                        reg.show_model(reg.ticks['x_ymax_zmin'])
-                        reg.hide_model(reg.ticks['x_ymax_zmax'])
-                        reg.show_model(reg.ticks['z_xmax_ymax'])
-                        reg.hide_model(reg.ticks['z_xmin_ymax'])
-                    else:
-                        reg.show_model(reg.ticks['x_ymax_zmax'])
-                        reg.hide_model(reg.ticks['x_ymax_zmin'])
-                        reg.show_model(reg.ticks['z_xmax_ymax'])
-                        reg.hide_model(reg.ticks['z_xmin_ymax'])
-                else:
-                    reg.hide_model(reg.ticks['x_ymax_zmin'])
-                    reg.hide_model(reg.ticks['x_ymax_zmax'])
-                    reg.hide_model(reg.ticks['z_xmin_ymax'])
-                    reg.hide_model(reg.ticks['z_xmax_ymax'])
-                    
-                    if 0 <= reg.azim < 90:
-                        reg.show_model(reg.ticks['x_ymin_zmin'])
-                        reg.hide_model(reg.ticks['x_ymin_zmax'])
-                        reg.show_model(reg.ticks['z_xmin_ymin'])
-                        reg.hide_model(reg.ticks['z_xmax_ymin'])
-                    elif 90 <= reg.azim < 180:
-                        reg.show_model(reg.ticks['x_ymin_zmax'])
-                        reg.hide_model(reg.ticks['x_ymin_zmin'])
-                        reg.show_model(reg.ticks['z_xmin_ymin'])
-                        reg.hide_model(reg.ticks['z_xmax_ymin'])
-                    elif -90 <= reg.azim < 0:
-                        reg.show_model(reg.ticks['x_ymin_zmin'])
-                        reg.hide_model(reg.ticks['x_ymin_zmax'])
-                        reg.show_model(reg.ticks['z_xmax_ymin'])
-                        reg.hide_model(reg.ticks['z_xmin_ymin'])
-                    else:
-                        reg.show_model(reg.ticks['x_ymin_zmax'])
-                        reg.hide_model(reg.ticks['x_ymin_zmin'])
-                        reg.show_model(reg.ticks['z_xmax_ymin'])
-                        reg.hide_model(reg.ticks['z_xmin_ymin'])
     
     def render_on_timer(self):
         """定时器事件函数"""

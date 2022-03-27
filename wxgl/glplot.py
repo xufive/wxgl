@@ -122,6 +122,10 @@ def surface(*args, **kwds):
     fig.curr_ax.surface(*args, **kwds)
 
 @current_axes
+def quad(*args, **kwds):
+    fig.curr_ax.quad(*args, **kwds)
+
+@current_axes
 def mesh(*args, **kwds):
     fig.curr_ax.mesh(*args, **kwds)
 
@@ -154,8 +158,12 @@ def cube(*args, **kwds):
     fig.curr_ax.cube(*args, **kwds)
 
 @current_axes
-def isosurface(*args, **kwds):
-    fig.curr_ax.isosurface(*args, **kwds)
+def mcs(*args, **kwds):
+    fig.curr_ax.mcs(*args, **kwds)
+
+@current_axes
+def grid(*args, **kwds):
+    fig.curr_ax.grid(*args, **kwds)
 
 @current_axes
 def model(*args, **kwds):

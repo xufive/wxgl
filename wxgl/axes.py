@@ -121,8 +121,7 @@ class Axes:
                 'weight':       self.title_dict['weight'], 
                 'align':        'center', 
                 'valign':       'fill', 
-                'inside':       False,
-                'light':        BaseLight()
+                'inside':       False
             }
             
             self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
@@ -206,13 +205,13 @@ class Axes:
         size        - 字号：整型，默认40
         color       - 文本颜色：支持预定义颜色、十六进制颜色，以及值域范围[0,1]的浮点型元组、列表或numpy数组颜色，默认使用场景的前景颜色
         kwds        - 关键字参数
-                        family          - 字体，None表示当前默认的字体
-                        weight          - 字体的浓淡：'normal'-正常，'light'-轻，'bold'-重（默认）
-                        border          - 显示标题边框，默认True
-                        margin_top      - 标题上方留空与标题文字高度之比，默认0.75
-                        margin_bottom   - 标题下方留空与标题文字高度之比，默认0.25
-                        margin_left     - 标题左侧留空与标题文字高度之比，默认0.0
-                        margin_right    - 标题右侧留空与标题文字高度之比，默认0.0
+            family          - 字体，None表示当前默认的字体
+            weight          - 字体的浓淡：'normal'-正常，'light'-轻，'bold'-重（默认）
+            border          - 显示标题边框，默认True
+            margin_top      - 标题上方留空与标题文字高度之比，默认0.75
+            margin_bottom   - 标题下方留空与标题文字高度之比，默认0.25
+            margin_left     - 标题左侧留空与标题文字高度之比，默认0.0
+            margin_right    - 标题右侧留空与标题文字高度之比，默认0.0
         """
         
         for key in kwds:
@@ -251,18 +250,18 @@ class Axes:
         cm          - 调色板名称
         drange      - 数据的动态范围：元组、列表或numpy数组
         loc         - 位置
-                        right           - 右侧
-                        bottom          - 底部
+            right           - 右侧
+            bottom          - 底部
         kwds        - 关键字参数
-                        subject         - 标题
-                        tick_format     - 刻度标注格式化函数，默认str
-                        density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
-                        endpoint        - 刻度是否包含值域范围的两个端点值
-                        scale           - 色条宽度、文字大小等缩放比例，默认None
-                        margin_left     - 色条左侧留空，默认0.5
-                        margin_right    - 色条右侧留空，默认0.5
-                        margin_top      - 色条上方留空，默认0.5
-                        margin_bottom   - 色条下方留空，默认0.5
+            subject         - 标题
+            tick_format     - 刻度标注格式化函数，默认str
+            density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+            endpoint        - 刻度是否包含值域范围的两个端点值
+            scale           - 色条宽度、文字大小等缩放比例，默认None
+            margin_left     - 色条左侧留空，默认0.5
+            margin_right    - 色条右侧留空，默认0.5
+            margin_top      - 色条上方留空，默认0.5
+            margin_bottom   - 色条下方留空，默认0.5
         """
         
         for key in kwds:
@@ -307,73 +306,68 @@ class Axes:
             if scale:
                 self.cbb_uk = scale * 1.5
     
-    def text(self, text, pos, color=None, size=32, family=None, weight='normal', loc='left_bottom', **kwds):
+    def text(self, text, pos, color=None, size=32, loc='left_bottom', **kwds):
         """文本
         
         text        - 文本字符串
         pos         - 文本位置：元组、列表或numpy数组，shape=(2|3,)
         color       - 文本颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色，默认使用场景的前景颜色
         size        - 字号：整型，默认32
-        family      - 字体：默认None，表示使用当前默认的字体
-        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         loc         - pos对应文本区域的位置，默认left_bottom
-                        'left-top'      - 左上
-                        'left-middle'   - 左中
-                        'left-bottom'   - 左下
-                        'center-top'    - 上中
-                        'center-middle' - 中
-                        'center-bottom' - 下中
-                        'right-top'     - 右上
-                        'right-middle'  - 右中
-                        'right-bottom'  - 右下
+            'left-top'      - 左上
+            'left-middle'   - 左中
+            'left-bottom'   - 左下
+            'center-top'    - 上中
+            'center-middle' - 中
+            'center-bottom' - 下中
+            'right-top'     - 右上
+            'right-middle'  - 右中
+            'right-bottom'  - 右下
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        slide           - 幻灯片函数，默认None
+            name            - 模型名
+            visible         - 是否可见，默认True
+            slide           - 幻灯片函数，默认None
+            family          - 字体：None表示当前默认的字体
+            weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         """
         
         self.add_widget(self.reg_main, 'text', text, pos, 
             color       = util.color2c(color), 
             size        = size, 
-            family      = family, 
-            weight      = weight, 
             loc         = loc, 
             **kwds
         )
         
-    def text3d(self, text, box, color=None, size=64, family=None, weight='normal', align='fill', valign='fill', **kwds):
+    def text3d(self, text, box, color=None, align='fill', valign='fill', **kwds):
         """3d文本
         
         text        - 文本字符串
         box         - 文本显式区域：左上、左下、右上、右下4个点组成的元组、列表或numpy数组，shape=(4,2|3)
         color       - 文本颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色，默认使用场景的前景颜色
-        size        - 字号：整型，默认64。此参数仅影响文本显示质量，不改变文本大小
-        family      - 字体：默认None，表示使用当前默认的字体
-        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         align       - 文本宽度方向对齐方式
-                        'fill'          - 填充
-                        'left'          - 左对齐
-                        'right'         - 右对齐
-                        'center'        - 居中对齐
+            'fill'          - 填充
+            'left'          - 左对齐
+            'right'         - 右对齐
+            'center'        - 居中对齐
         valign      - 文本高度方向对齐方式
-                        'fill'          - 填充
-                        'top'           - 上对齐
-                        'bottom'        - 下对齐
-                        'middle'        - 居中对齐
+            'fill'          - 填充
+            'top'           - 上对齐
+            'bottom'        - 下对齐
+            'middle'        - 居中对齐
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient         - 环境光，默认(1.0,1.0,1.0)
+            family          - 字体：None表示当前默认的字体
+            weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+            size            - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
         """
         
         self.add_widget(self.reg_main, 'text3d', text, box, 
             color       = util.color2c(color), 
-            size        = size, 
-            family      = family, 
-            weight      = weight, 
             align       = align, 
             valign      = valign, 
             **kwds
@@ -388,12 +382,12 @@ class Axes:
         alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         size        - 点或每个点的大小：数值，或数值型的元组、列表、numpy数组
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        slide           - 幻灯片函数，默认None
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认True（不透明）
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            name            - 模型名
+            visible         - 是否可见，默认True
+            slide           - 幻灯片函数，默认None
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
         if cm is None:
@@ -421,22 +415,22 @@ class Axes:
         alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         width       - 线宽，0.0~10.0之间，None使用默认设置
         style       - 线型, 默认实线
-                        'solid'         - 实线 
-                        'dashed'        - 虚线
-                        'dotted'        - 点线
-                        'dash-dot'      - 虚点线
+            'solid'         - 实线 
+            'dashed'        - 虚线
+            'dotted'        - 点线
+            'dash-dot'      - 虚点线
         method      - 绘制方法
-                        'isolate'       - 独立线段
-                        'strip'         - 连续线段
-                        'loop'          - 闭合线段
+            'isolate'       - 独立线段
+            'strip'         - 连续线段
+            'loop'          - 闭合线段
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认True（不透明）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-                        ambient         - 环境光，默认(1.0,1.0,1.0)
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient         - 环境光，默认(1.0,1.0,1.0)
         """
         
         if cm is None:
@@ -477,20 +471,21 @@ class Axes:
         texture     - 纹理：wxgl.Texture对象
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
         method      - 绘制方法
-                        'isolate'       - 独立三角面
-                        'strip'         - 带状三角面
-                        'fan'           - 扇面
+            'isolate'       - 独立三角面
+            'strip'         - 带状三角面
+            'fan'           - 扇面
         indices     - 顶点索引集，默认None
         closed      - 带状三角面或扇面两端闭合：布尔型
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认True（不透明）
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if cm is None:
@@ -521,7 +516,61 @@ class Axes:
             **kwds
         )
     
-    def mesh(self, xs, ys, zs, color=None, cm=None, alpha=None, texture=None, ur=(0,1), vr=(0,1), uclosed=False, vclosed=False, **kwds):
+    def quad(self, vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
+        """由四角面描述的曲面
+        
+        vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
+        color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
+        texture     - 纹理：wxgl.Texture对象
+        texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
+        method      - 绘制方法
+            'isolate'       - 独立四角面
+            'strip'         - 带状四角面
+        indices     - 顶点索引集，默认None
+        closed      - 带状三角面或扇面两端闭合：布尔型
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认True（不透明）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        if cm is None:
+            if color is None:
+                if texture is None:
+                    color = util.color2c(self.get_color())
+                elif texcoord is None:
+                    raise ValueError('当参数texture有效时，期望texcoord有效')
+            else:
+                color = util.color2c(color, outsize=len(vs))
+        else:
+            if not color is None and isinstance(color, (tuple, list, np.ndarray)):
+                color = np.array(color)
+                if color.shape == (len(vs),):
+                    color = util.cmap(color, cm, alpha=alpha)
+                else:
+                    raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+            else:
+                raise ValueError('当参数cm有效时，期望color是和顶点数量匹配的元组、列表或numpy数组')
+        
+        self.add_widget(self.reg_main, 'quad', vs, 
+            color       = color, 
+            texture     = texture, 
+            texcoord    = texcoord, 
+            method      = method, 
+            indices     = indices, 
+            closed      = closed,
+            **kwds
+        )
+    
+    def mesh(self, xs, ys, zs, color=None, cm=None, alpha=None, texture=None, ur=(0,1), vr=(0,1), method='T', uclosed=False, vclosed=False, **kwds):
         """网格面
         
         xs/ys/zs    - 顶点坐标集：元组、列表或numpy数组，shape=(m,n)
@@ -531,17 +580,19 @@ class Axes:
         texture     - 纹理：wxgl.Texture对象
         ur          - u方向纹理坐标范围
         vr          - v方向纹理坐标范围
+        method      - 绘制网格的方法：可选项：'T'- GL_TRIANGLES, 'Q' - GL_QUADS
         uclosed     - u方向网格两端闭合：布尔型
         vclosed     - v方向网格两端闭合：布尔型
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         xs, ys, zs = np.array(xs), np.array(ys), np.array(zs)
@@ -567,6 +618,7 @@ class Axes:
             texture     = texture,
             ur          = ur,
             vr          = vr,
+            method      = method,
             uclosed     = uclosed,
             vclosed     = vclosed,
             **kwds
@@ -583,14 +635,15 @@ class Axes:
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if color is None and texture is None:
@@ -616,7 +669,8 @@ class Axes:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -640,14 +694,15 @@ class Axes:
         v           - 纬度范围：默认-90°~90°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if color is None and texture is None:
@@ -664,14 +719,15 @@ class Axes:
         color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
         iterations  - 迭代次数：整型
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if color is None:
@@ -694,7 +750,8 @@ class Axes:
             visible         - 是否可见，默认True
             inside          - 模型顶点是否影响模型空间，默认True
             opacity         - 模型不透明属性，默认不透明
-            fill            - 填充，默认None（使用当前设置）
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
             slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
             light           - 光照情景模式，默认太阳光照情景模式
@@ -716,14 +773,15 @@ class Axes:
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if color is None:
@@ -740,14 +798,15 @@ class Axes:
         vec         - 六面体上表面法向量
         color       - 颜色：浮点型元组、列表或numpy数组
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        fill            - 填充，默认None（使用当前设置）
-                        slide           - 幻灯片函数，默认None
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        light           - 光照情景模式，默认太阳光照情景模式
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
         """
         
         if color is None:
@@ -756,34 +815,59 @@ class Axes:
         
         self.add_widget(self.reg_main, 'cube', center, side, vec=vec, color=color, **kwds)
     
-    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
-        """三维等值面
+    def mcs(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+        """基于MarchingCube算法的三维等值面
         
         data        - 数据集：三维numpy数组，第0轴对应y轴，第1轴对应z轴，第2轴对应x轴
         level       - 阈值：浮点型。data数据集中小于level的数据将被忽略
         color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
         x/y/z       - 数据集对应的点的x/y/z轴的动态范围
         kwds        - 关键字参数
-                        name            - 模型名
-                        visible         - 是否可见，默认True
-                        slide           - 幻灯片函数，默认None
-                        inside          - 模型顶点是否影响模型空间，默认True
-                        opacity         - 模型不透明属性，默认不透明
-                        transform       - 由旋转、平移和缩放组成的模型几何变换序列
-                        fill            - 填充，默认True
-                        ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
-                        light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
-                        light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
-                        shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
+            name            - 模型名
+            visible         - 是否可见，默认True
+            slide           - 幻灯片函数，默认None
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            ambient         - 环境亮度，开启灯光时默认(0.5, 0.5, 0.5)，关闭灯光时默认(1.0, 1.0, 1.0)
+            light           - 平行光源的方向，默认(-0.5, -0.1, -0.5)，None表示关闭灯光
+            light_color     - 平行光源的颜色，默认(1.0, 1.0, 1.0)
+            shininess       - 高光系数，值域范围[0,1]，默认0.0（无镜面反射）
         """
         
         if color is None:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'isosurface', data, level, color, x=x, y=y, z=z, **kwds)
+        self.add_widget(self.reg_main, 'mcs', data, level, color, x=x, y=y, z=z, **kwds)
+    
+    def grid(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
+        """绘制网格和刻度
+        
+        xlabel      - x轴名称，默认'X'
+        ylabel      - y轴名称，默认'Y'
+        zlabel      - z轴名称，默认'Z'
+        kwds        - 关键字参数
+            xf              - x轴刻度标注格式化函数，默认str
+            yf              - y轴刻度标注格式化函数，默认str
+            zf              - z轴刻度标注格式化函数，默认str
+            xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            xc              - x轴标注文本颜色，默认(1.0,0.3,0)
+            yc              - y轴标注文本颜色，默认(0,1.0,0.3)
+            zc              - z轴标注文本颜色，默认(0,0.3,1.0)
+            lc              - 网格线颜色，默认使用前景色
+            tick_size       - 刻度标注字号，默认32
+            label_size      - 坐标轴标注字号，默认40
+        """
+        
+        self.add_widget(self.reg_main, 'grid', xlabel=xlabel, ylabel=ylabel, zlabel=zlabel, **kwds)
     
     def model(self, m):
+        """定制着色器生成模型"""
         
         self.add_widget(self.reg_main, 'add_model', m)
     
