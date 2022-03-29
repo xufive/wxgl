@@ -17,13 +17,8 @@ class BaseLight:
         color = kwds.get('color')
         texture = kwds.get('texture')
         texcoord = kwds.get('texcoord')
-        psize = kwds.get('psize')
         lw = kwds.get('lw')
         ls = kwds.get('ls')
-        loc = kwds.get('loc')
-        tw = kwds.get('tw')
-        th = kwds.get('th')
-        _p = kwds.get('_p', 0)
         
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
@@ -33,72 +28,37 @@ class BaseLight:
         slide = kwds.get('slide')
         transform = kwds.get('transform')
         
-        if psize is None:
-            if color is None:
-                if not loc is None:
-                    vshader = self.get_text2d_vshader()
-                    fshader = self.get_ticks_fshader()
-                    
-                    m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-                    m.set_vertex('a_Position', vs, indices)
-                    m.set_texcoord('a_Texcoord', texcoord)
-                    m.add_texture('u_Texture', texture)
-                    m.set_argument('u_AmbientColor', self.ambient)
-                    m.set_argument('u_TextWidth', tw)
-                    m.set_argument('u_TextHeight', th)
-                    m.set_argument('u_Corner', loc)
-                    m.set_argument('u_Tick', _p)
-                    m.set_ae('u_Ae')
-                    m.set_picked('u_Picked')
-                    m.set_proj_matrix('u_ProjMatrix')
-                    m.set_view_matrix('u_ViewMatrix')
-                    m.set_model_matrix('u_ModelMatrix', transform)
-                    m.set_slide(slide)
-                else:
-                    vshader = self.get_texture_vshader()
-                    fshader = self.get_texture_fshader()
-                    
-                    m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-                    m.set_vertex('a_Position', vs, indices)
-                    m.set_texcoord('a_Texcoord', texcoord)
-                    m.add_texture('u_Texture', texture)
-                    m.set_argument('u_AmbientColor', self.ambient)
-                    m.set_picked('u_Picked')
-                    m.set_proj_matrix('u_ProjMatrix')
-                    m.set_view_matrix('u_ViewMatrix')
-                    m.set_model_matrix('u_ModelMatrix', transform)
-                    m.set_cull_mode(cull)
-                    m.set_fill_mode(fill)
-                    m.set_slide(slide)
-            else:
-                vshader = self.get_color_vshader()
-                fshader = self.get_color_fshader()
-                
-                m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-                m.set_vertex('a_Position', vs, indices)
-                m.set_color('a_Color', color)
-                m.set_argument('u_AmbientColor', self.ambient)
-                m.set_picked('u_Picked')
-                m.set_proj_matrix('u_ProjMatrix')
-                m.set_view_matrix('u_ViewMatrix')
-                m.set_model_matrix('u_ModelMatrix', transform)
-                m.set_line_style(lw, ls)
-                m.set_cull_mode(cull)
-                m.set_fill_mode(fill)
-                m.set_slide(slide) 
+        if color is None:
+            vshader = self.get_texture_vshader()
+            fshader = self.get_texture_fshader()
+            
+            m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
+            m.set_vertex('a_Position', vs, indices)
+            m.set_texcoord('a_Texcoord', texcoord)
+            m.add_texture('u_Texture', texture)
+            m.set_argument('u_AmbientColor', self.ambient)
+            m.set_picked('u_Picked')
+            m.set_proj_matrix('u_ProjMatrix')
+            m.set_view_matrix('u_ViewMatrix')
+            m.set_model_matrix('u_ModelMatrix', transform)
+            m.set_cull_mode(cull)
+            m.set_fill_mode(fill)
+            m.set_slide(slide)
         else:
-            vshader = self.get_point_vshader()
-            fshader = self.get_point_fshader()
+            vshader = self.get_color_vshader()
+            fshader = self.get_color_fshader()
             
             m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
             m.set_vertex('a_Position', vs, indices)
             m.set_color('a_Color', color)
-            m.set_psize('a_Psize', psize)
-            m.set_picked('u_Picked')
             m.set_argument('u_AmbientColor', self.ambient)
+            m.set_picked('u_Picked')
             m.set_proj_matrix('u_ProjMatrix')
             m.set_view_matrix('u_ViewMatrix')
             m.set_model_matrix('u_ModelMatrix', transform)
+            m.set_line_style(lw, ls)
+            m.set_cull_mode(cull)
+            m.set_fill_mode(fill)
             m.set_slide(slide)
         
         return m
@@ -136,6 +96,82 @@ class BaseLight:
                 v_Texcoord = a_Texcoord;
             }
         """
+        
+    def get_color_fshader(self):
+        """返回颜色的片元着色器源码"""
+        
+        return """
+            #version 330 core
+            
+            in vec4 v_Color;
+            uniform vec3 u_AmbientColor;
+            uniform int u_Picked;
+            
+            void main() { 
+                vec3 rgb = v_Color.rgb * u_AmbientColor;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, v_Color.a); 
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
+            } 
+        """
+        
+    def get_texture_fshader(self):
+        """返回纹理的片元着色器源码"""
+        
+        return """
+            #version 330 core
+            
+            in vec2 v_Texcoord;
+            uniform vec3 u_AmbientColor;
+            uniform sampler2D u_Texture;
+            uniform int u_Picked;
+            
+            void main() { 
+                vec4 color = texture2D(u_Texture, v_Texcoord);
+                vec3 rgb = color.rgb * u_AmbientColor;
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
+            } 
+        """
+
+class BaseLightPoint:
+    """适用于点环境光照情景模式"""
+    
+    def __init__(self, ambient=(1.0,1.0,1.0)):
+        """构造函数"""
+        
+        self.ambient = ambient              # 环境光
+    
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+        
+        color = kwds.get('color')
+        psize = kwds.get('psize')
+        
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        opacity = kwds.get('opacity', False)
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
+        
+        vshader = self.get_point_vshader()
+        fshader = self.get_point_fshader()
+        
+        m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
+        m.set_vertex('a_Position', vs)
+        m.set_color('a_Color', color)
+        m.set_psize('a_Psize', psize)
+        m.set_picked('u_Picked')
+        m.set_argument('u_AmbientColor', self.ambient)
+        m.set_proj_matrix('u_ProjMatrix')
+        m.set_view_matrix('u_ViewMatrix')
+        m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_slide(slide)
+        
+        return m
     
     def get_point_vshader(self):
         """返回点的顶点着色器源码"""
@@ -157,9 +193,77 @@ class BaseLight:
                 v_Color = a_Color;
             }
         """
+        
+    def get_point_fshader(self):
+        """返回散点的片元着色器源码"""
+        
+        return """
+            #version 330 core
+            
+            in vec4 v_Color;
+            uniform vec3 u_AmbientColor;
+            uniform int u_Picked;
+            
+            void main() { 
+                vec2 temp = gl_PointCoord - vec2(0.5);
+                float f = dot(temp, temp);
+                
+                if (f > 0.25)
+                    discard;
+                
+                vec3 rgb = v_Color.rgb * u_AmbientColor;
+                vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
+                if (u_Picked == 0)
+                    gl_FragColor = color;
+                else
+                    gl_FragColor = vec4(min(color.rgb*1.5, vec3(1.0)), color.a);
+            } 
+        """
+
+class BaseLightText2d:
+    """适用于2d文本的环境光照情景模式"""
+    
+    def __init__(self, ambient=(1.0,1.0,1.0)):
+        """构造函数"""
+        
+        self.ambient = ambient              # 环境光
+    
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+        
+        color = kwds.get('color')
+        texture = kwds.get('texture')
+        texcoord = kwds.get('texcoord')
+        loc = kwds.get('loc')
+        tw = kwds.get('tw')
+        th = kwds.get('th')
+        
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        opacity = kwds.get('opacity', True)
+        slide = kwds.get('slide')
+        
+        vshader = self.get_text2d_vshader()
+        fshader = self.get_text2d_fshader()
+        
+        m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
+        m.set_vertex('a_Position', vs)
+        m.set_texcoord('a_Texcoord', texcoord)
+        m.add_texture('u_Texture', texture)
+        m.set_argument('u_AmbientColor', self.ambient)
+        m.set_argument('u_TextWidth', tw)
+        m.set_argument('u_TextHeight', th)
+        m.set_argument('u_Corner', loc)
+        m.set_picked('u_Picked')
+        m.set_proj_matrix('u_ProjMatrix')
+        m.set_view_matrix('u_ViewMatrix')
+        m.set_model_matrix('u_ModelMatrix')
+        m.set_slide(slide)
+        
+        return m
     
     def get_text2d_vshader(self):
-        """返回2d文字的顶点着色器源码"""
+        """返回2d文本的顶点着色器源码"""
         
         return """
             #version 330 core
@@ -175,6 +279,7 @@ class BaseLight:
             out vec2 v_Texcoord;
             
             void main() {
+                v_Texcoord = a_Texcoord;
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                 
                 switch (u_Corner) {
@@ -285,32 +390,11 @@ class BaseLight:
                             gl_Position.y += u_TextHeight;
                         }
                 }
-                
-                v_Texcoord = a_Texcoord;
             }
         """
         
-    def get_color_fshader(self):
-        """返回颜色的片元着色器源码"""
-        
-        return """
-            #version 330 core
-            
-            in vec4 v_Color;
-            uniform vec3 u_AmbientColor;
-            uniform int u_Picked;
-            
-            void main() { 
-                vec3 rgb = v_Color.rgb * u_AmbientColor;
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, v_Color.a); 
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
-            } 
-        """
-        
-    def get_texture_fshader(self):
-        """返回纹理的片元着色器源码"""
+    def get_text2d_fshader(self):
+        """返回2d文本的片元着色器源码"""
         
         return """
             #version 330 core
@@ -329,93 +413,158 @@ class BaseLight:
                     gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
+
+class BaseLightText2dArray:
+    """适用于2d文本数组的环境光照情景模式"""
+    
+    def __init__(self, ambient=(1.0,1.0,1.0)):
+        """构造函数"""
         
-    def get_ticks_fshader(self):
-        """返回标注文本的片元着色器源码"""
+        self.ambient = ambient              # 环境光
+    
+    def get_model(self, gltype, vs_array, loc_view, texture, texcoord, tw, th, **kwds):
+        """返回模型对象"""
+        
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        opacity = kwds.get('opacity', False)
+        slide = kwds.get('slide')
+        
+        vshader = self.get_text2darray_vshader()
+        fshader = self.get_text2darray_fshader()
+        
+        m = wxModel.Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
+        m.set_vertex('a_Position', vs_array)
+        m.set_texcoord('a_Texcoord', texcoord)
+        m.add_texture('u_Texture', texture)
+        m.set_argument('u_AmbientColor', self.ambient)
+        m.set_argument('u_TextWidth', tw)
+        m.set_argument('u_TextHeight', th)
+        m.set_argument('a_LocView', loc_view)
+        m.set_ae('u_Ae')
+        m.set_picked('u_Picked')
+        m.set_proj_matrix('u_ProjMatrix')
+        m.set_view_matrix('u_ViewMatrix')
+        m.set_model_matrix('u_ModelMatrix')
+        m.set_slide(slide)
+        
+        return m
+    
+    def get_text2darray_vshader(self):
+        """返回2d文本数组的顶点着色器源码"""
         
         return """
             #version 330 core
             
-            in vec2 v_Texcoord;
+            in vec4 a_Position;
+            in vec3 a_Texcoord;
+            in ivec2 a_LocView;
+            uniform mat4 u_ProjMatrix;
+            uniform mat4 u_ViewMatrix;
+            uniform mat4 u_ModelMatrix;
+            uniform float u_TextWidth;
+            uniform float u_TextHeight;
+            out vec3 v_Texcoord;
+            out float v_View;
+            
+            void main() {
+                v_Texcoord = a_Texcoord;
+                v_View = float(a_LocView[1]);
+                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                
+                int idx = gl_VertexID % 4;
+                if (a_LocView[0] == 4) {
+                    if (idx == 0) {
+                        gl_Position.x -= u_TextWidth/2;
+                        gl_Position.y += u_TextHeight/2;
+                    } else if (idx == 1) {
+                        gl_Position.x -= u_TextWidth/2;
+                        gl_Position.y -= u_TextHeight/2;
+                    } else if (idx == 2) {
+                        gl_Position.x += u_TextWidth/2;
+                        gl_Position.y -= u_TextHeight/2;
+                    } else if (idx == 3) {
+                        gl_Position.x += u_TextWidth/2;
+                        gl_Position.y += u_TextHeight/2;
+                    }
+                } else {
+                    if (idx == 0) {
+                        gl_Position.x -= u_TextWidth;
+                        gl_Position.y += u_TextHeight/2;
+                    } else if (idx == 1) {
+                        gl_Position.x -= u_TextWidth;
+                        gl_Position.y -= u_TextHeight/2;
+                    } else if (idx == 2) {
+                        gl_Position.y -= u_TextHeight/2;
+                    } else if (idx == 3) {
+                        gl_Position.y += u_TextHeight/2;
+                    }
+                }
+            }
+        """
+        
+    def get_text2darray_fshader(self):
+        """返回2d文本数组的片元着色器源码"""
+        
+        return """
+            #version 330 core
+            
+            in vec3 v_Texcoord;
+            in float v_View;
             uniform vec3 u_AmbientColor;
-            uniform sampler2D u_Texture;
+            uniform sampler2DArray u_Texture;
             uniform int u_Picked;
             uniform vec2 u_Ae;
-            uniform int u_Tick;
             
             void main() { 
-                bool up = u_Ae.y > -90 && u_Ae.y < 90; 
-                switch (u_Tick) {
+                bool up = u_Ae[1] > -90 && u_Ae[1] < 90; 
+                switch (int(v_View)) {
                     case 1:
-                        if (u_Ae.x < 0 || u_Ae.x >= 90) discard;
+                        if (u_Ae[0] < 0 || u_Ae[0] >= 90) discard;
                         break;
                     case 2:
-                        if (u_Ae.x < 90 || u_Ae.x >= 180) discard;
+                        if (u_Ae[0] < 90 || u_Ae[0] >= 180) discard;
                         break;
                     case 3:
-                        if (u_Ae.x >= -90 || u_Ae.x < -180) discard;
+                        if (u_Ae[0] >= -90 || u_Ae[0] < -180) discard;
                         break;
                     case 4:
-                        if (u_Ae.x >= 0 || u_Ae.x < -90) discard;
+                        if (u_Ae[0] >= 0 || u_Ae[0] < -90) discard;
                         break;
                     case 5:
-                        if (u_Ae.y < 0 || (up && (u_Ae.x <= -90 || u_Ae.x >= 90)) || (!up && u_Ae.x >= -90 && u_Ae.x <= 90)) discard;
+                        if (u_Ae[1] < 0 || (up && (u_Ae[0] <= -90 || u_Ae[0] >= 90)) || (!up && u_Ae[0] >= -90 && u_Ae[0] <= 90)) discard;
                         break;
                     case 6:
-                        if (u_Ae.y >= 0 || (up && (u_Ae.x <= -90 || u_Ae.x >= 90)) || (!up && u_Ae.x >= -90 && u_Ae.x <= 90)) discard;
+                        if (u_Ae[1] >= 0 || (up && (u_Ae[0] <= -90 || u_Ae[0] >= 90)) || (!up && u_Ae[0] >= -90 && u_Ae[0] <= 90)) discard;
                         break;
                     case 7:
-                        if (u_Ae.y < 0 || (up && u_Ae.x >= -90 && u_Ae.x <= 90) || (!up && (u_Ae.x <= -90 || u_Ae.x >= 90))) discard;
+                        if (u_Ae[1] < 0 || (up && u_Ae[0] >= -90 && u_Ae[0] <= 90) || (!up && (u_Ae[0] <= -90 || u_Ae[0] >= 90))) discard;
                         break;
                     case 8:
-                        if (u_Ae.y >= 0 || (up && u_Ae.x >= -90 && u_Ae.x <= 90) || (!up && (u_Ae.x <= -90 || u_Ae.x >= 90))) discard;
+                        if (u_Ae[1] >= 0 || (up && u_Ae[0] >= -90 && u_Ae[0] <= 90) || (!up && (u_Ae[0] <= -90 || u_Ae[0] >= 90))) discard;
                         break;
                     case 9:
-                        if (u_Ae.y < 0 || (up && u_Ae.x >= 0 && u_Ae.x <= 180) || (!up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        if (u_Ae[1] < 0 || (up && u_Ae[0] >= 0 && u_Ae[0] <= 180) || (!up && u_Ae[0] >= -180 && u_Ae[0] <= 0)) discard;
                         break;
                     case 10:
-                        if (u_Ae.y >= 0 || (up && u_Ae.x >= 0 && u_Ae.x <= 180) || (!up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        if (u_Ae[1] >= 0 || (up && u_Ae[0] >= 0 && u_Ae[0] <= 180) || (!up && u_Ae[0] >= -180 && u_Ae[0] <= 0)) discard;
                         break;
                     case 11:
-                        if (u_Ae.y < 0 || (!up && u_Ae.x >= 0 && u_Ae.x <= 180) || (up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        if (u_Ae[1] < 0 || (!up && u_Ae[0] >= 0 && u_Ae[0] <= 180) || (up && u_Ae[0] >= -180 && u_Ae[0] <= 0)) discard;
                         break;
                     case 12:
-                        if (u_Ae.y >= 0 || (!up && u_Ae.x >= 0 && u_Ae.x <= 180) || (up && u_Ae.x >= -180 && u_Ae.x <= 0)) discard;
+                        if (u_Ae[1] >= 0 || (!up && u_Ae[0] >= 0 && u_Ae[0] <= 180) || (up && u_Ae[0] >= -180 && u_Ae[0] <= 0)) discard;
                         break;
                     default:
                         break;
                 }
                 
-                vec4 color = texture2D(u_Texture, v_Texcoord);
+                vec4 color = texture2DArray(u_Texture, v_Texcoord);
                 vec3 rgb = color.rgb * u_AmbientColor;
                 if (u_Picked == 0)
                     gl_FragColor = vec4(rgb, color.a);
                 else
                     gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """
-        
-    def get_point_fshader(self):
-        """返回散点的片元着色器源码"""
-        
-        return """
-            #version 330 core
-            
-            in vec4 v_Color;
-            uniform vec3 u_AmbientColor;
-            uniform int u_Picked;
-            
-            void main() { 
-                vec2 temp = gl_PointCoord - vec2(0.5);
-                if (dot(temp, temp) > 0.25) {
-                    discard;
-                } else {
-                    vec3 rgb = v_Color.rgb * u_AmbientColor;
-                    if (u_Picked == 0)
-                        gl_FragColor = vec4(rgb, v_Color.a);
-                    else
-                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
-                }
             } 
         """
 

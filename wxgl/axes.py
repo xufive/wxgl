@@ -48,16 +48,6 @@ class Axes:
         self.cbb_uk = 1.5                                                   # 底部色条基本单位缩放系数
         self.assembly = list()                                              # 生成模型的函数及参数列表
         self.ci = 0                                                         # 默认颜色选择指针
-        
-        self.xn = 'X'                                                       # x轴名称
-        self.yn = 'Y'                                                       # y轴名称
-        self.zn = 'Z'                                                       # z轴名称
-        self.xf = str                                                       # x轴标注格式化函数
-        self.yf = str                                                       # y轴标注格式化函数
-        self.zf = str                                                       # z轴标注格式化函数
-        self.xd = 0                                                         # x轴标注密度，整型，值域范围[-2,10], 默认0
-        self.yd = 0                                                         # y轴标注密度，整型，值域范围[-2,10], 默认0
-        self.zd = 0                                                         # z轴标注密度，整型，值域范围[-2,10], 默认0
     
     def _layout(self):
         """画布显示前设置主视区、标题视区和色条视区的布局关系"""
@@ -91,7 +81,7 @@ class Axes:
         
         # 计算标题高度
         if self.title_dict:
-            h_t = self.title_dict['height'] * (1 + self.title_dict['margin_top'] + self.title_dict['margin_bottom'])
+            h_t = self.title_dict['height'] * (1 + self.title_dict['margin_top'] + self.title_dict['margin_bottom'] + 0.3)
         else:
             h_t = 0
         
@@ -109,7 +99,7 @@ class Axes:
             
             w = self.reg_title.size[0]/self.reg_title.size[1]
             top = 1 - 2 * self.title_dict['height'] * self.title_dict['margin_top'] / h_t
-            bottom = -1 + 2 * self.title_dict['height'] * self.title_dict['margin_bottom'] / h_t
+            bottom = -1 + 2 * self.title_dict['height'] * (self.title_dict['margin_bottom']+0.4) / h_t
             left = -w + 2 * self.title_dict['height'] * self.title_dict['margin_left'] / h_t
             right = w - 2 * self.title_dict['height'] * self.title_dict['margin_right'] / h_t
             box = [[left,top],[left,bottom],[right,top],[right,bottom]]
@@ -127,7 +117,8 @@ class Axes:
             self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
             
             if self.title_dict['border']:
-                box = [[-w,1],[w,1],[-w,-1],[w,-1]]
+                bottom = -1 + 2 * self.title_dict['height'] * 0.4 / h_t
+                box = [[-w,1],[w,1],[-w,bottom],[w,bottom]]
                 self.add_widget(self.reg_title, 'line', box, method='isolate', inside=False)
         
         # 右侧色条
@@ -208,8 +199,8 @@ class Axes:
             family          - 字体，None表示当前默认的字体
             weight          - 字体的浓淡：'normal'-正常，'light'-轻，'bold'-重（默认）
             border          - 显示标题边框，默认True
-            margin_top      - 标题上方留空与标题文字高度之比，默认0.75
-            margin_bottom   - 标题下方留空与标题文字高度之比，默认0.25
+            margin_top      - 标题上方留空与标题文字高度之比，默认0.6
+            margin_bottom   - 标题下方留空与标题文字高度之比，默认0.2
             margin_left     - 标题左侧留空与标题文字高度之比，默认0.0
             margin_right    - 标题右侧留空与标题文字高度之比，默认0.0
         """
@@ -221,12 +212,12 @@ class Axes:
         family = kwds.get('family', None)
         weight = kwds.get('weight', 'bold')
         border = kwds.get('border', True)
-        margin_top = kwds.get('margin_top', 0.75)
-        margin_bottom = kwds.get('margin_bottom', 0.25)
+        margin_top = kwds.get('margin_top', 0.6)
+        margin_bottom = kwds.get('margin_bottom', 0.2)
         margin_left = kwds.get('margin_left', 0.0)
         margin_right = kwds.get('margin_right', 0.0)
         
-        height = size/1000 # 标题文字高度与Axes高度之比
+        height = size/1100 # 标题文字高度与Axes高度之比
         size = int(round(pow(size/64, 0.5) * 64))
         color = util.color2c(color)
         
@@ -386,7 +377,6 @@ class Axes:
             visible         - 是否可见，默认True
             slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
-            opacity         - 模型不透明属性，默认True（不透明）
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
@@ -815,7 +805,7 @@ class Axes:
         
         self.add_widget(self.reg_main, 'cube', center, side, vec=vec, color=color, **kwds)
     
-    def mcs(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
         """基于MarchingCube算法的三维等值面
         
         data        - 数据集：三维numpy数组，第0轴对应y轴，第1轴对应z轴，第2轴对应x轴
@@ -841,7 +831,7 @@ class Axes:
             color = self.get_color()
         color = util.color2c(color)
         
-        self.add_widget(self.reg_main, 'mcs', data, level, color, x=x, y=y, z=z, **kwds)
+        self.add_widget(self.reg_main, 'isosurface', data, level, color, x=x, y=y, z=z, **kwds)
     
     def grid(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
         """绘制网格和刻度
@@ -871,21 +861,6 @@ class Axes:
         
         self.add_widget(self.reg_main, 'add_model', m)
     
-    def xlabel(self, xlabel):
-        """设置x轴名称"""
-        
-        self.xn = xlabel
-    
-    def ylabel(self, ylabel):
-        """设置y轴名称"""
-        
-        self.yn = ylabel
-    
-    def zlabel(self, zlabel):
-        """设置z轴名称"""
-        
-        self.zn = zlabel
-    
     def xrange(self, xrange):
         """设置x轴范围"""
         
@@ -900,35 +875,5 @@ class Axes:
         """设置z轴范围"""
         
         self.reg_main.set_range(r_z=zrange)
-    
-    def xformat(self, xf):
-        """格式化x轴的标注"""
-        
-        self.xf = xf
-    
-    def yformat(self, yf):
-        """格式化y轴的标注"""
-        
-        self.yf = yf
-    
-    def zformat(self, zf):
-        """格式化z轴的标注"""
-        
-        self.zf = zf
-    
-    def xdensity(self, xd):
-        """设置x轴标注疏密度"""
-        
-        self.xd = xd
-    
-    def ydensity(self, yd):
-        """设置y轴标注疏密度"""
-        
-        self.yd = yd
-    
-    def zdensity(self, zd):
-        """设置z轴标注疏密度"""
-        
-        self.zd = zd
     
     

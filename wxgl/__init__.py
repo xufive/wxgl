@@ -4,7 +4,7 @@ from OpenGL.GL import *
 from wxgl.scene import Scene
 from wxgl.texture import Texture
 from wxgl.model import Model
-from wxgl.light import *
+from wxgl.light import BaseLight, SunLight, LampLight, SkyLight, SphereLight
 from wxgl.util import *
 
 name = 'wxgl'

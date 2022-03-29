@@ -155,6 +155,12 @@ class Figure:
         for ax in self.axes_list:
             for item in ax.assembly:
                 getattr(item[0], item[1])(*item[2], **item[3])
+        i = 0
+        for reg in self.ff.scene.regions:
+            for name in reg.models:
+                for m in reg.models[name]:
+                    i += 1
+        print('Total:', i)
     
     def redraw(self):
         """重新绘制"""
@@ -175,7 +181,6 @@ class Figure:
         
         if self.ff.scene.islive:
             self.ff.tb.EnableTool(self.ff.ID_ANIMATE, True)
-            #self.ff.cb_export.Enable(True)
         
         self.ff.Show()
         self.app.MainLoop()
@@ -262,7 +267,8 @@ class GltScene(Scene):
             elev = self.parent.curr_reg.elev
             oecs = self.parent.curr_reg.oecs
             dist = self.parent.curr_reg.dist
-            msg = '方位角：%0.2f°，高度角：%0.2f°，ECS原点：(%0.2f,%0.2f,%0.2f)，距离：%0.2f' % (azim, elev, *oecs, dist)
+            cam = self.parent.curr_reg.cam
+            msg = '方位角：%0.2f°，高度角：%0.2f°，相机位置：(%0.2f,%0.2f,%0.2f)，ECS原点：(%0.2f,%0.2f,%0.2f)' % (azim, elev, *cam, *oecs)
             self.parent.sb.SetStatusText(msg, 1)
         
     def on_mouse_motion(self, evt):
@@ -287,7 +293,7 @@ class GltScene(Scene):
                     erase = False
                     if not reg is self.parent.curr_reg:
                         self.parent.curr_reg = reg
-                        msg = '方位角：%0.2f°，高度角：%0.2f°，ECS原点：(%0.2f,%0.2f,%0.2f)，距离：%0.2f' % (reg.azim, reg.elev, *reg.oecs, reg.dist)
+                        msg = '方位角：%0.2f°，高度角：%0.2f°，相机位置：(%0.2f,%0.2f,%0.2f)，ECS原点：(%0.2f,%0.2f,%0.2f)' % (reg.azim, reg.elev, *reg.cam, *reg.oecs)
                         self.parent.sb.SetStatusText(msg, 1)
                         break
             

@@ -385,7 +385,9 @@ class Region:
         for key in m.uniform:
             item = m.uniform[key]
             if item['tag'] == 'texture':
-                item.update({'tid': item['data'].create_texture()})
+                if item['data'].tid is None:
+                    item['data'].create_texture()
+                item.update({'tid': item['data'].tid})
             elif item['tag'] == 'pmat':
                 if 'v' not in item and 'f' not in item:
                     item.update({'v': self.pmat})
@@ -547,7 +549,7 @@ class Region:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'slide', 'ambient', 'family', 'weight', '_p']:
+            if key not in ['name', 'visible', 'inside', 'slide', 'ambient', 'family', 'weight']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
@@ -557,7 +559,6 @@ class Region:
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
         family = kwds.get('family')
         weight = kwds.get('weight', 'normal')
-        _p = kwds.get('_p', 0)
         
         if color is None:
             color = self.scene.style[1]
@@ -583,14 +584,14 @@ class Region:
             'right-bottom':     8
         }.get(loc, 2)
         
-        th = self.vision[-1] * 0.2 * size/32
+        th = min(self.vision[1],self.vision[-1]) * 0.2 * size/32
         size = int(round(pow(size/64, 0.5) * 64))
         
         im_text = util.text2image(text, size, color, family, weight)
         tw = th * im_text.shape[1]/im_text.shape[0] * self.size[1]/self.size[0]
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         
-        light = BaseLight(ambient)
+        light = BaseLightText2d(ambient)
         self.add_model(light.get_model(GL_TRIANGLE_STRIP, box, 
             texture     = texture, 
             texcoord    = texcoord, 
@@ -598,10 +599,9 @@ class Region:
             tw          = tw, 
             th          = th, 
             visible     = visible, 
-            opacity     = False, 
             inside      = inside, 
-            slide       = slide,
-            _p          = _p
+            opacity     = False, 
+            slide       = slide
         ), name)
     
     def text3d(self, text, box, color=None, align='fill', valign='fill', **kwds):
@@ -737,13 +737,12 @@ class Region:
         """
         
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'slide', 'transform', 'ambient']:
+            if key not in ['name', 'visible', 'inside', 'slide', 'transform', 'ambient']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         name = kwds.get('name')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
         slide = kwds.get('slide')
         transform = kwds.get('transform')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
@@ -768,12 +767,13 @@ class Region:
             if size.ndim != 1 or size.shape[0] != n:
                 raise KeyError('期望size参数为长度等于%d的浮点型数组'%n)
         
-        light = BaseLight(ambient)
-        self.add_model(light.get_model(GL_POINTS, vs, 
-            color       = color, 
-            psize       = size, 
+        idx = np.argsort(vs[...,-1])
+        light = BaseLightPoint(ambient)
+        self.add_model(light.get_model(GL_POINTS, vs[idx], 
+            color       = color[idx], 
+            psize       = size[idx], 
             visible     = visible, 
-            opacity     = opacity, 
+            opacity     = False, 
             inside      = inside, 
             slide       = slide,
             transform   = transform
@@ -1447,7 +1447,7 @@ class Region:
         
         self.surface(vs, color=color, method='isolate', indices=None, **kwds)
 
-    def mcs(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
         """基于MarchingCube算法的三维等值面
         
         data        - 数据集：三维numpy数组
@@ -1535,9 +1535,9 @@ class Region:
             h = box[0,1] - box[1,1]
             if not subject is None:
                 vs_subject = np.array([
-                    [box[0,0], box[0,1]+1.2*u],
+                    [box[0,0], box[0,1]+1.05*u],
                     [box[0,0], box[0,1]+0.4*u],
-                    [box[2,0], box[2,1]+1.2*u],
+                    [box[2,0], box[2,1]+1.05*u],
                     [box[2,0], box[2,1]+0.4*u]
                 ])
                 self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False)
@@ -1561,9 +1561,9 @@ class Region:
             w = box[2,0] - box[0,0]
             if not subject is None:
                 vs_subject = np.array([
-                    [box[0,0], box[0,1]+1.4*u],
+                    [box[0,0], box[0,1]+1.2*u],
                     [box[0,0], box[0,1]+0.3*u],
-                    [box[2,0], box[2,1]+1.4*u],
+                    [box[2,0], box[2,1]+1.2*u],
                     [box[2,0], box[2,1]+0.3*u]
                 ])
                 self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False)
@@ -1600,7 +1600,7 @@ class Region:
             zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
             xc              - x轴标注文本颜色，默认(1.0,0.3,0)
             yc              - y轴标注文本颜色，默认(0,1.0,0.3)
-            zc              - z轴标注文本颜色，默认(0,0.3,1.0)
+            zc              - z轴标注文本颜色，默认(0,0.5,1.0)
             lc              - 网格线颜色，默认使用前景色
             tick_size       - 刻度标注字号，默认32
             label_size      - 坐标轴标注字号，默认40
@@ -1618,7 +1618,7 @@ class Region:
         zd = kwds.get('zd', 0)
         xc = kwds.get('xc', (1.0,0.3,0))
         yc = kwds.get('yc', (0,1.0,0.3))
-        zc = kwds.get('zc', (0,0.3,1.0))
+        zc = kwds.get('zc', (0,0.5,1.0))
         lc = kwds.get('lc', self.scene.style[1])
         tick_size = kwds.get('tick_size', 32)
         label_size = kwds.get('label_size', 40)
@@ -1662,47 +1662,170 @@ class Region:
         xs = np.ones(zs.shape) * xx[-1]
         self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # right
         
-        u = (xx[2] - xx[1])/2
-        h, g = 0.4 * u, 0.2 * u
+        u = max((xx[2]-xx[1])/2, (yy[2]-yy[1])/2) # 计算文字布局的长度单位
+        h, g = 0.4 * u, 0.2 * u # 文字宽度和间隙
+        
+        # 所有刻度文字拼合成一个模型
+        im_array, vs_array, loc_view, texcoord = list(), list(), list(), list()
+        th = min(self.vision[1],self.vision[-1]) * 0.2 * tick_size/32
+        tw, rows_max, cols_max = 0, 0, 0
         
         for y in yy[1:-1]:
-            t = yf(y)
-            self.text(t, (xx[0]-g,y,zz[-1]), color=yc, size=tick_size, loc='right-middle', _p=1, name=name)
-            self.text(t, (xx[-1]+g,y,zz[-1]), color=yc, size=tick_size, loc='right-middle', _p=2, name=name)
-            self.text(t, (xx[-1]+g,y,zz[0]), color=yc, size=tick_size, loc='right-middle', _p=3, name=name)
-            self.text(t, (xx[0]-g,y,zz[0]), color=yc, size=tick_size, loc='right-middle', _p=4, name=name)
+            im = util.text2image(yf(y), tick_size, yc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'right'))
+            i = len(im_array) - 1
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[xx[0]-g,y,zz[-1]], [xx[-1]+g,y,zz[-1]], [xx[-1]+g,y,zz[0]], [xx[0]-g,y,zz[0]]])
+            loc_view.extend([[7,1], [7,2], [7,3], [7,4]])
         
         for x in xx[1:-1]:
-            t = xf(x)
-            self.text(t, (x,yy[0]-h,zz[-1]), color=xc, size=tick_size, loc='center-middle', _p=5, name=name)
-            self.text(t, (x,yy[-1]+h,zz[-1]), color=xc, size=tick_size, loc='center-middle', _p=6, name=name)
-            self.text(t, (x,yy[0]-h,zz[0]), color=xc, size=tick_size, loc='center-middle', _p=7, name=name)
-            self.text(t, (x,yy[-1]+h,zz[0]), color=xc, size=tick_size, loc='center-middle', _p=8, name=name)
+            im = util.text2image(xf(x), tick_size, xc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'center'))
+            i = len(im_array) - 1
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[x,yy[0]-h,zz[-1]], [x,yy[-1]+h,zz[-1]], [x,yy[0]-h,zz[0]], [x,yy[-1]+h,zz[0]]])
+            loc_view.extend([[4,5], [4,6], [4,7], [4,8]])
         
         for z in zz[1:-1]:
-            t = zf(z)
-            self.text(t, (xx[0],yy[0]-h,z), color=zc, size=tick_size, loc='center-middle', _p=9, name=name)
-            self.text(t, (xx[0],yy[-1]+h,z), color=zc, size=tick_size, loc='center-middle', _p=10, name=name)
-            self.text(t, (xx[-1],yy[0]-h,z), color=zc, size=tick_size, loc='center-middle', _p=11, name=name)
-            self.text(t, (xx[-1],yy[-1]+h,z), color=zc, size=tick_size, loc='center-middle', _p=12, name=name)
+            im = util.text2image(zf(z), tick_size, zc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'center'))
+            i = len(im_array) - 1
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[xx[0],yy[0]-h,z], [xx[0],yy[-1]+h,z], [xx[-1],yy[0]-h,z], [xx[-1],yy[-1]+h,z]])
+            loc_view.extend([[4,9], [4,10], [4,11], [4,12]])
+        
+        texcoord = np.repeat(np.array(texcoord), 4, axis=0).reshape(-1,3)
+        vs_array = np.repeat(np.array(vs_array), 4, axis=0)
+        loc_view = np.repeat(np.array(loc_view), 4, axis=0)
+        
+        self._text_array(im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) #刻度文字模型
+        
+        # 三个轴名称拼合成一个模型
+        im_array, vs_array, loc_view, texcoord = list(), list(), list(), list()
+        th = min(self.vision[1],self.vision[-1]) * 0.2 * label_size/32
+        tw, rows_max, cols_max = 0, 0, 0
         
         if ylabel:
-            self.text(ylabel, (xx[0]-g,yy[-1],zz[-1]), color=yc, size=label_size, loc='right-middle', _p=1, name=name)
-            self.text(ylabel, (xx[-1]+g,yy[-1],zz[-1]), color=yc, size=label_size, loc='right-middle', _p=2, name=name)
-            self.text(ylabel, (xx[-1]+g,yy[-1],zz[0]), color=yc, size=label_size, loc='right-middle', _p=3, name=name)
-            self.text(ylabel, (xx[0]-g,yy[-1],zz[0]), color=yc, size=label_size, loc='right-middle', _p=4, name=name)
+            im = util.text2image(ylabel, label_size, yc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'right'))
+            i = len(im_array) - 1
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[xx[0]-g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[0]], [xx[0]-g,yy[-1],zz[0]]])
+            loc_view.extend([[7,1], [7,2], [7,3], [7,4]])
         
         if xlabel:
+            im = util.text2image(xlabel, label_size, xc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'center'))
+            i = len(im_array) - 1
             x = (xx[0]+xx[-1])/2
-            self.text(xlabel, (x,yy[0]-2.5*h,zz[-1]), color=xc, size=label_size, loc='center-middle', _p=5, name=name)
-            self.text(xlabel, (x,yy[-1]+2.5*h,zz[-1]), color=xc, size=label_size, loc='center-middle', _p=6, name=name)
-            self.text(xlabel, (x,yy[0]-2.5*h,zz[0]), color=xc, size=label_size, loc='center-middle', _p=7, name=name)
-            self.text(xlabel, (x,yy[-1]+2.5*h,zz[0]), color=xc, size=label_size, loc='center-middle', _p=8, name=name)
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[x,yy[0]-2.5*h,zz[-1]], [x,yy[-1]+2.5*h,zz[-1]], [x,yy[0]-2.5*h,zz[0]], [x,yy[-1]+2.5*h,zz[0]]])
+            loc_view.extend([[4,5], [4,6], [4,7], [4,8]])
         
         if zlabel:
+            im = util.text2image(zlabel, label_size, zc)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
+            
+            im_array.append((im, 'center'))
+            i = len(im_array) - 1
             z = (zz[0]+zz[-1])/2
-            self.text(zlabel, (xx[0],yy[0]-2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=9, name=name)
-            self.text(zlabel, (xx[0],yy[-1]+2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=10, name=name)
-            self.text(zlabel, (xx[-1],yy[0]-2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=11, name=name)
-            self.text(zlabel, (xx[-1],yy[-1]+2.5*h,z), color=zc, size=label_size, loc='center-middle', _p=12, name=name)
+            
+            texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
+            vs_array.extend([[xx[0],yy[0]-2.5*h,z], [xx[0],yy[-1]+2.5*h,z], [xx[-1],yy[0]-2.5*h,z], [xx[-1],yy[-1]+2.5*h,z]])
+            loc_view.extend([[4,9], [4,10], [4,11], [4,12]])
+        
+        texcoord = np.repeat(np.array(texcoord), 4, axis=0).reshape(-1,3)
+        vs_array = np.repeat(np.array(vs_array), 4, axis=0)
+        loc_view = np.repeat(np.array(loc_view), 4, axis=0)
+        
+        self._text_array(im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) # 轴名称模型
+    
+    def _text_array(self, im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, **kwds):
+        """2d文字数组
+        
+        im_array    - 文本图象数组
+        vs_array    - 文本位置数组
+        loc_view    - 文本基点和可见性数组
+        texcoord    - 纹理数组
+        tw          - 文本宽度
+        th          - 文本高度
+        rows_max    - 文本图象最大行数
+        cols_max    - 文本图像最大列数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            slide           - 幻灯片函数，默认None
+            ambient         - 环境光，默认(1.0,1.0,1.0)
+        """
+        
+        for key in kwds:
+            if key not in ['name', 'visible', 'inside', 'slide', 'ambient']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        name = kwds.get('name')
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        slide = kwds.get('slide')
+        ambient = kwds.get('ambient', (1.0,1.0,1.0))
+        
+        text_array = list()
+        for im, align in im_array:
+            if im.shape[0] < rows_max:
+                n = rows_max - im.shape[0]
+                nu = n // 2
+                nd = n - nu
+                
+                im = np.vstack((im, np.zeros((nd, *im.shape[1:]), dtype=np.uint8)))
+                if nu > 0:
+                    im = np.vstack((np.zeros((nu, *im.shape[1:]), dtype=np.uint8), im))
+            
+            if im.shape[1] < cols_max:   
+                n = cols_max - im.shape[1]
+                if align == 'right':
+                    im = np.hstack((im, np.zeros((im.shape[0], n, im.shape[-1]), dtype=np.uint8)))
+                elif align == 'center':
+                    nl = n // 2
+                    nr = n - nl
+                    
+                    im = np.hstack((im, np.zeros((im.shape[0], nr, im.shape[-1]), dtype=np.uint8)))
+                    if nl > 0:
+                        im = np.hstack((np.zeros((im.shape[0], nl, im.shape[-1]), dtype=np.uint8), im))
+            
+            text_array.append(im)
+        
+        light = BaseLightText2dArray(ambient)
+        texture = Texture(np.stack(text_array), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+        self.add_model(light.get_model(GL_QUADS, vs_array, loc_view, texture, texcoord, tw, th, 
+            visible     = visible, 
+            inside      = inside, 
+            opacity     = False, 
+            slide       = slide
+        ), name)
     

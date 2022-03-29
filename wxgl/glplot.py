@@ -158,8 +158,8 @@ def cube(*args, **kwds):
     fig.curr_ax.cube(*args, **kwds)
 
 @current_axes
-def mcs(*args, **kwds):
-    fig.curr_ax.mcs(*args, **kwds)
+def isosurface(*args, **kwds):
+    fig.curr_ax.isosurface(*args, **kwds)
 
 @current_axes
 def grid(*args, **kwds):
@@ -168,18 +168,6 @@ def grid(*args, **kwds):
 @current_axes
 def model(*args, **kwds):
     fig.curr_ax.model(*args, **kwds)
-
-@current_axes
-def xlabel(xlabel):
-    fig.curr_ax.xlabel(xlabel)
-
-@current_axes
-def ylabel(ylabel):
-    fig.curr_ax.ylabel(ylabel)
-
-@current_axes
-def zlabel(zlabel):
-    fig.curr_ax.zlabel(zlabel)
 
 @current_axes
 def xrange(xrange):
@@ -192,27 +180,3 @@ def yrange(yrange):
 @current_axes
 def zrange(zrange):
     fig.curr_ax.zrange(zrange)
-
-@current_axes
-def xformat(xf):
-    fig.curr_ax.xformat(xf)
-
-@current_axes
-def yformat(yf):
-    fig.curr_ax.yformat(yf)
-
-@current_axes
-def zformat(zf):
-    fig.curr_ax.zformat(zf)
-
-@current_axes
-def xdensity(xd):
-    fig.curr_ax.xdensity(xd)
-
-@current_axes
-def ydensity(yd):
-    fig.curr_ax.ydensity(yd)
-
-@current_axes
-def zdensity(zd):
-    fig.curr_ax.zdensity(zd)
