@@ -142,6 +142,9 @@ class Model:
         """
         
         data = np.array(data, dtype=np.float32)
+        if data.ndim == 1:
+            data = data[:,np.newaxis]
+        
         self.attribute.update({var_name: {'tag':'texcoord', 'data':data, 'un':data.shape[-1], 'usize':data.itemsize}})
     
     def set_color(self, var_name, data):

@@ -155,12 +155,6 @@ class Figure:
         for ax in self.axes_list:
             for item in ax.assembly:
                 getattr(item[0], item[1])(*item[2], **item[3])
-        i = 0
-        for reg in self.ff.scene.regions:
-            for name in reg.models:
-                for m in reg.models[name]:
-                    i += 1
-        print('Total:', i)
     
     def redraw(self):
         """重新绘制"""

@@ -648,10 +648,6 @@ class Region:
         weight = kwds.get('weight', 'normal')
         size = kwds.get('size', 64)
         
-        gltype = GL_TRIANGLE_STRIP
-        box = np.array(box, dtype=np.float32)
-        normal = self.get_normal(gltype, box)
-        
         if color is None:
             color = self.scene.style[1]
         elif isinstance(color, (tuple, list, np.ndarray)):
@@ -660,6 +656,10 @@ class Region:
                 raise KeyError('期望color参数为浮点类型RGB或RGBA颜色')
         else:
             raise KeyError('期望color参数为浮点类型元组、列表或numpy数组')
+        
+        gltype = GL_TRIANGLE_STRIP
+        box = np.array(box, dtype=np.float32)
+        normal = self.get_normal(gltype, box)
          
         im_text = util.text2image(text, size, color, family, weight)
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
@@ -923,8 +923,8 @@ class Region:
                 raise KeyError('缺少纹理坐标参数')
             
             texcoord = np.float32(texcoord)
-            if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] != 2:
-                raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
+            #if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] != 2:
+            #    raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
         else:
             if not isinstance(color, (tuple, list, np.ndarray)):
                 raise KeyError('期望颜色参数为元组、列表或numpy数组类型')
@@ -1020,8 +1020,8 @@ class Region:
                 raise KeyError('缺少纹理坐标参数')
             
             texcoord = np.float32(texcoord)
-            if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] != 2:
-                raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
+            #if texcoord.ndim != 2 or texcoord.shape[0] != vs.shape[0] or texcoord.shape[1] not in (2,3):
+            #    raise KeyError('期望纹理坐标参数为%d行2列的浮点型数组'%vs.shape[0])
         else:
             if not isinstance(color, (tuple, list, np.ndarray)):
                 raise KeyError('期望颜色参数为元组、列表或numpy数组类型')
@@ -1543,18 +1543,22 @@ class Region:
                 self.text3d(subject, vs_subject, align='left', valign='fill', size=text_size, inside=False)
             
             tk = h/(dmax-dmin)
-            dashes = list()
+            text_arr, box_arr, dashes = list(), list(), list()
             for t in ticks:
                 y = (t-dmin)*tk + box[1,1]
                 dashes.extend([[box[2,0], y], [box[2,0]+0.4*u, y]])
                 vs_tick = np.array([
                     [box[2,0]+0.6*u, y+0.25*u],
                     [box[2,0]+0.6*u, y-0.25*u],
-                    [box[2,0]+3*u, y+0.25*u],
-                    [box[2,0]+3*u, y-0.25*u]
+                    [box[2,0]+3*u, y-0.25*u],
+                    [box[2,0]+3*u, y+0.25*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='left', valign='fill', size=text_size, inside=False)
+                
+                text_arr.append(tick_format(t))
+                box_arr.append(vs_tick)
             
+            box_arr = np.stack(box_arr, axis=0)
+            self._text3d_array(text_arr, box_arr, align='center', valign='fill', size=text_size, inside=False)
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         else:
             u = box[0,1] - box[1,1]
@@ -1569,21 +1573,25 @@ class Region:
                 self.text3d(subject, vs_subject, align='center', valign='fill', size=text_size, inside=False)
             
             tk = w/(dmax-dmin)
-            dashes = list()
+            text_arr, box_arr, dashes = list(), list(), list()
             for t in ticks:
                 x = (t-dmin)*tk + box[1,0]
                 dashes.extend([[x, box[1,1]], [x, box[1,1]-0.4*u]])
                 vs_tick = np.array([
                     [x-u, box[1,1]-0.65*u],
                     [x-u, box[1,1]-1.35*u],
-                    [x+u, box[1,1]-0.65*u],
-                    [x+u, box[1,1]-1.35*u]
+                    [x+u, box[1,1]-1.35*u],
+                    [x+u, box[1,1]-0.65*u]
                 ])
-                self.text3d(tick_format(t), vs_tick, align='center', valign='fill', size=text_size, inside=False)
+                
+                text_arr.append(tick_format(t))
+                box_arr.append(vs_tick)
             
+            box_arr = np.stack(box_arr, axis=0)
+            self._text3d_array(text_arr, box_arr, align='center', valign='fill', size=text_size, inside=False)
             self.line(np.array(dashes, dtype=np.float32), method='isolate', width=0.5, inside=False)
         
-        self.surface(box, texture=texture, texcoord=texcoord, method='strip', inside=False)
+        self.surface(box, texture=texture, texcoord=texcoord, method='strip', inside=False, light=BaseLight())
         
     def grid(self, xlabel='X', ylabel='Y', zlabel='Z', **kwds):
         """绘制网格和刻度
@@ -1638,35 +1646,41 @@ class Region:
         dz = (self.r_z[1] - self.r_z[0]) * 0.1
         zz = self.get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd)
         
-        xs, ys = np.meshgrid(xx, yy[::-1])
-        zs = np.ones(xs.shape) * zz[-1]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # front
-        
-        xs, ys = np.meshgrid(xx[::-1], yy[::-1])
-        zs = np.ones(xs.shape) * zz[0]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # back
-        
-        xs, zs = np.meshgrid(xx, zz)
-        ys = np.ones(xs.shape) * yy[-1]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # top
-        
-        xs, zs = np.meshgrid(xx, zz[::-1])
-        ys = np.ones(xs.shape) * yy[0]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # bottom
-        
-        zs, ys = np.meshgrid(zz, yy[::-1])
-        xs = np.ones(zs.shape) * xx[0]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # left
-        
-        zs, ys = np.meshgrid(zz[::-1], yy[::-1])
-        xs = np.ones(zs.shape) * xx[-1]
-        self.mesh(xs, ys, zs, color=lc, fill=False, cull='front', method='Q', light=BaseLight(), name=name) # right
-        
         u = max((xx[2]-xx[1])/2, (yy[2]-yy[1])/2) # 计算文字布局的长度单位
         h, g = 0.4 * u, 0.2 * u # 文字宽度和间隙
         
+        # 六个网格拼合成一个模型
+        # -----------------------------
+        xs, ys = np.meshgrid(xx, yy[::-1])
+        zs = np.ones(xs.shape) * zz[-1]
+        xs_front = self._mesh2quad(xs, ys, zs)
+        
+        xs, ys = np.meshgrid(xx[::-1], yy[::-1])
+        zs = np.ones(xs.shape) * zz[0]
+        xs_back = self._mesh2quad(xs, ys, zs)
+        
+        xs, zs = np.meshgrid(xx, zz)
+        ys = np.ones(xs.shape) * yy[-1]
+        xs_top = self._mesh2quad(xs, ys, zs)
+        
+        xs, zs = np.meshgrid(xx, zz[::-1])
+        ys = np.ones(xs.shape) * yy[0]
+        xs_bottom = self._mesh2quad(xs, ys, zs)
+        
+        zs, ys = np.meshgrid(zz, yy[::-1])
+        xs = np.ones(zs.shape) * xx[0]
+        xs_left = self._mesh2quad(xs, ys, zs)
+        
+        zs, ys = np.meshgrid(zz[::-1], yy[::-1])
+        xs = np.ones(zs.shape) * xx[-1]
+        xs_right = self._mesh2quad(xs, ys, zs)
+        
+        vs = np.vstack((xs_front, xs_back, xs_top, xs_bottom, xs_left, xs_right))
+        self.quad(vs, color=lc, fill=False, cull='front', method='isolate', light=BaseLight(), name=name)
+        
         # 所有刻度文字拼合成一个模型
-        im_array, vs_array, loc_view, texcoord = list(), list(), list(), list()
+        # -----------------------------
+        im_arr, vs_arr, loc_view, texcoord = list(), list(), list(), list()
         th = min(self.vision[1],self.vision[-1]) * 0.2 * tick_size/32
         tw, rows_max, cols_max = 0, 0, 0
         
@@ -1676,11 +1690,11 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'right'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'right'))
+            i = len(im_arr) - 1
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[xx[0]-g,y,zz[-1]], [xx[-1]+g,y,zz[-1]], [xx[-1]+g,y,zz[0]], [xx[0]-g,y,zz[0]]])
+            vs_arr.extend([[xx[0]-g,y,zz[-1]], [xx[-1]+g,y,zz[-1]], [xx[-1]+g,y,zz[0]], [xx[0]-g,y,zz[0]]])
             loc_view.extend([[7,1], [7,2], [7,3], [7,4]])
         
         for x in xx[1:-1]:
@@ -1689,11 +1703,11 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'center'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'center'))
+            i = len(im_arr) - 1
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[x,yy[0]-h,zz[-1]], [x,yy[-1]+h,zz[-1]], [x,yy[0]-h,zz[0]], [x,yy[-1]+h,zz[0]]])
+            vs_arr.extend([[x,yy[0]-h,zz[-1]], [x,yy[-1]+h,zz[-1]], [x,yy[0]-h,zz[0]], [x,yy[-1]+h,zz[0]]])
             loc_view.extend([[4,5], [4,6], [4,7], [4,8]])
         
         for z in zz[1:-1]:
@@ -1702,21 +1716,22 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'center'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'center'))
+            i = len(im_arr) - 1
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[xx[0],yy[0]-h,z], [xx[0],yy[-1]+h,z], [xx[-1],yy[0]-h,z], [xx[-1],yy[-1]+h,z]])
+            vs_arr.extend([[xx[0],yy[0]-h,z], [xx[0],yy[-1]+h,z], [xx[-1],yy[0]-h,z], [xx[-1],yy[-1]+h,z]])
             loc_view.extend([[4,9], [4,10], [4,11], [4,12]])
         
         texcoord = np.repeat(np.array(texcoord), 4, axis=0).reshape(-1,3)
-        vs_array = np.repeat(np.array(vs_array), 4, axis=0)
+        vs_arr = np.repeat(np.array(vs_arr), 4, axis=0)
         loc_view = np.repeat(np.array(loc_view), 4, axis=0)
         
-        self._text_array(im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) #刻度文字模型
+        self._text2d_array(im_arr, vs_arr, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) #刻度文字模型
         
         # 三个轴名称拼合成一个模型
-        im_array, vs_array, loc_view, texcoord = list(), list(), list(), list()
+        # -----------------------------
+        im_arr, vs_arr, loc_view, texcoord = list(), list(), list(), list()
         th = min(self.vision[1],self.vision[-1]) * 0.2 * label_size/32
         tw, rows_max, cols_max = 0, 0, 0
         
@@ -1726,11 +1741,11 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'right'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'right'))
+            i = len(im_arr) - 1
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[xx[0]-g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[0]], [xx[0]-g,yy[-1],zz[0]]])
+            vs_arr.extend([[xx[0]-g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[-1]], [xx[-1]+g,yy[-1],zz[0]], [xx[0]-g,yy[-1],zz[0]]])
             loc_view.extend([[7,1], [7,2], [7,3], [7,4]])
         
         if xlabel:
@@ -1739,12 +1754,12 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'center'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'center'))
+            i = len(im_arr) - 1
             x = (xx[0]+xx[-1])/2
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[x,yy[0]-2.5*h,zz[-1]], [x,yy[-1]+2.5*h,zz[-1]], [x,yy[0]-2.5*h,zz[0]], [x,yy[-1]+2.5*h,zz[0]]])
+            vs_arr.extend([[x,yy[0]-2.5*h,zz[-1]], [x,yy[-1]+2.5*h,zz[-1]], [x,yy[0]-2.5*h,zz[0]], [x,yy[-1]+2.5*h,zz[0]]])
             loc_view.extend([[4,5], [4,6], [4,7], [4,8]])
         
         if zlabel:
@@ -1753,25 +1768,38 @@ class Region:
             cols_max = max(im.shape[1], cols_max)
             tw = max(th * im.shape[1]/im.shape[0] * self.size[1]/self.size[0], tw)
             
-            im_array.append((im, 'center'))
-            i = len(im_array) - 1
+            im_arr.append((im, 'center'))
+            i = len(im_arr) - 1
             z = (zz[0]+zz[-1])/2
             
             texcoord.append([[0,0,i], [0,1,i], [1,1,i], [1,0,i]])
-            vs_array.extend([[xx[0],yy[0]-2.5*h,z], [xx[0],yy[-1]+2.5*h,z], [xx[-1],yy[0]-2.5*h,z], [xx[-1],yy[-1]+2.5*h,z]])
+            vs_arr.extend([[xx[0],yy[0]-2.5*h,z], [xx[0],yy[-1]+2.5*h,z], [xx[-1],yy[0]-2.5*h,z], [xx[-1],yy[-1]+2.5*h,z]])
             loc_view.extend([[4,9], [4,10], [4,11], [4,12]])
         
-        texcoord = np.repeat(np.array(texcoord), 4, axis=0).reshape(-1,3)
-        vs_array = np.repeat(np.array(vs_array), 4, axis=0)
-        loc_view = np.repeat(np.array(loc_view), 4, axis=0)
-        
-        self._text_array(im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) # 轴名称模型
+        if vs_arr:
+            texcoord = np.repeat(np.array(texcoord), 4, axis=0).reshape(-1,3)
+            vs_arr = np.repeat(np.array(vs_arr), 4, axis=0)
+            loc_view = np.repeat(np.array(loc_view), 4, axis=0)
+            
+            self._text2d_array(im_arr, vs_arr, loc_view, texcoord, tw, th, rows_max, cols_max, name=name) # 轴名称模型
     
-    def _text_array(self, im_array, vs_array, loc_view, texcoord, tw, th, rows_max, cols_max, **kwds):
+    def _mesh2quad(self, xs, ys, zs):
+        """mesh转quad"""
+        
+        vs = np.dstack((xs, ys, zs))
+        rows, cols = vs.shape[:2]
+        
+        idx = np.arange(rows*cols).reshape(rows, cols)
+        idx_a, idx_b, idx_c, idx_d = idx[:-1,:-1], idx[1:,:-1], idx[1:,1:], idx[:-1, 1:]
+        idx = np.int32(np.dstack((idx_a, idx_b, idx_c, idx_d)).ravel())
+        
+        return vs.reshape(-1,3)[idx]
+    
+    def _text2d_array(self, im_arr, vs_arr, loc_view, texcoord, tw, th, rows_max, cols_max, **kwds):
         """2d文字数组
         
-        im_array    - 文本图象数组
-        vs_array    - 文本位置数组
+        im_arr      - 文本图象数组
+        vs_arr      - 文本位置数组
         loc_view    - 文本基点和可见性数组
         texcoord    - 纹理数组
         tw          - 文本宽度
@@ -1796,7 +1824,7 @@ class Region:
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
         
         text_array = list()
-        for im, align in im_array:
+        for im, align in im_arr:
             if im.shape[0] < rows_max:
                 n = rows_max - im.shape[0]
                 nu = n // 2
@@ -1822,10 +1850,146 @@ class Region:
         
         light = BaseLightText2dArray(ambient)
         texture = Texture(np.stack(text_array), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
-        self.add_model(light.get_model(GL_QUADS, vs_array, loc_view, texture, texcoord, tw, th, 
+        self.add_model(light.get_model(GL_QUADS, vs_arr, loc_view, texture, texcoord, tw, th, 
             visible     = visible, 
             inside      = inside, 
             opacity     = False, 
             slide       = slide
+        ), name)
+    
+    def _text3d_array(self, text_arr, box_arr, color=None, align='center', valign='fill', **kwds):
+        """3d文字数组
+        
+        text_arr    - 文本字符串列表
+        box_arr     - 文本显式区域数组
+        color       - 文本颜色：浮点型元组、列表或numpy数组，值域范围[0,1]，None表示使用场景默认的前景颜色
+        align       - 文本宽度方向对齐方式
+            'fill'          - 填充
+            'left'          - 左对齐
+            'right'         - 右对齐
+            'center'        - 居中对齐
+        valign      - 文本高度方向对齐方式
+            'fill'          - 填充
+            'top'           - 上对齐
+            'bottom'        - 下对齐
+            'middle'        - 居中对齐
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            ambient         - 环境光，默认(1.0,1.0,1.0)
+            size            - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
+        """
+        
+        for key in kwds:
+            if key not in ['name', 'visible', 'inside', 'ambient', 'size']:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
+        name = kwds.get('name')
+        visible = kwds.get('visible', True)
+        inside = kwds.get('inside', True)
+        ambient = kwds.get('ambient', (1.0,1.0,1.0))
+        size = kwds.get('size', 64)
+        
+        if color is None:
+            color = self.scene.style[1]
+        elif isinstance(color, (tuple, list, np.ndarray)):
+            color = np.float32(color)
+            if color.shape != (3,) and color.shape != (4,):
+                raise KeyError('期望color参数为浮点类型RGB或RGBA颜色')
+        else:
+            raise KeyError('期望color参数为浮点类型元组、列表或numpy数组')
+        
+        im_arr, texcoord = list(), list()
+        rows_max, cols_max = 0, 0
+        for i in range(len(text_arr)):
+            im = util.text2image(text_arr[i], size, color)
+            rows_max = max(im.shape[0], rows_max)
+            cols_max = max(im.shape[1], cols_max)
+            im_arr.append(im)
+            texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
+        
+        nim_arr = list()
+        for im in im_arr:
+            if im.shape[0] < rows_max:
+                n = rows_max - im.shape[0]
+                nu = n // 2
+                nd = n - nu
+                
+                im = np.vstack((im, np.zeros((nd, *im.shape[1:]), dtype=np.uint8)))
+                if nu > 0:
+                    im = np.vstack((np.zeros((nu, *im.shape[1:]), dtype=np.uint8), im))
+            
+            if im.shape[1] < cols_max:   
+                n = cols_max - im.shape[1]
+                nl = n // 2
+                nr = n - nl
+                
+                im = np.hstack((im, np.zeros((im.shape[0], nr, im.shape[-1]), dtype=np.uint8)))
+                if nl > 0:
+                    im = np.hstack((np.zeros((im.shape[0], nl, im.shape[-1]), dtype=np.uint8), im))
+            
+            nim_arr.append(im)
+        
+        for i in range(box_arr.shape[0]):
+            box_width = np.linalg.norm(box_arr[i][2] - box_arr[i][0])
+            box_height = np.linalg.norm(box_arr[i][0] - box_arr[i][1])
+
+            k_box, k_text = box_width/box_height, nim_arr[i].shape[1]/nim_arr[i].shape[0]
+            
+            if k_text > k_box:
+                if valign != 'fill':
+                    align = 'fill'
+            else:
+                if align != 'fill':
+                    valign = 'fill'
+            
+            if align == 'fill':
+                if valign == 'top':
+                    offset = (box_arr[i][1] - box_arr[i][0])*k_box/k_text
+                    box_arr[i][1] = box_arr[i][0] + offset
+                    box_arr[i][2] = box_arr[i][3] + offset
+                elif valign == 'middle':
+                    offset = (box_arr[i][1]-box_arr[i][0])*(1-k_box/k_text)/2
+                    box_arr[i][0] += offset
+                    box_arr[i][3] += offset
+                    box_arr[i][1] -= offset
+                    box_arr[i][2] -= offset
+                elif valign == 'bottom':
+                    offset = (box_arr[i][0]-box_arr[i][1])*k_box/k_text
+                    box_arr[i][0] = box_arr[i][1] + offset
+                    box_arr[i][3] = box_arr[i][2] + offset
+            elif align == 'left':
+                offset = (box_arr[i][2]-box_arr[i][1])*k_text/k_box
+                box_arr[i][2] = box_arr[i][1] + offset
+                box_arr[i][3] = box_arr[i][0] + offset
+            elif align == 'right':
+                offset = (box_arr[i][0] - box_arr[i][3])*k_text/k_box
+                box_arr[i][0] = box_arr[i][3] + offset
+                box_arr[i][1] = box_arr[i][2] + offset
+            elif align == 'center':
+                offset = (box_arr[i][3] - box_arr[i][0])*(1-k_text/k_box)/2
+                box_arr[i][0] += offset
+                box_arr[i][1] += offset
+                box_arr[i][3] -= offset
+                box_arr[i][2] -= offset
+        
+        texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+        texcoord = np.vstack(texcoord)
+        #light = BaseLightText3dArray(ambient)
+        #
+        #self.add_model(light.get_model(GL_QUADS, box_arr, texture, texcoord,
+        #    visible     = visible, 
+        #    opacity     = False, 
+        #    inside      = inside
+        #), name)
+        
+        light = BaseLight()
+        self.add_model(light.get_model(GL_QUADS, box_arr,
+            texture     = texture,
+            texcoord    = texcoord,
+            visible     = visible, 
+            opacity     = False, 
+            inside      = inside
         ), name)
     

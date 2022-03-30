@@ -195,22 +195,24 @@ class Texture:
         im_mode = GL_LUMINANCE if im.ndim == 3 else (GL_RGB, GL_RGBA)[im.shape[-1]-3]
         
         tid = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_3D, tid)
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glMatrixMode(GL_MODELVIEW)
+        glBindTexture(self.ttype, tid)
+        
+        if (im.size/(im_layer*im_h))%4 == 0:
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4)
+        else:
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
         
         for i in range(self.level):
-            glTexImage3D(GL_TEXTURE_3D, i, GL_RGBA, im_w, im_h, im_layer, 0, im_mode, GL_UNSIGNED_BYTE, im)
+            glTexImage3D(self.ttype, i, GL_RGBA, im_w, im_h, im_layer, 0, im_mode, GL_UNSIGNED_BYTE, im)
 
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, self.min_filter)
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, self.mag_filter)
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, self.s_tile)
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, self.t_tile)
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, self.r_tile)
+        glTexParameterf(self.ttype, GL_TEXTURE_MIN_FILTER, self.min_filter)
+        glTexParameterf(self.ttype, GL_TEXTURE_MAG_FILTER, self.mag_filter)
+        glTexParameterf(self.ttype, GL_TEXTURE_WRAP_S, self.s_tile)
+        glTexParameterf(self.ttype, GL_TEXTURE_WRAP_T, self.t_tile)
+        glTexParameterf(self.ttype, GL_TEXTURE_WRAP_R, self.r_tile)
         
-        glGenerateMipmap(GL_TEXTURE_3D)
-        glEnable(GL_TEXTURE_3D)
-        glBindTexture(GL_TEXTURE_3D, 0)
+        glGenerateMipmap(self.ttype)
+        glBindTexture(self.ttype, 0)
         
         return tid
 

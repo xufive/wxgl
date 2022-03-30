@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+np.seterr(invalid='ignore')
 
 from . import text
 from . import cmap
