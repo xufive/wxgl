@@ -27,15 +27,12 @@ WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块�
 ```python
 import wxgl.glplot as glt
 
-glt.uvsphere((0,0,0), 1, color='cyan')
 glt.title('快速体验：$x^2+y^2=1$')
+glt.uvsphere((0,0,0), 1, color='cyan')
 glt.show()
 ```
 
-![色球](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_01.png)
-
-
-* 在一张画布上可以任意放置多个子图。下面的代码演示了子图布局函数subplot的经典用法。实际上，这个函数比Matplotlib的同名函数更灵活和便捷。
+* 在一张画布上可以任意放置多个子图。下面的代码演示了子图布局函数subplot的经典用法，代码中的纹理图片在example路径下。
 
 ```python
 import wxgl
@@ -44,16 +41,15 @@ import wxgl.glplot as glt
 glt.subplot(121)
 glt.title('经纬度网格生成球体')
 glt.uvsphere((0,0,0), 1, texture=wxgl.Texture('res/earth.jpg'))
+glt.grid()
 glt.subplot(122)
 glt.title('正八面体迭代细分生成球体')
-glt.isosphere((0,0,0), 1, color=(0,1,1), iterations=5)
+glt.isosphere((0,0,0), 1, color=(0,1,1), fill=False, iterations=5)
+glt.grid()
 glt.show()
 ```
 
-![子图布局](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_02.png)
-
-
-* 对于数据快速可视化工具来说，ColorBar是必不可少的。下面的代码演示了ColorBar最简单的用法。wxgl提供了cmap_help和cmap_list两个函数用于查看颜色映射表。
+* 对于数据快速可视化工具来说，ColorBar是必不可少的。下面的代码演示了ColorBar最简单的用法。
 
 ```python
 import numpy as np
@@ -61,41 +57,69 @@ import wxgl.glplot as glt
 
 vs = np.random.random((300, 3))*2-1
 color = np.random.random(300)
-size = np.random.randint(3, 15, size=300)
-glt.point(vs, color, cm='jet', alpha=0.9, size=size)
-glt.colorbar('jet', [-1, 1], loc='right')
-glt.colorbar('Paired', [-5, 5], loc='bottom', subject='温度')
-glt.colorbar('rainbow', [0, 77], loc='bottom', subject='速度')
+size = np.linalg.norm(vs, axis=1)
+size = 30 * (size - size.min()) / (size.max() - size.min())
+
+glt.title('随机生成的300个点')
+glt.point(vs, color, cm='jet', alpha=0.8, size=size)
+glt.colorbar('jet', [0, 100], loc='right', subject='高度')
+glt.colorbar('Paired', [-50, 50], loc='bottom', subject='温度', margin_left=5)
+glt.colorbar('rainbow', [0, 240], loc='bottom', subject='速度', margin_right=5)
 glt.show()
 ```
 
-![调色板](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_03.png)
-
-
-* 通过transform参数传递一个以累计渲染时长为参数的函数给模型，可以实现复杂的模型动画。相机巡航、漫游等，也以同样的方式实现。
+* WxGL提供了BaseLight、SunLight、LampLight、SkyLight、SphereLight等多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟不同的质感。
 
 ```python
-import numpy as np
 import wxgl
 import wxgl.glplot as glt
 
-r = 1 # 花灯半径为1
-theta = np.linspace(0, 2*np.pi, 361) 
-xs = r * np.tile(np.cos(theta), (150,1))
-zs = r * np.tile(-np.sin(theta), (150,1))
-ys = np.repeat(np.linspace(1.35, -1.35, 150), 361).reshape(150,361)
+glt.subplot(221)
+glt.title('太阳光')
+glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SunLight(roughness=0, metalness=0, shininess=0.5))
 
-tf = lambda duration : ((0, 1, 0, (-0.02*duration)%360),)
-tx = wxgl.Texture('res/bull.jpg')
+glt.subplot(222)
+glt.title('灯光')
+pos = (3, 0.0, 3)
+glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.LampLight(position=pos))
+glt.point((pos,), color='white', size=20)
 
-glt.mesh(xs, ys, zs, texture=tx, transform=tf, light=wxgl.BaseLight())
+glt.subplot(223)
+glt.title('户外光')
+glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SkyLight(sky=(1.0,1.0,1.0)))
+
+glt.subplot(224)
+glt.title('球谐光')
+glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SphereLight(5, factor=0.8))
+
 glt.show()
 ```
 
-![动画函数](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_04.png)
+* 通过transform参数传递一个以累计渲染时长duration为参数的函数给模型，可以实现复杂的模型动画。相机巡航也以类似的方式实现。下面代码中，模型渲染使用了射向右后方的平行光，模型旋转时光照位置随之改变，而相机旋转时光照位置不变。
 
+```python
+import wxgl
+import wxgl.glplot as glt
 
-* 除了内置绘图函数，wxgl还提供了GLSL接口，允许用户定制着色器代码。这意味着，wxgl正在尝试成为GLSL语言的解释器——尽管距离这个目标还很遥远。下面的代码演示了使用顶点着色器源码和片元着色器源码的基本流程。
+tf = lambda duration : ((0, 1, 0, (0.02*duration)%360),)
+cf = lambda duration : {'azim':(-0.02*duration)%360}
+
+tx = wxgl.Texture('res/earth.jpg')
+light = wxgl.SunLight(direction=(1,0,-1))
+
+glt.subplot(121)
+glt.title('模型旋转')
+glt.cylinder((0,1,0), (0,-1,0), 1, texture=tx, transform=tf, light=light)
+
+glt.subplot(122)
+glt.cruise(cf)
+glt.title('相机旋转')
+glt.cylinder((0,1,0), (0,-1,0), 1, texture=tx, light=light)
+
+glt.show()
+```
+
+* 除了内置的绘图函数，wxgl还提供了GLSL接口，允许用户定制着色器代码。下面的代码演示了使用顶点着色器源码和片元着色器源码的基本流程。
 
 ```python
 import wxgl
@@ -105,10 +129,12 @@ vshader = """
 	#version 330 core
 	in vec4 a_Position;
     in vec4 a_Color;
-	uniform mat4 u_MVPMatrix;
+	uniform mat4 u_ProjMatrix;
+    uniform mat4 u_ViewMatrix;
+    uniform mat4 u_ModelMatrix;
     out vec4 v_Color;
 	void main() { 
-		gl_Position = u_MVPMatrix * a_Position; 
+		gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
 		v_Color = a_Color;
 	}
 """
@@ -124,16 +150,10 @@ fshader = """
 m = wxgl.Model(wxgl.TRIANGLE_STRIP, vshader, fshader) # 实例化模型，设置绘图方法和着色器源码
 m.set_vertex('a_Position', [[-1,1,0],[-1,-1,0],[1,1,0],[1,-1,0]]) # 4个顶点坐标
 m.set_color('a_Color', [[1,0,0],[0,1,0],[0,0,1],[0,1,1]]) # 4个顶点的颜色
-m.set_mvp_matrix('u_MVPMatrix') # 设置模型矩阵、视点矩阵和投影矩阵
+m.set_proj_matrix('u_ProjMatrix') # 设置投影矩阵
+m.set_view_matrix('u_ViewMatrix') # 设置视点矩阵
+m.set_model_matrix('u_ModelMatrix') # 设置模型矩阵
 
-glt.cruise(lambda duration : {'azim':(0.02*duration)%360}) # 相机巡航（绕y轴逆时针旋转）
 glt.model(m) # 添加模型到画布
 glt.show() # 显示画布
 ```
-
-这里使用Model.set_mvp_matrix函数将着色器中的MVP三合一矩阵和WxGL的模型矩阵、视点矩阵和投影矩阵联系起来。Model类还提供了set_model_matrix函数、set_view_matrix函数和set_proj_matrix函数，分别关联着色器中的模型矩阵、视点矩阵和投影矩阵。另外，这段代码还演示了相机动画函数的使用方式，和前面的模型动画基本类似。
-
-![GLSL接口](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/readme_img_05.png)
-
-
-

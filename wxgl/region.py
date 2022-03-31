@@ -1976,15 +1976,8 @@ class Region:
         
         texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         texcoord = np.vstack(texcoord)
-        #light = BaseLightText3dArray(ambient)
-        #
-        #self.add_model(light.get_model(GL_QUADS, box_arr, texture, texcoord,
-        #    visible     = visible, 
-        #    opacity     = False, 
-        #    inside      = inside
-        #), name)
         
-        light = BaseLight()
+        light = BaseLight(ambient)
         self.add_model(light.get_model(GL_QUADS, box_arr,
             texture     = texture,
             texcoord    = texcoord,

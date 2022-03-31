@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import numpy as np
 from OpenGL.GL import *
 from . import model as wxModel
 
@@ -604,14 +605,14 @@ class SunLight:
     def __init__(self, direction=(-5.0,-1.0,-5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
         """构造函数"""
         
-        self.direction = direction                          # 光的方向
-        self.color = color                                  # 光的颜色
-        self.ambient = ambient                              # 环境光
-        self.stray = kwds.get('stray', False)               # 杂散光
-        self.roughness = kwds.get('roughness', 0.2)         # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
-        self.metalness = kwds.get('metalness', 0.2)         # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
-        self.pellucidness = kwds.get('pellucidness', 0.2)   # 透光度：值域范围[0.0,1.0]
-        self.shininess = kwds.get('shininess', 30.0)        # 光洁度（高光指数）：值域范围(0.0,3000.0]
+        self.direction = direction                                  # 光的方向
+        self.color = color                                          # 光的颜色
+        self.ambient = ambient                                      # 环境光
+        self.stray = kwds.get('stray', False)                       # 杂散光
+        self.roughness = kwds.get('roughness', 0.2)                 # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
+        self.metalness = kwds.get('metalness', 0.2)                 # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
+        self.pellucidness = kwds.get('pellucidness', 0.2)           # 透光度：值域范围[0.0,1.0]
+        self.shininess = np.exp(8*(1-kwds.get('shininess', 0.5)))   # 光洁度（高光系数）：值域范围(0.0,1.0]
     
     def get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
@@ -845,14 +846,14 @@ class LampLight:
     def __init__(self, position=(5.0,1.0,5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
         """构造函数"""
         
-        self.position = position                            # 光源位置
-        self.color = color                                  # 光的颜色
-        self.ambient = ambient                              # 环境光
-        self.stray = kwds.get('stray', False)               # 杂散光
-        self.roughness = kwds.get('roughness', 0.2)         # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
-        self.metalness = kwds.get('metalness', 0.2)         # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
-        self.pellucidness = kwds.get('pellucidness', 0.2)   # 透光度：值域范围[0.0,1.0]
-        self.shininess = kwds.get('shininess', 30.0)        # 光洁度（高光指数）：值域范围(0.0,3000.0]
+        self.position = position                                    # 光源位置
+        self.color = color                                          # 光的颜色
+        self.ambient = ambient                                      # 环境光
+        self.stray = kwds.get('stray', False)                       # 杂散光
+        self.roughness = kwds.get('roughness', 0.2)                 # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
+        self.metalness = kwds.get('metalness', 0.2)                 # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
+        self.pellucidness = kwds.get('pellucidness', 0.2)           # 透光度：值域范围[0.0,1.0]
+        self.shininess = np.exp(8*(1-kwds.get('shininess', 0.5)))   # 光洁度（高光系数）：值域范围(0.0,1.0]
     
     def get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
@@ -1075,7 +1076,7 @@ class LampLight:
 class SkyLight:
     """户外光照情景模式"""
     
-    def __init__(self, direction=(0.0,-1.0,0.0), sky=(0.8,0.8,0.8), ground=(0.5,0.5,0.5)):
+    def __init__(self, direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.5,0.5,0.5)):
         """构造函数"""
         
         self.direction = direction          # 光的方向

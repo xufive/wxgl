@@ -81,7 +81,7 @@ class Axes:
         
         # 计算标题高度
         if self.title_dict:
-            h_t = self.title_dict['height'] * (1 + self.title_dict['margin_top'] + self.title_dict['margin_bottom'] + 0.3)
+            h_t = self.title_dict['height'] * (1.5 + self.title_dict['margin_top'] + self.title_dict['margin_bottom'])
         else:
             h_t = 0
         
@@ -98,8 +98,8 @@ class Axes:
             self.reg_title = self.scene.add_region(box, proj='ortho', fixed=True) # 创建标题视区
             
             w = self.reg_title.size[0]/self.reg_title.size[1]
-            top = 1 - 2 * self.title_dict['height'] * self.title_dict['margin_top'] / h_t
-            bottom = -1 + 2 * self.title_dict['height'] * (self.title_dict['margin_bottom']+0.4) / h_t
+            top = 1 - 2 * self.title_dict['height'] * (self.title_dict['margin_top']+0.05) / h_t
+            bottom = -1 + 2 * self.title_dict['height'] * (self.title_dict['margin_bottom']+0.45) / h_t
             left = -w + 2 * self.title_dict['height'] * self.title_dict['margin_left'] / h_t
             right = w - 2 * self.title_dict['height'] * self.title_dict['margin_right'] / h_t
             box = [[left,top],[left,bottom],[right,top],[right,bottom]]
@@ -117,9 +117,10 @@ class Axes:
             self.add_widget(self.reg_title, 'text3d', self.title_dict['text'], box, color=color, size=size, **kwds)
             
             if self.title_dict['border']:
-                bottom = -1 + 2 * self.title_dict['height'] * 0.4 / h_t
-                box = [[-w,1],[w,1],[-w,bottom],[w,bottom]]
-                self.add_widget(self.reg_title, 'line', box, method='isolate', inside=False)
+                top = 1 - 2 * self.title_dict['height'] * 0.05 / h_t
+                bottom = -1 + 2 * self.title_dict['height'] * 0.45 / h_t
+                box = [[-w,top],[w,top],[-w,bottom],[w,bottom]]
+                self.add_widget(self.reg_title, 'line', box, width=0.5, method='isolate', inside=False)
         
         # 右侧色条
         if self.cbr_list:
