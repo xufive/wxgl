@@ -1,1 +1,14 @@
-theme: jekyll-theme-slate
+title: wxgl
+lang: cn
+description: 基于OpenGL的3D库，以wx为后端
+
+remote_theme: rundocs/jekyll-rtd-theme
+
+readme_index:
+  with_frontmatter: true
+
+exclude:
+  - Makefile
+  - CNAME
+  - Gemfile
+  - Gemfile.lock
