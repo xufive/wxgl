@@ -78,5 +78,6 @@ m.set_model_matrix('u_ModelMatrix')
 m.set_cull_mode('back')
 
 glt.figure(elev=10)
+glt.title('以法向量和光线向量的点积作为1D纹理坐标')
 glt.model(m)
 glt.show()

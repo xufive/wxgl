@@ -110,6 +110,7 @@ wxgl/custom.ini
 capture/
 data/
 temp/
+.update.log
 demo*.py
 
 
