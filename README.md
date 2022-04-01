@@ -27,7 +27,7 @@ WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块�
 ```python
 import wxgl.glplot as glt
 
-glt.title('快速体验：$x^2+y^2=1$')
+glt.title('快速体验：$x^2+y^2+z^2=1$')
 glt.uvsphere((0,0,0), 1, color='cyan')
 glt.show()
 ```

@@ -262,7 +262,7 @@ class GltScene(Scene):
             oecs = self.parent.curr_reg.oecs
             dist = self.parent.curr_reg.dist
             cam = self.parent.curr_reg.cam
-            msg = '方位角：%0.2f°，高度角：%0.2f°，相机位置：(%0.2f,%0.2f,%0.2f)，ECS原点：(%0.2f,%0.2f,%0.2f)' % (azim, elev, *cam, *oecs)
+            msg = '方位角：%0.2f°，高度角：%0.2f°，视点坐标：(%0.2f,%0.2f,%0.2f)，相机位置：(%0.2f,%0.2f,%0.2f)' % (azim, elev, *oecs, *cam)
             self.parent.sb.SetStatusText(msg, 1)
         
     def on_mouse_motion(self, evt):
@@ -287,7 +287,7 @@ class GltScene(Scene):
                     erase = False
                     if not reg is self.parent.curr_reg:
                         self.parent.curr_reg = reg
-                        msg = '方位角：%0.2f°，高度角：%0.2f°，相机位置：(%0.2f,%0.2f,%0.2f)，ECS原点：(%0.2f,%0.2f,%0.2f)' % (reg.azim, reg.elev, *reg.cam, *reg.oecs)
+                        msg = '方位角：%0.2f°，高度角：%0.2f°，视点坐标：(%0.2f,%0.2f,%0.2f)，相机位置：(%0.2f,%0.2f,%0.2f)' % (reg.azim, reg.elev, *reg.oecs, *reg.cam)
                         self.parent.sb.SetStatusText(msg, 1)
                         break
             
@@ -322,7 +322,7 @@ class FigureFrame(wx.Frame):
     def __init__(self, fig):
         """构造函数"""
         
-        wx.Frame.__init__(self, None, -1, 'wxPlot', style=wx.DEFAULT_FRAME_STYLE|wx.TRANSPARENT_WINDOW)
+        wx.Frame.__init__(self, None, -1, '3d Plot Tool Kits', style=wx.DEFAULT_FRAME_STYLE|wx.TRANSPARENT_WINDOW)
         
         self.fig = fig
         self.SetIcon(wx.Icon(os.path.join(BASE_PATH, 'res', 'wxplot.ico')))
