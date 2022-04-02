@@ -841,7 +841,7 @@ class SunLight:
         """ % (a_dtype, u_dtype, f_name, diffuse_str)
 
 class LampLight:
-    """室内光照情景模式"""
+    """定位光照情景模式"""
     
     def __init__(self, position=(5.0,1.0,5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
         """构造函数"""

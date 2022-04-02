@@ -10,13 +10,13 @@ class Model:
     def __init__(self, gltype, vshader, fshader, visible=True, opacity=True, inside=True, sprite=False):
         """构造函数
         
-        gltype          - GL基本图元
-        vshader         - 顶点着色器源码
-        fshader         - 片元着色器源码
-        visible         - 模型可见性
-        opacity         - 模型不透明属性
-        inside          - 模型显示在视锥体内
-        sprite          - 是否开启点精灵
+        gltype      - GL基本图元
+        vshader     - 顶点着色器源码
+        fshader     - 片元着色器源码
+        visible     - 模型可见性
+        opacity     - 模型不透明属性
+        inside      - 模型显示在视锥体内
+        sprite      - 是否开启点精灵
         """
         
         gltypes = (
@@ -70,11 +70,11 @@ class Model:
             self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
             self.after.append((glPopAttrib, ()))
     
-    def add_shader(self, shader_source, shader_type):
+    def add_shader(self, shader_src, shader_type):
         """添加着色器
         
-        shader_source   - 着色器源码
-        shader_type     - 着色器类型
+        shader_src  - 着色器源码
+        shader_type - 着色器类型
         """
         
         shader_types = (
@@ -89,21 +89,14 @@ class Model:
         if shader_type not in shader_types:
             raise ValueError('不支持的着色器类型')
         
-        self.shaders.append((shader_source, shader_type))
-    
-    def set_slide(self, slide):
-        """设置幻灯片函数"""
-        
-        self.slide = slide
-        if hasattr(slide, '__call__'):
-            self.islive = True
+        self.shaders.append((shader_src, shader_type))
     
     def set_vertex(self, var_name, data, indices=None):
         """设置顶点
         
-        var_name        - 顶点在着色器中的变量名
-        data            - 顶点数据
-        indices         - 顶点索引数据
+        var_name    - 顶点在着色器中的变量名
+        data        - 顶点数据
+        indices     - 顶点索引数据
         """
         
         data = np.array(data, dtype=np.float32)
@@ -127,8 +120,8 @@ class Model:
     def set_normal(self, var_name, data):
         """设置顶点法向量
         
-        var_name        - 顶点法向量在着色器中的变量名
-        data            - 顶点法向量数据
+        var_name    - 顶点法向量在着色器中的变量名
+        data        - 顶点法向量数据
         """
         
         data = np.array(data, dtype=np.float32)
@@ -137,8 +130,8 @@ class Model:
     def set_texcoord(self, var_name, data):
         """设置顶点纹理
         
-        var_name        - 顶点纹理在着色器中的变量名
-        data            - 顶点纹理数据
+        var_name    - 顶点纹理在着色器中的变量名
+        data        - 顶点纹理数据
         """
         
         data = np.array(data, dtype=np.float32)
@@ -150,8 +143,8 @@ class Model:
     def set_color(self, var_name, data):
         """设置顶点颜色
         
-        var_name        - 顶点颜色在着色器中的变量名
-        data            - 顶点颜色数据
+        var_name    - 顶点颜色在着色器中的变量名
+        data        - 顶点颜色数据
         """
         
         data = np.array(data, dtype=np.float32)
@@ -160,8 +153,8 @@ class Model:
     def set_psize(self, var_name, data):
         """设置顶点大小
         
-        var_name        - 顶点大小在着色器中的变量名
-        data            - 顶点大小数据
+        var_name    - 顶点大小在着色器中的变量名
+        data        - 顶点大小数据
         """
         
         data = np.array(data, dtype=np.float32)
@@ -177,8 +170,8 @@ class Model:
     def add_texture(self, var_name, texture):
         """添加纹理
         
-        var_name        - 纹理在着色器中的变量名
-        texture         - wxgl.Texture对象
+        var_name    - 纹理在着色器中的变量名
+        texture     - wxgl.Texture对象
         """
         
         self.uniform.update({var_name: {'tag':'texture', 'data':texture}})
@@ -186,7 +179,7 @@ class Model:
     def set_cam_pos(self, var_name):
         """设置相机位置（用于计算镜面反射）
         
-        var_name        - 相机位置在着色器中的变量名
+        var_name    - 相机位置在着色器中的变量名
         """
         
         self.uniform.update({var_name: {'tag':'campos'}})
@@ -194,7 +187,7 @@ class Model:
     def set_ae(self, var_name):
         """设置相机方位角和高度角
         
-        var_name        - 相机方位角和高度角在着色器中的变量名
+        var_name    - 相机方位角和高度角在着色器中的变量名
         """
         
         self.uniform.update({var_name: {'tag':'ae'}})
@@ -202,7 +195,7 @@ class Model:
     def set_picked(self, var_name):
         """设置拾取状态
         
-        var_name        - 拾取状态在着色器中的变量名
+        var_name    - 拾取状态在着色器中的变量名
         """
         
         self.uniform.update({var_name: {'tag':'picked'}})
@@ -210,8 +203,8 @@ class Model:
     def set_view_matrix(self, var_name, vmatrix=None):
         """设置视点矩阵
         
-        var_name        - 视点矩阵在着色器中的变量名
-        vmatrix         - 视点矩阵或生成视点矩阵的函数，None表示使用场景的视点矩阵
+        var_name    - 视点矩阵在着色器中的变量名
+        vmatrix     - 视点矩阵或生成视点矩阵的函数，None表示使用当前视点矩阵
         """
         
         if vmatrix is None:
@@ -225,8 +218,8 @@ class Model:
     def set_proj_matrix(self, var_name, pmatrix=None):
         """设置投影矩阵
         
-        var_name        - 投影矩阵在着色器中的变量名
-        mmatrix         - 投影矩阵或生成投影矩阵的函数，None表示使用场景的投影矩阵
+        var_name    - 投影矩阵在着色器中的变量名
+        mmatrix     - 投影矩阵或生成投影矩阵的函数，None表示使用当前投影矩阵
         """
         
         if pmatrix is None:
@@ -240,8 +233,8 @@ class Model:
     def set_model_matrix(self, var_name, mmatrix=None):
         """设置模型矩阵
         
-        var_name        - 模型矩阵在着色器中的变量名
-        mmatrix         - 模型矩阵或生成模型矩阵的函数，None表示模型无几何变换
+        var_name    - 模型矩阵在着色器中的变量名
+        mmatrix     - 模型矩阵或生成模型矩阵的函数，None表示模型无几何变换
         """
         
         if mmatrix is None:
@@ -255,8 +248,8 @@ class Model:
     def set_argument(self, var_name, var_value):
         """设置变量
         
-        var_name        - 变量在着色器中的变量名
-        var_value       - 变量值或生成变量值的函数
+        var_name    - 变量在着色器中的变量名
+        var_value   - 变量值或生成变量值的函数
         """
         
         self.other.update({var_name:var_value})
@@ -264,8 +257,8 @@ class Model:
     def set_line_style(self, width=None, stipple=None):
         """设置线宽和线型
         
-        width           - 线宽
-        stipple         - 线型，重复因子（整数）和模式（16位二进制）组成的元组
+        width       - 线宽
+        stipple     - 线型，重复因子（整数）和模式（16位二进制）组成的元组
         """
         
         if not width is None or not stipple is None:
@@ -278,9 +271,9 @@ class Model:
             self.after.append((glPopAttrib, ()))
     
     def set_cull_mode(self, mode):
-        """设置面剔除模式
+        """设置面剔除方式
         
-        mode            - 剔除的面：'front' | 'back'
+        mode        - 剔除的面：'front'|'back'
         """
         
         if mode is None:
@@ -300,7 +293,7 @@ class Model:
     def set_fill_mode(self, mode):
         """设置填充方式
         
-        mode            - 填充模式：布尔型，或FCBC|FLBC|FCBL|FLBL
+        mode        - 填充模式：布尔型，或'FCBC'|'FLBC'|'FCBL'|'FLBL'
         """
         
         if mode is None:
@@ -325,8 +318,15 @@ class Model:
         else:
             raise ValueError('不支持的填充模式：%s'%mode)
     
+    def set_slide(self, slide):
+        """设置幻灯片函数"""
+        
+        self.slide = slide
+        if hasattr(slide, '__call__'):
+            self.islive = True
+    
     def verify(self):
-        """验证并完善模型数据"""
+        """验证模型数据、检查着色器源码"""
         
         if self.gltype is None:
             raise ValueError('未设置GL基本图元')

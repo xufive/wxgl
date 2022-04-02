@@ -187,11 +187,11 @@ class Region:
         self.update_cam_and_up(oecs=oecs, dist=dist)
         self.posture.update({'oecs': [*self.oecs,]})
         
-    def set_cam_cruise(self, func_cruise):
+    def set_cam_cruise(self, func):
         """设置相机巡航函数"""
         
-        if hasattr(func_cruise, '__call__'):
-            self.cam_cruise = func_cruise
+        if hasattr(func, '__call__'):
+            self.cam_cruise = func
             self.scene.islive = True
     
     def motion(self, ctr, dx, dy):
