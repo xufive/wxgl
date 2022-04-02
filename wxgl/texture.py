@@ -7,7 +7,7 @@ from OpenGL.GL import *
 
 
 class Texture:
-    """纹理对象"""
+    """WxGL纹理对象"""
     
     def __init__(self, tsrc, ttype=GL_TEXTURE_2D, **kwds):
         """构造函数

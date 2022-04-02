@@ -25,10 +25,10 @@
 
 
 """
-WxGL: 基于pyopengl的三维数据可视化库
+WxGL: 基于PyOpenGL的三维数据绘图工具包
 
-WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
-同时，也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
+以wx为显示后端，提供Matplotlib风格的应用方式
+也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
 """
 
 
@@ -48,7 +48,7 @@ from . import util
 
 
 class Scene(glcanvas.GLCanvas):
-    """GL场景类"""
+    """WxGL场景类"""
     
     def __init__(self, parent, smooth=True, style='blue'):
         """构造函数
@@ -56,10 +56,10 @@ class Scene(glcanvas.GLCanvas):
         parent      - 父级窗口对象
         smooth      - 直线、多边形和点的反走样开关
         style       - 场景风格，默认太空蓝
-            'white'     - 珍珠白
-            'black'     - 石墨黑
-            'gray'      - 国际灰
             'blue'      - 太空蓝
+            'gray'      - 国际灰
+            'black'     - 石墨黑
+            'white'     - 珍珠白
             'royal'     - 宝石蓝
         """
         
@@ -424,7 +424,7 @@ class Scene(glcanvas.GLCanvas):
         self.render()
     
     def restore_posture(self):
-        """还原各视区观察姿态"""
+        """还原场景内各视区的相机初始姿态"""
         
         for reg in self.regions:
             reg.restore_posture()
@@ -432,7 +432,7 @@ class Scene(glcanvas.GLCanvas):
         self.reset_timer()
         self.render()
         
-    def get_scene_buffer(self, alpha=True, buffer='FRONT', crop=False):
+    def get_scene_buffer(self, alpha=True, buffer='front', crop=False):
         """以PIL对象的格式返回场景缓冲区数据
         
         alpha       - 是否使用透明通道
@@ -447,9 +447,9 @@ class Scene(glcanvas.GLCanvas):
             gl_mode = GL_RGB
             pil_mode = 'RGB'
         
-        if buffer == 'FRONT':
+        if buffer.upper() == 'FRONT':
             glReadBuffer(GL_FRONT)
-        elif buffer == 'BACK':
+        else:
             glReadBuffer(GL_BACK)
         
         data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
@@ -465,7 +465,7 @@ class Scene(glcanvas.GLCanvas):
         
         return im
         
-    def save_scene(self, fn, alpha=True, buffer='FRONT', crop=False):
+    def save_scene(self, fn, alpha=True, buffer='front', crop=False):
         """保存场景为图像文件
         
         fn          - 保存的文件名
@@ -499,7 +499,7 @@ class Scene(glcanvas.GLCanvas):
         self.creating = False
     
     def start_record(self, out_file, fps, fn, loop):
-        """生成gif或视频文件
+        """开始生成gif或视频文件
         
         out_file    - 文件名，支持gif和mp4、avi、wmv等格式
         fps         - 每秒帧数
@@ -519,7 +519,7 @@ class Scene(glcanvas.GLCanvas):
         self.threading_record.start()
     
     def stop_record(self):
-        """"""
+        """停止生成gif或视频文件"""
         
         self.cn = 0
         self.capturing = False
@@ -529,8 +529,6 @@ class Scene(glcanvas.GLCanvas):
         """添加视区
         
         box         - 视区位置四元组：四个元素分别表示视区左下角坐标、宽度、高度，元素值域[0,1]
-        proj        - 投影模式：'O' - 正射投影，'P' - 透视投影（默认）
-        fixed       - 锁定模式：固定ECS原点、相机位置和角度，以及视口缩放因子等。布尔型，默认False
         kwds        - 关键字参数
             proj        - 投影模式：'O' - 正射投影，'P' - 透视投影（默认）
             fixed       - 锁定模式：固定ECS原点、相机位置和角度，以及视口缩放因子等。布尔型，默认False

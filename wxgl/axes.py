@@ -8,7 +8,7 @@ from . light import BaseLight
 
 
 class Axes:
-    """子图类"""
+    """WxGL子图类"""
     
     def __init__(self, scene, pos):
         """构造函数

@@ -8,4 +8,4 @@ WxGL模块使用pip命令安装。
 
 ```
 pip install wxgl
-
+```

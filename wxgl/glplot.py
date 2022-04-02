@@ -25,10 +25,10 @@
 
 
 """
-WxGL: 基于pyopengl的三维数据可视化库
+WxGL: 基于PyOpenGL的三维数据绘图工具包
 
-WxGL以wx为显示后端，提供matplotlib风格的交互绘图模式
-同时，也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
+以wx为显示后端，提供Matplotlib风格的应用方式
+也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
 """
 
 
@@ -58,7 +58,7 @@ def current_axes(func):
 def figure(**kwds):
     """初始化画布
     
-    kwds        - 3D场景参数
+    kwds        - 关键字参数
         proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影（默认）
         zoom        - 视口缩放因子，默认1.0
         azim        - 方位角，默认0°

@@ -18,7 +18,7 @@ NEAR = 3.0
 FAR = 1000.0
 
 class Region:
-    """GL视区类"""
+    """WxGL视区类"""
     
     def __init__(self, scene, box, **kwds):
         """构造函数

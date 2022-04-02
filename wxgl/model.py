@@ -5,7 +5,7 @@ import numpy as np
 from OpenGL.GL import *
 
 class Model:
-    """模型类"""
+    """WxGL模型类"""
     
     def __init__(self, gltype, vshader, fshader, visible=True, opacity=True, inside=True, sprite=False):
         """构造函数
