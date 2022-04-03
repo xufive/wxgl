@@ -78,22 +78,10 @@ class Region:
         self.vmat = np.eye(4, dtype=np.float32)                             # 视点矩阵
         self.pmat = np.eye(4, dtype=np.float32)                             # 投影矩阵
         
-        self.update_size()
-        self.save_status()
+        self.reset_box()
+        self.save_posture()
     
-    def update_size(self, box=None):
-        """设置视区大小"""
-        
-        if not box is None:
-            self.box = box
-        
-        self.pos = int(self.scene.csize[0] * self.box[0]), int(self.scene.csize[1] * self.box[1])
-        self.size = int(self.scene.csize[0] * self.box[2]), int(self.scene.csize[1] * self.box[3])
-        self.aspect = self.size[0]/self.size[1] if self.size[1] > 0 else 10000
-        
-        self.set_range()
-    
-    def update_cam_and_up(self, oecs=None, dist=None, azim=None, elev=None):
+    def _update_cam_and_up(self, oecs=None, dist=None, azim=None, elev=None):
         """根据当前ECS原点位置、距离、方位角、仰角等参数，重新计算相机位置和up向量"""
         
         if not oecs is None:
@@ -129,6 +117,183 @@ class Region:
         self.up[1] = 1.0 if -90 <= self.elev <= 90 else -1.0
         
         self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
+    
+    def _clear_buffer(self):
+        """删除buffer"""
+        
+        for name in self.models:
+            for m in self.models[name]:
+                for item in m.cshaders:
+                    glDeleteShader(item)
+                glDeleteProgram(m.program)
+            
+                if m.indices:
+                    m.indices['ibo'].delete()
+                
+                for key in m.attribute:
+                    if 'bo' in m.attribute[key]:
+                        m.attribute[key]['bo'].delete()
+                
+                textures = list()
+                for key in m.uniform:
+                    if 'texture' in m.uniform[key]:
+                        textures.append(m.attribute[key]['texture'])
+                if textures:
+                    glDeleteTextures(len(textures), textures)
+    
+    def _update_pmat(self):
+        """更新投影矩阵"""
+        
+        self.pmat[:] = util.proj_matrix(self.proj, (*self.vision, self.near, self.far), self.zoom)
+    
+    def _motion(self, ctr, dx, dy):
+        """鼠标移动"""
+        
+        if self.fixed:
+            return
+        
+        if ctr:
+            oecs = [self.oecs[0]-dx/(self.scene.csize[0]*self.scale), self.oecs[1]+dy/(self.scene.csize[1]*self.scale), self.oecs[2]]
+            self._update_cam_and_up(oecs=oecs)
+        else:
+            azim = self.azim - self.up[1]*(180*dx/self.scene.csize[0])
+            elev = self.elev + 90*dy/self.scene.csize[1]
+            self._update_cam_and_up(azim=azim, elev=elev)
+    
+    def _wheel(self, ctr, wr):
+        """鼠标滚轮"""
+        
+        if self.fixed:
+            return
+        
+        if ctr:
+            if wr < 0:
+                dist = self.dist * 1.01
+            else:
+                dist = self.dist * 0.99
+            
+            self._update_cam_and_up(dist=dist)
+        else:
+            if wr < 0:
+                self.zoom *= 1.05
+                if self.zoom > 100:
+                    self.zoom = 100
+            else:
+                self.zoom *= 0.95
+                if self.zoom < 0.01:
+                    self.zoom = 0.01
+            
+            self._update_pmat()
+    
+    def _get_normal(self, gltype, vs, indices=None):
+        """返回法线集"""
+        
+        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUADS, GL_QUAD_STRIP):
+            raise KeyError('%s不支持法线计算'%(str(gltype)))
+        
+        if not indices is None and gltype != GL_TRIANGLES and gltype != GL_QUADS:
+            raise KeyError('当前图元类型不支持indices参数')
+        
+        n = vs.shape[0]
+        if indices is None:
+            if gltype == GL_TRIANGLE_FAN:
+                a = np.zeros(n-2, dtype=np.int32)
+                b = np.arange(1, n-1)
+                c = np.arange(2, n)
+                idx = np.stack((a, b, c), axis=1).ravel()
+            elif gltype == GL_TRIANGLE_STRIP:
+                a = np.append(0, np.stack((np.arange(3, n, 2, dtype=np.int32), np.arange(2, n, 2, dtype=np.int32)[:(n-2)//2]), axis=1).ravel())[:n-2]
+                b = np.arange(1, n-1, dtype=np.int32)
+                c = np.stack((np.arange(2, n, 2, dtype=np.int32), np.arange(1, n, 2, dtype=np.int32)[:(n-1)//2]), axis=1).ravel()[:n-2]
+                idx = np.stack((a, b, c), axis=1).ravel()
+            elif gltype == GL_QUAD_STRIP:
+                a = np.arange(0, n-2, 2)
+                b = np.arange(1, n-2, 2)
+                c = np.arange(3, n, 2)
+                d = np.arange(2, n, 2)
+                idx = np.stack((a, b, c, d), axis=1).ravel()
+            else:
+                idx = np.arange(n, dtype=np.int32)
+        else:
+            idx = np.array(indices, dtype=np.int32)
+        
+        primitive = vs[idx]
+        if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
+            a = primitive[::4]
+            b = primitive[1::4]
+            c = primitive[2::4]
+            d = primitive[3::4]
+            normal = np.repeat(np.cross(c-a, b-d), 4, axis=0)
+        else:
+            a = primitive[::3]
+            b = primitive[1::3]
+            c = primitive[2::3]
+            normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
+        
+        if indices is None and (gltype == GL_TRIANGLES or gltype == GL_QUADS):
+            return normal
+        
+        result = np.zeros((n,3), dtype=np.float32)
+        idx_arg = np.argsort(idx)
+        rise = np.where(np.diff(idx[idx_arg])==1)[0]+1
+        rise = np.hstack((0,rise,len(idx)))
+        
+        for i in range(n):
+            result[i] = np.sum(normal[idx_arg[rise[i]:rise[i+1]]], axis=0)
+        return result
+    
+    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
+        """返回合适的Colorbar标注值
+        
+        v_min       - 数据最小值
+        v_max       - 数据最大值
+        ks          - 分段选项
+        s_min       - 分段数最小值
+        s_max       - 分段数最大值
+        extend      - 是否外延一个标注单位
+        """
+        
+        r = v_max - v_min
+        tmp = np.array([[abs(float(('%E'%(r/i)).split('E')[0])-k) for i in range(s_min,s_max+1)] for k in ks])
+        i, j = divmod(tmp.argmin(), tmp.shape[1])
+        step, steps = ks[i], j+s_min
+        step *= pow(10, int(('%E'%(r/steps)).split('E')[1]))
+        
+        result = list()
+        v = int(v_min/step)*step
+        while v <= v_max:
+            if v >= v_min:
+                result.append(round(v, 6))
+            v += step
+        
+        if result[0] > v_min:
+            if extend:
+                result.insert(0, 2*result[0]-result[1])
+            elif (result[0]-v_min) < 0.3*(result[1]-result[0]):
+                result[0] = v_min
+            else:
+                result.insert(0, v_min)
+        if result[-1] < v_max:
+            if extend:
+                result.append(2*result[-1]-result[-2])
+            elif (v_max-result[-1]) < 0.3*(result[-1]-result[-2]):
+                result[-1] = v_max
+            else:
+                result.append(v_max)
+        
+        return result
+    
+    def reset_box(self, box=None):
+        """重置视区位置和大小"""
+        
+        if not box is None:
+            self.box = box
+        
+        self.pos = int(self.scene.csize[0] * self.box[0]), int(self.scene.csize[1] * self.box[1])
+        self.size = int(self.scene.csize[0] * self.box[2]), int(self.scene.csize[1] * self.box[3])
+        self.aspect = self.size[0]/self.size[1] if self.size[1] > 0 else 10000
+        
+        self.set_range()
     
     def set_range(self, r_x=None, r_y=None, r_z=None):
         """设置坐标轴范围
@@ -180,11 +345,11 @@ class Region:
         else:
             self.vision = (-vision, vision, -vision/self.aspect, vision/self.aspect)
         
-        self.update_pmat()
+        self._update_pmat()
         
         oecs = [sum(self.r_x)/2, sum(self.r_y)/2, sum(self.r_z)/2]
         dist = DIST/self.scale
-        self.update_cam_and_up(oecs=oecs, dist=dist)
+        self._update_cam_and_up(oecs=oecs, dist=dist)
         self.posture.update({'oecs': [*self.oecs,]})
         
     def set_cam_cruise(self, func):
@@ -194,47 +359,8 @@ class Region:
             self.cam_cruise = func
             self.scene.islive = True
     
-    def motion(self, ctr, dx, dy):
-        """鼠标移动"""
-        
-        if self.fixed:
-            return
-        
-        if ctr:
-            oecs = [self.oecs[0]-dx/(self.scene.csize[0]*self.scale), self.oecs[1]+dy/(self.scene.csize[1]*self.scale), self.oecs[2]]
-            self.update_cam_and_up(oecs=oecs)
-        else:
-            azim = self.azim - self.up[1]*(180*dx/self.scene.csize[0])
-            elev = self.elev + 90*dy/self.scene.csize[1]
-            self.update_cam_and_up(azim=azim, elev=elev)
-    
-    def wheel(self, ctr, wr):
-        """鼠标滚轮"""
-        
-        if self.fixed:
-            return
-        
-        if ctr:
-            if wr < 0:
-                dist = self.dist * 1.01
-            else:
-                dist = self.dist * 0.99
-            
-            self.update_cam_and_up(dist=dist)
-        else:
-            if wr < 0:
-                self.zoom *= 1.05
-                if self.zoom > 100:
-                    self.zoom = 100
-            else:
-                self.zoom *= 0.95
-                if self.zoom < 0.01:
-                    self.zoom = 0.01
-            
-            self.update_pmat()
-    
-    def save_status(self):
-        """保存当前的相机状态"""
+    def save_posture(self):
+        """保存相机姿态"""
         
         self.posture.update({
             'oecs': [*self.oecs,],
@@ -244,44 +370,16 @@ class Region:
         })
     
     def restore_posture(self):
-        """还原观察姿态"""
+        """还原相机姿态"""
         
-        self.update_cam_and_up(oecs=self.posture['oecs'], dist=DIST/self.scale, azim=self.posture['azim'], elev=self.posture['elev'])
+        self._update_cam_and_up(oecs=self.posture['oecs'], dist=DIST/self.scale, azim=self.posture['azim'], elev=self.posture['elev'])
         self.zoom = self.posture['zoom']
-        self.update_pmat()
-    
-    def update_pmat(self):
-        """更新投影矩阵"""
+        self._update_pmat()
         
-        self.pmat[:] = util.proj_matrix(self.proj, (*self.vision, self.near, self.far), self.zoom)
-    
-    def clear_buffer(self):
-        """删除buffer"""
+    def clear(self):
+        """清空视区"""
         
-        for name in self.models:
-            for m in self.models[name]:
-                for item in m.cshaders:
-                    glDeleteShader(item)
-                glDeleteProgram(m.program)
-            
-                if m.indices:
-                    m.indices['ibo'].delete()
-                
-                for key in m.attribute:
-                    if 'bo' in m.attribute[key]:
-                        m.attribute[key]['bo'].delete()
-                
-                textures = list()
-                for key in m.uniform:
-                    if 'texture' in m.uniform[key]:
-                        textures.append(m.attribute[key]['texture'])
-                if textures:
-                    glDeleteTextures(len(textures), textures)
-        
-    def reset(self):
-        """视区复位"""
-        
-        self.clear_buffer()
+        self._clear_buffer()
         self.models.clear()
         self.ticks.clear()
         self.mnames[0].clear()
@@ -307,7 +405,7 @@ class Region:
     def show_model(self, name):
         """显示模型
         
-        nams        - 模型名
+        name        - 模型名
         """
         
         self.set_model_visible(name, True)
@@ -347,7 +445,7 @@ class Region:
     def add_model(self, m, name=None):
         """添加模型
         
-        main        - 模型实例
+        m           - wxgl.Model实例
         name        - 模型名
         """
         
@@ -422,104 +520,6 @@ class Region:
             self.mnames[1].sort(key=lambda item:item[2])
         
         wx.CallAfter(self.scene.render)
-    
-    def get_normal(self, gltype, vs, indices=None):
-        """返回法线集"""
-        
-        if gltype not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUADS, GL_QUAD_STRIP):
-            raise KeyError('%s不支持法线计算'%(str(gltype)))
-        
-        if not indices is None and gltype != GL_TRIANGLES and gltype != GL_QUADS:
-            raise KeyError('当前图元类型不支持indices参数')
-        
-        n = vs.shape[0]
-        if indices is None:
-            if gltype == GL_TRIANGLE_FAN:
-                a = np.zeros(n-2, dtype=np.int32)
-                b = np.arange(1, n-1)
-                c = np.arange(2, n)
-                idx = np.stack((a, b, c), axis=1).ravel()
-            elif gltype == GL_TRIANGLE_STRIP:
-                a = np.append(0, np.stack((np.arange(3, n, 2, dtype=np.int32), np.arange(2, n, 2, dtype=np.int32)[:(n-2)//2]), axis=1).ravel())[:n-2]
-                b = np.arange(1, n-1, dtype=np.int32)
-                c = np.stack((np.arange(2, n, 2, dtype=np.int32), np.arange(1, n, 2, dtype=np.int32)[:(n-1)//2]), axis=1).ravel()[:n-2]
-                idx = np.stack((a, b, c), axis=1).ravel()
-            elif gltype == GL_QUAD_STRIP:
-                a = np.arange(0, n-2, 2)
-                b = np.arange(1, n-2, 2)
-                c = np.arange(3, n, 2)
-                d = np.arange(2, n, 2)
-                idx = np.stack((a, b, c, d), axis=1).ravel()
-            else:
-                idx = np.arange(n, dtype=np.int32)
-        else:
-            idx = np.array(indices, dtype=np.int32)
-        
-        primitive = vs[idx]
-        if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
-            a = primitive[::4]
-            b = primitive[1::4]
-            c = primitive[2::4]
-            d = primitive[3::4]
-            normal = np.repeat(np.cross(c-a, b-d), 4, axis=0)
-        else:
-            a = primitive[::3]
-            b = primitive[1::3]
-            c = primitive[2::3]
-            normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
-        
-        if indices is None and (gltype == GL_TRIANGLES or gltype == GL_QUADS):
-            return normal
-        
-        result = np.zeros((n,3), dtype=np.float32)
-        idx_arg = np.argsort(idx)
-        rise = np.where(np.diff(idx[idx_arg])==1)[0]+1
-        rise = np.hstack((0,rise,len(idx)))
-        
-        for i in range(n):
-            result[i] = np.sum(normal[idx_arg[rise[i]:rise[i+1]]], axis=0)
-        return result
-    
-    def get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
-        """返回合适的Colorbar标注值
-        
-        v_min       - 数据最小值
-        v_max       - 数据最大值
-        ks          - 分段选项
-        s_min       - 分段数最小值
-        s_max       - 分段数最大值
-        extend      - 是否外延一个标注单位
-        """
-        
-        r = v_max - v_min
-        tmp = np.array([[abs(float(('%E'%(r/i)).split('E')[0])-k) for i in range(s_min,s_max+1)] for k in ks])
-        i, j = divmod(tmp.argmin(), tmp.shape[1])
-        step, steps = ks[i], j+s_min
-        step *= pow(10, int(('%E'%(r/steps)).split('E')[1]))
-        
-        result = list()
-        v = int(v_min/step)*step
-        while v <= v_max:
-            if v >= v_min:
-                result.append(round(v, 6))
-            v += step
-        
-        if result[0] > v_min:
-            if extend:
-                result.insert(0, 2*result[0]-result[1])
-            elif (result[0]-v_min) < 0.3*(result[1]-result[0]):
-                result[0] = v_min
-            else:
-                result.insert(0, v_min)
-        if result[-1] < v_max:
-            if extend:
-                result.append(2*result[-1]-result[-2])
-            elif (v_max-result[-1]) < 0.3*(result[-1]-result[-2]):
-                result[-1] = v_max
-            else:
-                result.append(v_max)
-        
-        return result
     
     def text(self, text, pos, color=None, size=32, loc='left_bottom', **kwds):
         """2d文字
@@ -659,7 +659,7 @@ class Region:
         
         gltype = GL_TRIANGLE_STRIP
         box = np.array(box, dtype=np.float32)
-        normal = self.get_normal(gltype, box)
+        normal = self._get_normal(gltype, box)
          
         im_text = util.text2image(text, size, color, family, weight)
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
@@ -848,7 +848,7 @@ class Region:
         ), name)
     
     def surface(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
-        """曲面
+        """三角曲面
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
@@ -900,7 +900,7 @@ class Region:
             raise ValueError('STRIP或FAN不支持indices参数')
         
         vs = np.array(vs, dtype=np.float32)
-        normal = self.get_normal(gltype, vs, indices)
+        normal = self._get_normal(gltype, vs, indices)
         
         if closed:
             if gltype == GL_TRIANGLE_STRIP:
@@ -952,7 +952,7 @@ class Region:
         ), name)
     
     def quad(self, vs, color=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
-        """四角面
+        """四角曲面
         
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或颜色集：浮点型元组、列表或numpy数组，值域范围[0,1]
@@ -1001,7 +1001,7 @@ class Region:
             raise ValueError('STRIP不支持indices参数')
         
         vs = np.array(vs, dtype=np.float32)
-        normal = self.get_normal(gltype, vs, indices)
+        normal = self._get_normal(gltype, vs, indices)
         
         if closed and gltype == GL_QUAD_STRIP:
             normal[0] += normal[-2]
@@ -1120,7 +1120,7 @@ class Region:
             indices = np.int32(np.dstack((idx_a, idx_b, idx_d, idx_c, idx_d, idx_b)).ravel())
         else:
             indices = np.int32(np.dstack((idx_a, idx_b, idx_c, idx_d)).ravel())
-        normal = self.get_normal(gltype, vs, indices).reshape(rows,cols,-1)
+        normal = self._get_normal(gltype, vs, indices).reshape(rows,cols,-1)
         
         if vclosed:
             normal[0] += normal[-1]
@@ -1366,7 +1366,7 @@ class Region:
         self.surface(vs, color=color, method='fan', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
 
     def cone(self, spire, center, r, color=None, arc=(0,360), cell=5, **kwds):
-        """锥
+        """圆锥
         
         spire       - 锥尖：元组、列表或numpy数组
         center      - 锥底圆心：元组、列表或numpy数组
@@ -1408,7 +1408,7 @@ class Region:
         self.surface(vs, color=color, method='fan', indices=None, closed=abs(arc[0]-arc[1])==360, **kwds)
 
     def cube(self, center, side, vec=(0,1,0), color=None, **kwds):
-        """绘制六面体
+        """六面体
         
         center      - 中心坐标，元组、列表或numpy数组
         side        - 棱长：数值或长度为3的元组、列表、numpy数组
@@ -1480,7 +1480,7 @@ class Region:
         self.surface(vs, color=color, method='isolate', indices=indices, **kwds)
     
     def colorbar(self, cm, drange, box, mode='V', **kwds):
-        """绘制colorBar 
+        """ColorBar 
         
         cm          - 调色板名称
         drange      - 值域范围或刻度序列：长度大于1的元组或列表
@@ -1512,7 +1512,7 @@ class Region:
         if len(drange) > 2:
             ticks = drange
         else:
-            ticks = self.get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
+            ticks = self._get_tick_label(dmin, dmax, s_min=s_min, s_max=s_max)
        
         if endpoint:
             if (ticks[1]-ticks[0])/(ticks[2]-ticks[1]) < 0.2:
@@ -1638,13 +1638,13 @@ class Region:
             return # '模型空间不存在，返回
         
         dx = (self.r_x[1] - self.r_x[0]) * 0.1
-        xx = self.get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd)
+        xx = self._get_tick_label(self.r_x[0]-dx, self.r_x[1]+dx, s_min=4+xd, s_max=6+xd)
         
         dy = (self.r_y[1] - self.r_y[0]) * 0.1
-        yy = self.get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd)
+        yy = self._get_tick_label(self.r_y[0]-dy, self.r_y[1]+dy, s_min=4+yd, s_max=6+yd)
         
         dz = (self.r_z[1] - self.r_z[0]) * 0.1
-        zz = self.get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd)
+        zz = self._get_tick_label(self.r_z[0]-dz, self.r_z[1]+dz, s_min=4+zd, s_max=6+zd)
         
         u = max((xx[2]-xx[1])/2, (yy[2]-yy[1])/2) # 计算文字布局的长度单位
         h, g = 0.4 * u, 0.2 * u # 文字宽度和间隙

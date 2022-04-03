@@ -4,8 +4,7 @@ sort: 2
 
 # util
 
-WxGL工具包。
-
+WxGL函数。
 
 ## wxgl.font_list
 
@@ -13,13 +12,11 @@ WxGL工具包。
 
 返回可用字体列表。无参数。
 
-
 ## wxgl.color_list
 
 **wxgl.color_list()**
 
 返回可用颜色列表。无参数。
-
 
 ## wxgl.color_help
 
@@ -27,20 +24,17 @@ WxGL工具包。
 
 返回可用颜色中英文对照表。无参数。
 
-
 ## wxgl.cmap_list
 
 **wxgl.cmap_list()**
 
 返回颜色映射方案列表。无参数。
 
-
 ## wxgl.cmap_help
 
 **wxgl.cmap_help()**
 
 返回颜色映射方案分类列表。无参数。
-
 
 ## wxgl.cmap
 
@@ -57,7 +51,6 @@ drange      - 数据动态范围，None表示使用data的动态范围
 alpha       - 透明度，None表示不改变当前透明度
 drop        - 舍弃alpha通道
 ```
-
 
 ## wxgl.text2image
 

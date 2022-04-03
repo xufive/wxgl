@@ -59,7 +59,7 @@ def figure(**kwds):
     """初始化画布
     
     kwds        - 关键字参数
-        proj        - 投影模式，'ortho' - 正射投影，'frustum' - 透视投影（默认）
+        proj        - 投影模式，'O' - 正射投影，'P' - 透视投影（默认）
         zoom        - 视口缩放因子，默认1.0
         azim        - 方位角，默认0°
         elev        - 仰角，默认0°

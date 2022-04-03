@@ -18,7 +18,6 @@ inside      - 模型显示在视锥体内
 sprite      - 是否开启点精灵
 ```
 
-
 ## wxgl.Model.add_shader
 
 **wxgl.Model.add_shader(shader_src, shader_type)**
@@ -29,7 +28,6 @@ sprite      - 是否开启点精灵
 shader_src  - 着色器源码
 shader_type - 着色器类型
 ```
-
 
 ## wxgl.Model.set_vertex
 
@@ -43,7 +41,6 @@ data        - 顶点数据
 indices     - 顶点索引数据
 ```
 
-
 ## wxgl.Model.set_normal
 
 **wxgl.Model.set_normal(var_name, data)**
@@ -54,7 +51,6 @@ indices     - 顶点索引数据
 var_name    - 顶点法向量在着色器中的变量名
 data        - 顶点法向量数据
 ```
-
 
 ## wxgl.Model.set_texcoord
 
@@ -67,7 +63,6 @@ var_name    - 顶点纹理在着色器中的变量名
 data        - 顶点纹理数据
 ```
 
-
 ## wxgl.Model.set_color
 
 **wxgl.Model.set_color(var_name, data)**
@@ -78,7 +73,6 @@ data        - 顶点纹理数据
 var_name    - 顶点颜色在着色器中的变量名
 data        - 顶点颜色数据
 ```
-
 
 ## wxgl.Model.set_psize
 
@@ -91,7 +85,6 @@ var_name    - 顶点大小在着色器中的变量名
 data        - 顶点大小数据
 ```
 
-
 ## wxgl.Model.add_texture
 
 **wxgl.Model.add_texture(var_name, texture)**
@@ -102,40 +95,6 @@ data        - 顶点大小数据
 var_name    - 纹理在着色器中的变量名
 texture     - wxgl.Texture对象
 ```
-
-
-## wxgl.Model.set_cam_pos
-
-**wxgl.Model.set_cam_pos(var_name)**
-
-设置相机位置。参数说明如下：
-
-```
-var_name    - 相机位置在着色器中的变量名
-```
-
-
-## wxgl.Model.set_ae
-
-**wxgl.Model.set_ae(var_name)**
-
-设置相机方位角和高度角。参数说明如下：
-
-```
-var_name    - 相机方位角和高度角在着色器中的变量名
-```
-
-
-## wxgl.Model.set_picked
-
-**wxgl.Model.set_picked(var_name)**
-
-设置拾取状态。参数说明如下：
-
-```
-var_name    - 拾取状态在着色器中的变量名
-```
-
 
 ## wxgl.Model.set_view_matrix
 
@@ -148,7 +107,6 @@ var_name    - 视点矩阵在着色器中的变量名
 vmatrix     - 视点矩阵或生成视点矩阵的函数，None表示使用当前视点矩阵
 ```
 
-
 ## wxgl.Model.set_proj_matrix
 
 **wxgl.Model.set_proj_matrix(var_name, pmatrix=None)**
@@ -159,7 +117,6 @@ vmatrix     - 视点矩阵或生成视点矩阵的函数，None表示使用当�
 var_name    - 投影矩阵在着色器中的变量名
 mmatrix     - 投影矩阵或生成投影矩阵的函数，None表示使用当前投影矩阵
 ```
-
 
 ## wxgl.Model.set_model_matrix
 
@@ -172,7 +129,6 @@ var_name    - 模型矩阵在着色器中的变量名
 mmatrix     - 模型矩阵或生成模型矩阵的函数，None表示模型无几何变换
 ```
 
-
 ## wxgl.Model.set_argument
 
 **wxgl.Model.set_argument(var_name, var_value)**
@@ -184,6 +140,35 @@ var_name    - 变量在着色器中的变量名
 var_value   - 变量值或生成变量值的函数
 ```
 
+## wxgl.Model.set_cam_pos
+
+**wxgl.Model.set_cam_pos(var_name)**
+
+设置相机位置。参数说明如下：
+
+```
+var_name    - 相机位置在着色器中的变量名
+```
+
+## wxgl.Model.set_ae
+
+**wxgl.Model.set_ae(var_name)**
+
+设置相机方位角和高度角。参数说明如下：
+
+```
+var_name    - 相机方位角和高度角在着色器中的变量名
+```
+
+## wxgl.Model.set_picked
+
+**wxgl.Model.set_picked(var_name)**
+
+设置拾取状态。参数说明如下：
+
+```
+var_name    - 拾取状态在着色器中的变量名
+```
 
 ## wxgl.Model.set_line_style
 
@@ -196,7 +181,6 @@ width       - 线宽
 stipple     - 线型，重复因子（整数）和模式（16位二进制）组成的元组
 ```
 
-
 ## wxgl.Model.set_cull_mode
 
 **wxgl.Model.set_cull_mode(mode)**
@@ -206,7 +190,6 @@ stipple     - 线型，重复因子（整数）和模式（16位二进制）组�
 ```
 mode        - 剔除的面：'front'|'back'
 ```
-
 
 ## wxgl.Model.set_fill_mode
 
@@ -218,7 +201,6 @@ mode        - 剔除的面：'front'|'back'
 mode        - 填充模式：布尔型，或'FCBC'|'FLBC'|'FCBL'|'FLBL'
 ```
 
-
 ## wxgl.Model.set_slide
 
 **wxgl.Model.set_slide(slide)**
@@ -228,7 +210,6 @@ mode        - 填充模式：布尔型，或'FCBC'|'FLBC'|'FCBL'|'FLBL'
 ```
 slide    	- 以渲染时长（ms）为参数的函数，该函数返回布尔值
 ```
-
 
 ## wxgl.Model.verify
 

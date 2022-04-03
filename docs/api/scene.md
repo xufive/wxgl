@@ -19,7 +19,6 @@ style       - 场景风格，默认太空蓝
 	'royal'     - 宝石蓝
 ```
 
-
 ## wxgl.Scene.add_region
 
 **wxgl.Scene.add_region(box, \*\*kwds)**
@@ -36,9 +35,8 @@ kwds        - 关键字参数
                 azim_range  - 方位角限位器：默认-180°~180°
                 elev_range  - 仰角限位器：默认-180°~180°
                 zoom        - 视口缩放因子：默认1.0
-                name        - 视区名
+				name        - 视区名
 ```
-
 
 ## wxgl.Scene.set_style
 
@@ -49,6 +47,12 @@ kwds        - 关键字参数
 ```
 style       - 场景风格，可选项：'blue'|'gray'|'black'|'white'|'royal'
 ```
+
+## wxgl.Scene.render
+
+模型渲染。无参数。
+
+**wxgl.Scene.render()**
 
 ## wxgl.Scene.save_scene
 
@@ -63,6 +67,29 @@ buffer      - 显示缓冲区， 可选项：'front'|'back'。默认使用前缓
 crop        - 是否将宽高裁切为16的倍数
 ```
 
+## wxgl.Scene.start_animate
+
+开始动画。无参数。
+
+**wxgl.Scene.start_animate()**
+
+## wxgl.Scene.stop_animate
+
+**wxgl.Scene.stop_animate()**
+
+停止动画。无参数。
+
+## wxgl.Scene.pause_animate
+
+**wxgl.Scene.pause_animate()**
+
+暂停或重启动画。无参数。
+
+## wxgl.Scene.estimate
+
+动画渲染帧频评估，返回当前渲染帧率。无参数。
+
+**wxgl.Scene.estimate()**
 
 ## wxgl.Scene.start_record
 
@@ -77,45 +104,15 @@ fn          - 总帧数
 loop        - 循环播放次数（仅gif格式有效，0表示无限循环）
 ```
 
-
 ## wxgl.Scene.stop_record
 
 **wxgl.Scene.stop_record()**
 
 停止生成gif或视频文件。无参数。
 
-
-## wxgl.Scene.start_animate
-
-开始动画。无参数。
-
-**wxgl.Scene.start_animate()**
-
-
-## wxgl.Scene.stop_animate
-
-**wxgl.Scene.stop_animate()**
-
-停止动画。无参数。
-
-
-## wxgl.Scene.pause_animate
-
-**wxgl.Scene.pause_animate()**
-
-暂停或重启动画。无参数。
-
-
 ## wxgl.Scene.restore_posture
 
 还原场景内各视区的相机初始姿态。无参数。
 
 **wxgl.Scene.restore_posture()**
-
-
-## wxgl.Scene.estimate
-
-动画渲染帧频评估，返回当前渲染帧率。无参数。
-
-**wxgl.Scene.estimate()**
 

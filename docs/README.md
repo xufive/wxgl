@@ -10,13 +10,15 @@ WxGL是一个基于PyOpenGL的三维数据绘图工具包，以wx为显示后端
 
 [项目地址](https://github.com/xufive/wxgl)
 
-[中文文档](https://xufive.github.io/wxgl/)
+[中文文档](https://xufive.github.io/wxgl)
+
 
 # 安装
 
 ```
 pip install wxgl
 ```
+
 
 # 快速体验
 

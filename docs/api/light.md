@@ -4,8 +4,7 @@ sort: 3
 
 # light
 
-WxGL光照模式类。
-
+WxGL光照情景模式类。
 
 ## wxgl.BaseLight
 
@@ -16,7 +15,6 @@ WxGL光照模式类。
 ```
 ambient     - 环境光颜色，默认(1.0,1.0,1.0)
 ```
-
 
 ## wxgl.SunLight
 
@@ -36,7 +34,6 @@ kwds        - 关键字参数
 				shininess       - 光洁度（高光系数）：值域范围(0.0,1.0]，默认0.5
 ```
 
-
 ## wxgl.LampLight
 
 **wxgl.LampLight(position=(5.0,1.0,5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), \*\*kwds)**
@@ -55,7 +52,6 @@ kwds        - 关键字参数
 				shininess       - 光洁度（高光系数）：值域范围(0.0,1.0]，默认0.5
 ```
 
-
 ## wxgl.SkyLight
 
 **wxgl.SkyLight(direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.5,0.5,0.5))**
@@ -67,7 +63,6 @@ position    - 主光方向，默认(0.0,-1.0,0.0)
 sky     	- 天光颜色，默认(1.0,1.0,1.0)
 ground      - 地光颜色，默认(0.5,0.5,0.5)
 ```
-
 
 ## wxgl.SphereLight
 

@@ -2,6 +2,6 @@
 sort: 4
 ---
 
-# 交互式绘图
+# 高阶应用
 
 {% include list.liquid %}

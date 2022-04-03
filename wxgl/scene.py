@@ -93,16 +93,16 @@ class Scene(glcanvas.GLCanvas):
         
         self._init_gl()                                                     # 画布初始化
         
-        self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)                   # 绑定canvas销毁事件
-        self.Bind(wx.EVT_SIZE, self.on_resize)                              # 绑定canvas大小改变事件
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)                  # 绑定canvas销毁事件
+        self.Bind(wx.EVT_SIZE, self._on_resize)                             # 绑定canvas大小改变事件
         
-        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)                      # 绑定鼠标左键按下事件
-        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)                          # 绑定鼠标左键弹起事件                   
-        self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)                        # 绑定鼠标右键弹起事件                   
-        self.Bind(wx.EVT_MOTION, self.on_mouse_motion)                      # 绑定鼠标移动事件
-        self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)                   # 绑定鼠标滚轮事件
+        self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)                     # 绑定鼠标左键按下事件
+        self.Bind(wx.EVT_LEFT_UP, self._on_left_up)                         # 绑定鼠标左键弹起事件                   
+        self.Bind(wx.EVT_RIGHT_UP, self._on_right_up)                       # 绑定鼠标右键弹起事件                   
+        self.Bind(wx.EVT_MOTION, self._on_mouse_motion)                     # 绑定鼠标移动事件
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_mouse_wheel)                  # 绑定鼠标滚轮事件
         
-        monitor_k = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        monitor_k = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         monitor_k.start()
     
     def _set_style(self, style):
@@ -144,44 +144,44 @@ class Scene(glcanvas.GLCanvas):
             glEnable(GL_LINE_SMOOTH)                                        # 开启直线反走样
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                          # 最高质量直线反走样
     
-    def on_destroy(self, evt):
+    def _on_destroy(self, evt):
         """canvas销毁事件函数"""
         
         for reg in self.regions:
-            reg.clear_buffer()
+            reg._clear_buffer()
         
         evt.Skip()
     
-    def on_resize(self, evt):
+    def _on_resize(self, evt):
         """窗口改变事件函数"""
         
         self.SetCurrent(self.context)
         self.csize = self.GetClientSize()
         
         for reg in self.regions:
-            reg.update_size()
+            reg.reset_box()
         
         self.render()
         evt.Skip()
         
-    def on_left_down(self, evt):
+    def _on_left_down(self, evt):
         """响应鼠标左键按下事件"""
         
         self.leftdown = True
         self.mpos = evt.GetPosition()
         
-    def on_left_up(self, evt):
+    def _on_left_up(self, evt):
         """响应鼠标左键弹起事件"""
         
         self.leftdown = False
         
-    def on_right_up(self, evt):
+    def _on_right_up(self, evt):
         """响应鼠标右键弹起事件"""
         
         x, y = evt.GetPosition()
-        self.render_pick(x, self.csize[1]-y)
+        self._render_pick(x, self.csize[1]-y)
         
-    def on_mouse_motion(self, evt):
+    def _on_mouse_motion(self, evt):
         """响应鼠标移动事件"""
         
         if evt.Dragging() and self.leftdown:
@@ -190,25 +190,25 @@ class Scene(glcanvas.GLCanvas):
             self.mpos = pos
             
             for reg in self.regions:
-                reg.motion(self.ctr, dx, dy)
+                reg._motion(self.ctr, dx, dy)
             
             self.render()
         
-    def on_mouse_wheel(self, evt):
+    def _on_mouse_wheel(self, evt):
         """响应鼠标滚轮事件"""
         
         for reg in self.regions:
-            reg.wheel(self.ctr, evt.WheelRotation)
+            reg._wheel(self.ctr, evt.WheelRotation)
             
         self.render()
     
-    def on_press(self, key):
+    def _on_press(self, key):
         """键按下"""
         
         if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
             self.ctr = True
     
-    def on_release(self, key):
+    def _on_release(self, key):
         """键弹起"""
         
         if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
@@ -216,39 +216,84 @@ class Scene(glcanvas.GLCanvas):
         elif key == keyboard.Key.esc:
             wx.CallAfter(self.restore_posture)
     
-    def render(self):
-        """模型渲染器"""
+    def _render_on_timer(self):
+        """定时器事件函数"""
         
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
-        
-        for reg in self.regions:
-            glViewport(*reg.pos, *reg.size) # 设置视口
-            
-            if reg.cam_cruise:
-                v = reg.cam_cruise(self.duration)
-                reg.update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
-            
-            for name, idx, zmean in reg.mnames[0]:
-                self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            
-            glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
-            if reg.up[1] > 0 and -90 <= reg.azim < 90 or reg.up[1] < 0 and (reg.azim < -90 or reg.azim >= 90):
-                for name, idx, zmean in reg.mnames[1]:
-                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            else:
-                for name, idx, zmean in reg.mnames[1][::-1]:
-                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            glDepthMask(True) # 释放深度缓冲区
-        
-        self.SwapBuffers() # 切换缓冲区，以显示绘制内容
-        
+        self.tn += 1
         if self.capturing:
-            if self.cn < self.fn:
-                im = self.get_scene_buffer(alpha=True, crop=True)
-                self.q.put(im)
-                self.cn += 1
+            self.duration = self.tbase + self.ft * self.cn
+        else:
+            self.duration = self.tbase + int((time.time() - self.tstamp) * 1000)
+        
+        wx.CallAfter(self.render)
+        
+        if self.playing:
+            wx.CallLater(10, self._render_on_timer)
+    
+    def _reset_timer(self):
+        """复位和定时器相关的参数"""
+        
+        self.playing = False
+        self.capturing = False
+        self.creating = False
+        self.cn = 0
+        self.tn = 0 
+        self.tbase = 0
+        self.duration = 0
+        
+    def _get_scene_buffer(self, alpha=True, buffer='front', crop=False):
+        """以PIL对象的格式返回场景缓冲区数据
+        
+        alpha       - 是否使用透明通道
+        buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
+        crop        - 是否将宽高裁切为16的倍数
+        """
+        
+        if alpha:
+            gl_mode = GL_RGBA
+            pil_mode = 'RGBA'
+        else:
+            gl_mode = GL_RGB
+            pil_mode = 'RGB'
+        
+        if buffer.upper() == 'FRONT':
+            glReadBuffer(GL_FRONT)
+        else:
+            glReadBuffer(GL_BACK)
+        
+        data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
+        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
+        im = im.transpose(Image.FLIP_TOP_BOTTOM)
+        
+        if crop:
+            w, h = im.size
+            nw, nh = 16*(w//16), 16*(h//16)
+            x0, y0 = (w-nw)//2, (h-nh)//2
+            x1, y1 = x0+nw, y0+nh
+            im = im.crop((x0, y0, x1, y1))
+        
+        return im
+    
+    def _create_gif_or_video(self, out_file, fps, loop):
+        """生成gif或视频文件的线程函数"""
+        
+        if os.path.splitext(out_file)[1] == '.gif':
+            writer = imageio.get_writer(out_file, fps=fps, loop=loop)
+        else:
+            writer = imageio.get_writer(out_file, fps=fps)
+        
+        while True:
+            if self.q.empty():
+                if not self.capturing:
+                    break
+                else:
+                    time.sleep(0.1)
             else:
-                self.stop_record()
+                im = np.array(self.q.get())
+                writer.append_data(im)
+        
+        writer.close()
+        self.creating = False
     
     def _render_core(self, m, campos, azim, elev):
         """模型渲染核函数"""
@@ -326,8 +371,8 @@ class Scene(glcanvas.GLCanvas):
         
         glUseProgram(0)
     
-    def render_pick(self, x, y):
-        """拾取渲染器"""
+    def _render_pick(self, x, y):
+        """拾取渲染"""
         
         for reg in self.regions:
             if reg.fixed:
@@ -337,7 +382,7 @@ class Scene(glcanvas.GLCanvas):
             
             if reg.cam_cruise:
                 v = reg.cam_cruise(self.duration)
-                reg.update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+                reg._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
             
             name_hit, depth_hit, idx_hit = None, 1, 0
             
@@ -363,19 +408,39 @@ class Scene(glcanvas.GLCanvas):
         
         self.render()
     
-    def render_on_timer(self):
-        """定时器事件函数"""
+    def render(self):
+        """模型渲染"""
         
-        self.tn += 1
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
+        
+        for reg in self.regions:
+            glViewport(*reg.pos, *reg.size) # 设置视口
+            
+            if reg.cam_cruise:
+                v = reg.cam_cruise(self.duration)
+                reg._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+            
+            for name, idx, zmean in reg.mnames[0]:
+                self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
+            
+            glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
+            if reg.up[1] > 0 and -90 <= reg.azim < 90 or reg.up[1] < 0 and (reg.azim < -90 or reg.azim >= 90):
+                for name, idx, zmean in reg.mnames[1]:
+                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
+            else:
+                for name, idx, zmean in reg.mnames[1][::-1]:
+                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
+            glDepthMask(True) # 释放深度缓冲区
+        
+        self.SwapBuffers() # 切换缓冲区，以显示绘制内容
+        
         if self.capturing:
-            self.duration = self.tbase + self.ft * self.cn
-        else:
-            self.duration = self.tbase + int((time.time() - self.tstamp) * 1000)
-        
-        wx.CallAfter(self.render)
-        
-        if self.playing:
-            wx.CallLater(10, self.render_on_timer)
+            if self.cn < self.fn:
+                im = self._get_scene_buffer(alpha=True, crop=True)
+                self.q.put(im)
+                self.cn += 1
+            else:
+                self.stop_record()
     
     def start_animate(self):
         """开始动画"""
@@ -385,7 +450,7 @@ class Scene(glcanvas.GLCanvas):
             self.tstamp = time.time()
             self.tbase = self.duration
             self.playing = True
-            self.render_on_timer()
+            self._render_on_timer()
     
     def stop_animate(self):
         """停止动画"""
@@ -399,17 +464,6 @@ class Scene(glcanvas.GLCanvas):
             self.stop_animate()
         else:
             self.start_animate()
-    
-    def reset_timer(self):
-        """复位和定时器相关的参数"""
-        
-        self.playing = False
-        self.capturing = False
-        self.creating = False
-        self.cn = 0
-        self.tn = 0 
-        self.tbase = 0
-        self.duration = 0
     
     def estimate(self):
         """动画渲染帧频评估"""
@@ -429,41 +483,8 @@ class Scene(glcanvas.GLCanvas):
         for reg in self.regions:
             reg.restore_posture()
         
-        self.reset_timer()
+        self._reset_timer()
         self.render()
-        
-    def get_scene_buffer(self, alpha=True, buffer='front', crop=False):
-        """以PIL对象的格式返回场景缓冲区数据
-        
-        alpha       - 是否使用透明通道
-        buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
-        crop        - 是否将宽高裁切为16的倍数
-        """
-        
-        if alpha:
-            gl_mode = GL_RGBA
-            pil_mode = 'RGBA'
-        else:
-            gl_mode = GL_RGB
-            pil_mode = 'RGB'
-        
-        if buffer.upper() == 'FRONT':
-            glReadBuffer(GL_FRONT)
-        else:
-            glReadBuffer(GL_BACK)
-        
-        data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
-        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
-        im = im.transpose(Image.FLIP_TOP_BOTTOM)
-        
-        if crop:
-            w, h = im.size
-            nw, nh = 16*(w//16), 16*(h//16)
-            x0, y0 = (w-nw)//2, (h-nh)//2
-            x1, y1 = x0+nw, y0+nh
-            im = im.crop((x0, y0, x1, y1))
-        
-        return im
         
     def save_scene(self, fn, alpha=True, buffer='front', crop=False):
         """保存场景为图像文件
@@ -474,29 +495,8 @@ class Scene(glcanvas.GLCanvas):
         crop        - 是否将宽高裁切为16的倍数
         """
         
-        im = self.get_scene_buffer(alpha=alpha, buffer=buffer, crop=crop)
+        im = self._get_scene_buffer(alpha=alpha, buffer=buffer, crop=crop)
         im.save(fn)
-    
-    def _create_gif_or_video(self, out_file, fps, loop):
-        """生成gif或视频文件的线程函数"""
-        
-        if os.path.splitext(out_file)[1] == '.gif':
-            writer = imageio.get_writer(out_file, fps=fps, loop=loop)
-        else:
-            writer = imageio.get_writer(out_file, fps=fps)
-        
-        while True:
-            if self.q.empty():
-                if not self.capturing:
-                    break
-                else:
-                    time.sleep(0.1)
-            else:
-                im = np.array(self.q.get())
-                writer.append_data(im)
-        
-        writer.close()
-        self.creating = False
     
     def start_record(self, out_file, fps, fn, loop):
         """开始生成gif或视频文件

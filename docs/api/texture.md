@@ -34,7 +34,6 @@ kwds        - 关键字参数
                 yflip       - 上下翻转
 ```
 
-
 ## wxgl.Texture.create_texture
 
 **wxgl.Texture.create_texture()**

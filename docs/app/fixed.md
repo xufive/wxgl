@@ -1,5 +1,12 @@
-# -*- coding: utf-8 -*-
+---
+sort: 2
+---
 
+# 多个视区
+
+标题或Colorbar，可以绘制在一个锁定的（fixed）视区上。
+
+```
 import wx
 import numpy as np
 import wxgl
@@ -49,3 +56,5 @@ if __name__ == "__main__":
     frame = mainFrame()
     frame.Show(True)
     app.MainLoop()
+```
+

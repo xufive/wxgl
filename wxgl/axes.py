@@ -90,7 +90,7 @@ class Axes:
         y0 += h_cb * self.box[3]
         w_main -= w_cb * self.box[2]
         h_main -= (h_t + h_cb) * self.box[3]
-        self.reg_main.update_size((x0, y0, w_main, h_main))
+        self.reg_main.reset_box((x0, y0, w_main, h_main))
         
         # 标题
         if self.title_dict:
@@ -453,11 +453,11 @@ class Axes:
         )
     
     def surface(self, vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
-        """由三角面描述的曲面
+        """三角曲面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
-        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
         alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         texture     - 纹理：wxgl.Texture对象
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
@@ -508,11 +508,11 @@ class Axes:
         )
     
     def quad(self, vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, **kwds):
-        """由四角面描述的曲面
+        """四角曲面
         
         vs          - 顶点集，元组、列表或numpy数组，shape=(n,2|3)
         color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
-        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与mesh网格匹配的数据
+        cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
         alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
         texture     - 纹理：wxgl.Texture对象
         texcoord    - 顶点的纹理坐标集，元组、列表或numpy数组，shape=(n,2)
@@ -621,7 +621,7 @@ class Axes:
         c1          - 圆柱端面圆心：元组、列表或numpy数组
         c2          - 圆柱端面圆心：元组、列表或numpy数组
         r           - 圆柱半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         texture     - 纹理：wxgl.Texture对象
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
@@ -650,7 +650,7 @@ class Axes:
         r1          - 球半径：浮点型
         r2          - 环半径：浮点型
         vec         - 环面法向量
-        color       - 颜色：浮点型元组、列表或numpy数组
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         texture     - 纹理：wxgl.Texture对象
         u           - u方向范围：默认0°~360°
         v           - v方向范围：默认-180°~180°
@@ -679,7 +679,7 @@ class Axes:
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
         vec         - 轴向量
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         texture     - 纹理：wxgl.Texture对象
         u           - 经度范围：默认0°~360°
         v           - 纬度范围：默认-90°~90°
@@ -707,7 +707,7 @@ class Axes:
         
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         iterations  - 迭代次数：整型
         kwds        - 关键字参数
             name            - 模型名
@@ -733,7 +733,7 @@ class Axes:
         center      - 锥底圆心：元组、列表或numpy数组
         r           - 锥底半径：浮点型
         vec         - 圆面法向量
-        color       - 颜色：浮点型元组、列表或numpy数组
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
@@ -755,12 +755,12 @@ class Axes:
         self.add_widget(self.reg_main, 'circle', center, r, vec=vec, color=color, arc=arc, cell=cell, **kwds)
     
     def cone(self, spire, center, r, color=None, arc=(0,360), cell=5, **kwds):
-        """圆、锥、扇
+        """圆锥
         
         spire       - 锥尖：元组、列表或numpy数组
         center      - 锥底圆心：元组、列表或numpy数组
         r           - 锥底半径：浮点型
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         arc         - 弧度角范围：默认0°~360°
         cell        - 网格精度：默认5°
         kwds        - 关键字参数
@@ -782,12 +782,12 @@ class Axes:
         self.add_widget(self.reg_main, 'cone', spire, center, r, color=color, arc=arc, cell=cell, **kwds)
     
     def cube(self, center, side, vec=(0,1,0), color=None, **kwds):
-        """绘制六面体
+        """六面体
         
         center      - 中心坐标，元组、列表或numpy数组
         side        - 棱长：数值或长度为3的元组、列表、numpy数组
         vec         - 六面体上表面法向量
-        color       - 颜色：浮点型元组、列表或numpy数组
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
@@ -811,7 +811,7 @@ class Axes:
         
         data        - 数据集：三维numpy数组，第0轴对应y轴，第1轴对应z轴，第2轴对应x轴
         level       - 阈值：浮点型。data数据集中小于level的数据将被忽略
-        color       - 颜色：浮点型元组、列表或numpy数组，值域范围[0,1]
+        color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         x/y/z       - 数据集对应的点的x/y/z轴的动态范围
         kwds        - 关键字参数
             name            - 模型名

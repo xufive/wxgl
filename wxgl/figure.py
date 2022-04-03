@@ -160,7 +160,7 @@ class Figure:
         """重新绘制"""
         
         for reg in self.ff.scene.regions:
-            reg.reset()
+            reg.clear()
         
         self._draw()
     
@@ -245,14 +245,14 @@ class Figure:
 class GltScene(Scene):
     """重写Scene的鼠标左键函数"""
         
-    def on_left_down(self, evt):
+    def _on_left_down(self, evt):
         """响应鼠标左键按下事件"""
         
         self.leftdown = True
         self.mpos = evt.GetPosition()
         self.parent.sb.SetStatusText('', 1)
         
-    def on_left_up(self, evt):
+    def _on_left_up(self, evt):
         """响应鼠标左键弹起事件"""
         
         self.leftdown = False
@@ -265,7 +265,7 @@ class GltScene(Scene):
             msg = '方位角：%0.2f°，高度角：%0.2f°，视点坐标：(%0.2f,%0.2f,%0.2f)，相机位置：(%0.2f,%0.2f,%0.2f)' % (azim, elev, *oecs, *cam)
             self.parent.sb.SetStatusText(msg, 1)
         
-    def on_mouse_motion(self, evt):
+    def _on_mouse_motion(self, evt):
         """响应鼠标移动事件"""
         
         if evt.Dragging() and self.leftdown:
@@ -274,7 +274,7 @@ class GltScene(Scene):
             self.mpos = pos
             
             for reg in self.regions:
-                reg.motion(self.ctr, dx, dy)
+                reg._motion(self.ctr, dx, dy)
             
             self.render()
         else:
@@ -295,11 +295,11 @@ class GltScene(Scene):
                 self.parent.sb.SetStatusText('', 1)
                 self.parent.curr_reg = None
         
-    def on_right_up(self, evt):
+    def _on_right_up(self, evt):
         """响应鼠标右键弹起事件"""
         
         x, y = evt.GetPosition()
-        self.render_pick(x, self.csize[1]-y)
+        self._render_pick(x, self.csize[1]-y)
         
         self.parent.update_select()
 
@@ -363,7 +363,7 @@ class FigureFrame(wx.Frame):
         self.sb.SetStatusWidths([-2, -12, -1, -1])
         self.sb.SetStatusStyles([wx.SB_RAISED, wx.SB_RAISED, wx.SB_RAISED, wx.SB_RAISED])
         
-        proj = '正射投影' if self.fig.args.get('proj', 'P') == 'O' else '透视投影'
+        proj = '正射投影' if self.fig.args.get('proj', 'P')[0].upper() == 'O' else '透视投影'
         self.sb.SetStatusText('投影方式：%s' % proj, 0)
         self.sb.SetStatusText('', 1)
         self.sb.SetStatusText('选中：0', 2)

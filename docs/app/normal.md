@@ -1,5 +1,12 @@
-# -*- coding: utf-8 -*-
+---
+sort: 1
+---
 
+# 单个视区
+
+这段代码演示了wx.Frame和wxgl.Scene的集成方法。调用wxgl.Scene.add_region方法添加视区（wxgl.Region对象），而绘制网格面（mesh）和绘制坐标网格（grid）都是wxgl.Region对象的方法。
+
+```
 import wx
 import numpy as np
 import wxgl
@@ -15,11 +22,9 @@ class mainFrame(wx.Frame):
         self.SetBackgroundColour(wx.Colour(240,240,240))
         
         self.scene = wxgl.Scene(self) # 创建场景
-        self.reg = self.scene.add_region((0,0,0.8,1)) # 添加视区
-        self.cb = self.scene.add_region((0.8,0,0.2,1), fixed=True) # 添加fixed视区
+        self.reg = self.scene.add_region((0,0,1,1)) # 添加视区
                 
         self.draw_mesh()
-        self.draw_colorbar()
     
     def draw_mesh(self):
         """网格模型"""
@@ -37,15 +42,10 @@ class mainFrame(wx.Frame):
         self.reg.mesh(xs, ys, zs, texture=texture) # 绘制网格面
         self.reg.grid() # 绘制坐标网格
     
-    def draw_colorbar(self):
-        """Colorbar"""
-        
-        box = np.array([[-0.9,2],[-0.9,-2.5],[-0.5,2],[-0.5,-2.5]])
-        self.cb.colorbar('hsv', (-50, 100), box, subject='温度')
-        
-    
 if __name__ == "__main__":
     app = wx.App()
     frame = mainFrame()
     frame.Show(True)
     app.MainLoop()
+```
+
