@@ -2,9 +2,9 @@
 sort: 4
 ---
 
-# 光照模式
+# 光照和材质
 
-* WxGL提供了BaseLight、SunLight、LampLight、SkyLight、SphereLight等多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟出不同的质感。
+WxGL提供了BaseLight、SunLight、LampLight、SkyLight、SphereLight等多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟出不同的质感。
 
 ```python
 import wxgl

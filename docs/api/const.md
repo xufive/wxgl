@@ -4,11 +4,11 @@ sort: 1
 
 # constant
 
-WxGL常量。
+除了常规的模块和版本信息外，WxGL内置了常用的OpenGL常量。
 
 ## wxgl.name
 
-模块命。
+模块名。
 
 ## wxgl.version
 

@@ -18,17 +18,6 @@ WxGL是一个基于PyOpenGL的三维数据绘图工具包，以wx为显示后端
 pip install wxgl
 ```
 
-WxGL依赖pyopengl等模块，如果当前运行环境没有安装这些模块，安装程序将会自动安装它们。如果安装过程出现问题，或者安装完成后无法正常使用，请手动安装WxGL的依赖模块。
- 
-* pyopengl - 推荐版本:3.1.5或更高 
-* numpy - 推荐版本:1.18.2或更高 
-* matplotlib - 推荐版本:3.1.2或更高  
-* pillow - 推荐版本:8.2.0或更高
-* wxpython - 推荐版本:4.0.7.post2或更高 
-* freetype-py - 推荐版本:2.2.0或更高
-* pynput - 推荐版本:1.7.6或更高
-* imageio - 推荐版本:2.8.0或更高
-
 # 快速体验
 
 * 下面这几行代码，绘制了一个中心在三维坐标系原点半径为1的纯色圆球。忽略模块名的话，这些代码和Matplotlib的风格几乎是完全一致的。
@@ -77,30 +66,16 @@ glt.colorbar('rainbow', [0, 240], loc='bottom', subject='速度', margin_right=5
 glt.show()
 ```
 
-* WxGL提供了BaseLight、SunLight、LampLight、SkyLight、SphereLight等多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟出不同的质感。
+* WxGL提供了多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟出不同的质感。
 
 ```python
 import wxgl
 import wxgl.glplot as glt
 
-glt.subplot(221)
-glt.title('太阳光')
-glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SunLight(roughness=0, metalness=0, shininess=0.5))
+light = wxgl.SunLight(roughness=0, metalness=0, shininess=0.5)
 
-glt.subplot(222)
-glt.title('灯光')
-pos = (3, 0.0, 3)
-glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.LampLight(position=pos))
-glt.point((pos,), color='white', size=20)
-
-glt.subplot(223)
-glt.title('户外光')
-glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SkyLight(sky=(1.0,1.0,1.0)))
-
-glt.subplot(224)
-glt.title('球谐光')
-glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SphereLight(5, factor=0.8))
-
+glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=light)
+glt.grid()
 glt.show()
 ```
 

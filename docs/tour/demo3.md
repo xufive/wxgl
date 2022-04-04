@@ -2,9 +2,9 @@
 sort: 3
 ---
 
-# ColorBar
+# Colorbar
 
-* 对于数据快速可视化工具来说，ColorBar是必不可少的。下面的代码演示了ColorBar最简单的用法。
+对于数据快速可视化工具来说，Colorbar是必不可少的。下面的代码演示了Colorbar最简单的用法。
 
 ```python
 import numpy as np

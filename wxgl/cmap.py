@@ -57,7 +57,7 @@ class ColorManager:
             ('darkslategray', '深岩灰'), ('darkslategrey', '深岩灰'), ('darkturquoise', '深松石绿'), ('darkviolet', '深紫'), ('deeppink', '深粉'), 
             ('deepskyblue', '深天蓝'), ('dimgray', '昏灰'), ('dimgrey', '昏灰'), ('dodgerblue', '湖蓝'), ('firebrick', '火砖红'), 
             ('floralwhite', '花卉白'), ('forestgreen', '森林绿'), ('fuchsia', '洋红'), ('gainsboro', '庚氏灰'), ('ghostwhite', '幽灵白'), 
-            ('gold', '金'), ('goldenrod', '金菊'), ('gray', '灰'), ('green', '绿'), ('greenyellow', '黄绿'),  ('honeydew', '蜜瓜绿'), 
+            ('gold', '金'), ('goldenrod', '金菊'), ('gray', '灰'), ('green', '绿'), ('greenyellow', '黄绿'), ('grey', '灰'),  ('honeydew', '蜜瓜绿'), 
             ('hotpink', '艳粉'), ('indianred', '印度红'), ('indigo', '靛蓝'), ('ivory', '象牙白'), ('khaki', '卡其'), ('lavender', '薰衣草紫'), 
             ('lavenderblush', '薰衣草红'), ('lawngreen', '草坪绿'), ('lemonchiffon', '柠檬绸黄'), ('lightblue', '浅蓝'), ('lightcoral', '浅珊瑚红'), 
             ('lightcyan', '浅青'), ('lightgoldenrodyellow', '浅金菊黄'), ('lightgray', '亮灰'), ('lightgreen', '浅绿'), ('lightgrey', '亮灰'), 

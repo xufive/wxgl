@@ -2,9 +2,9 @@
 sort: 1
 ---
 
-# 单个视区
+# 常规视区
 
-这段代码演示了wx.Frame和wxgl.Scene的集成方法。调用wxgl.Scene.add_region方法添加视区（wxgl.Region对象），而绘制网格面（mesh）和绘制坐标网格（grid）都是wxgl.Region对象的方法。
+这段代码演示了wx.Frame和wxgl.Scene的集成方法。调用wxgl.Scene.add_region方法添加视区（wxgl.Region对象），而绘制网格曲面（mesh）和绘制坐标网格（grid）都是wxgl.Region对象的方法。
 
 ```
 import wx
