@@ -512,6 +512,7 @@ class Scene(glcanvas.GLCanvas):
         self.ft = round(1000/fps)
         self.q = queue.Queue()
         self.capturing = True
+        self.creating = True
         self.start_animate()
         
         self.threading_record = threading.Thread(target=self._create_gif_or_video, args=(out_file, fps, loop))

@@ -242,7 +242,7 @@ class Region:
             result[i] = np.sum(normal[idx_arg[rise[i]:rise[i+1]]], axis=0)
         return result
     
-    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=8, extend=False):
+    def _get_tick_label(self, v_min, v_max, ks=(1, 2, 2.5, 3, 4, 5), s_min=4, s_max=7, extend=False):
         """返回合适的Colorbar标注值
         
         v_min       - 数据最小值
@@ -1489,7 +1489,7 @@ class Region:
         kwds        - 关键字参数
             subject         - 标题
             tick_format     - 刻度标注格式化函数，默认str
-            density         - 刻度密度，最少和最多刻度线组成的元组，默认(3,6)
+            density         - 刻度密度，最少和最多刻度线组成的元组，默认(4,7)
             endpoint        - 刻度是否包含值域范围的两个端点值
         """
         
@@ -1505,7 +1505,7 @@ class Region:
         
         subject = kwds.get('subject', None)
         tick_format = kwds.get('tick_format', str)
-        s_min, s_max = kwds.get('density', (3,6))
+        s_min, s_max = kwds.get('density', (4,7))
         endpoint = kwds.get('endpoint', False)
         
         dmin, dmax = drange[0], drange[-1]
@@ -1603,9 +1603,9 @@ class Region:
             xf              - x轴刻度标注格式化函数，默认str
             yf              - y轴刻度标注格式化函数，默认str
             zf              - z轴刻度标注格式化函数，默认str
-            xd              - x轴刻度密度调整，整型，值域范围[-2,10], 默认0
-            yd              - y轴刻度密度调整，整型，值域范围[-2,10], 默认0
-            zd              - z轴刻度密度调整，整型，值域范围[-2,10], 默认0
+            xd              - x轴刻度密度调整，整型，-1~3，默认0
+            yd              - y轴刻度密度调整，整型，-1~3，默认0
+            zd              - z轴刻度密度调整，整型，-1~3，默认0
             xc              - x轴标注文本颜色，默认(1.0,0.3,0)
             yc              - y轴标注文本颜色，默认(0,1.0,0.3)
             zc              - z轴标注文本颜色，默认(0,0.5,1.0)
@@ -1631,7 +1631,7 @@ class Region:
         tick_size = kwds.get('tick_size', 32)
         label_size = kwds.get('label_size', 40)
         
-        xd, yd, zd = max(-2, xd), max(-2, yd), max(-2, zd)
+        xd, yd, zd = max(-1, xd), max(-1, yd), max(-1, zd)
         name = uuid.uuid1().hex
         
         if self.r_x[0] >= self.r_x[-1] or self.r_y[0] >= self.r_y[-1] or self.r_z[0] >= self.r_z[-1]:

@@ -10,10 +10,10 @@ sort: 2
 
 WxGL提供了7大类共计82种颜色映射表，每种映射表名字之后附加'_r'，可以获得该映射表的反转版本。函数[wxgl.cmap_list](https://xufive.github.io/wxgl/api/util.html#wxglcmap_list)返回颜色映射方案列表，函数[wxgl.cmap_help](https://xufive.github.io/wxgl/api/util.html#wxglcmap_help)返回颜色映射方案分类列表。
 
-* 视觉均匀类: 'viridis', 'plasma', 'inferno', 'magma', 'cividis'
-* 单调变化类: 'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds', 'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu', 'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn' 
-* 近似单调类: 'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink', 'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia', 'hot', 'afmhot', 'gist_heat', 'copper' 
-* 亮度发散类: 'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic' 
-* 颜色循环类: 'twilight', 'twilight_shifted', 'hsv'
-* 分段阶梯类: 'Pastel1', 'Pastel2', 'Paired', 'Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10', 'tab20', 'tab20b', 'tab20c', 
-* 专属定制类: 'flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix' 'brg', 'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral', 'gist_ncar'
+* 视觉均匀类：viridis, plasma, inferno, magma, cividis
+* 单调变化类：Greys, Purples, Blues, Greens, Oranges, Reds, YlOrBr, YlOrRd, OrRd, PuRd, RdPu, BuPu, GnBu, PuBu, YlGnBu, PuBuGn, BuGn, YlGn 
+* 近似单调类：binary, gist_yarg, gist_gray, gray, bone, pink, spring, summer, autumn, winter, cool, Wistia, hot, afmhot, gist_heat, copper 
+* 亮度发散类：PiYG, PRGn, BrBG, PuOr, RdGy, RdBu, RdYlBu, RdYlGn, Spectral, coolwarm, bwr, seismic 
+* 颜色循环类：twilight, twilight_shifted, hsv
+* 分段阶梯类：Pastel1, Pastel2, Paired, Accent, Dark2, Set1, Set2, Set3, tab10, tab20, tab20b, tab20c
+* 专属定制类：flag, prism, ocean, gist_earth, terrain, gist_stern, gnuplot, gnuplot2, CMRmap, cubehelix, brg, gist_rainbow, rainbow, jet, nipy_spectral, gist_ncar

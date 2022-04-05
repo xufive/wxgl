@@ -6,12 +6,12 @@ sort: 1
 
 WxGL支持十六进制的颜色、预定义的颜色，以及浮点型元组、列表或numpy数组表示的RGB/RGBA颜色。下面这些写法都是合法的。
 
-* '#F3D6E9'
-* '#C6B'
-* 'red'
-* (1.0, 0.8, 0.2)
-* [1.0, 0.8, 0.2, 1.0]
-* numpy.array([1.0, 0.8, 0.2])
+* '#F3D6E9', '#de3f80'
+* '#C6F', '#ab8'
+* 'red', 'blue', 'cyan'
+* (1.0, 0.8, 0.2), (1.0, 0.8, 0.2, 1.0)
+* [1.0, 0.8, 0.2], [1.0, 0.8, 0.2, 1.0]
+* numpy.array([1.0, 0.8, 0.2]), numpy.array([1.0, 0.8, 0.2, 1.0])
 
 预定义的颜色共计148种。函数[wxgl.color_list](https://xufive.github.io/wxgl/api/util.html#wxglcolor_list)返回预定义的颜色列表，函数[wxgl.color_help](https://xufive.github.io/wxgl/api/util.html#wxglcolor_help)返回预定义的颜色中英文对照表。
 
