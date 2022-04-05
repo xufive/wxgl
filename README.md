@@ -79,14 +79,14 @@ glt.grid()
 glt.show()
 ```
 
-* 通过transform参数传递一个以累计渲染时长duration为参数的函数给模型，可以实现复杂的模型动画。相机巡航也以类似的方式实现。下面代码中，模型渲染使用了射向右后方的平行光，模型旋转时光照位置随之改变，而相机旋转时光照位置不变。
+* 通过transform参数传递一个以累计渲染时长为参数的函数给模型，可以实现复杂的模型动画。相机巡航也以类似的方式实现。下面代码中，模型渲染使用了射向右后方的平行光，模型旋转时光照位置随之改变，而相机旋转时光照位置不变。
 
 ```python
 import wxgl
 import wxgl.glplot as glt
 
-tf = lambda duration : ((0, 1, 0, (0.02*duration)%360),)
-cf = lambda duration : {'azim':(-0.02*duration)%360}
+tf = lambda t : ((0, 1, 0, (0.02*t)%360),)
+cf = lambda t : {'azim':(-0.02*t)%360}
 
 tx = wxgl.Texture('res/earth.jpg')
 light = wxgl.SunLight(direction=(1,0,-1))
