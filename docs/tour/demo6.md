@@ -11,25 +11,25 @@ import wxgl
 import wxgl.glplot as glt
 
 vshader = """
-	#version 330 core
-	in vec4 a_Position;
+    #version 330 core
+    in vec4 a_Position;
     in vec4 a_Color;
-	uniform mat4 u_ProjMatrix;
+    uniform mat4 u_ProjMatrix;
     uniform mat4 u_ViewMatrix;
     uniform mat4 u_ModelMatrix;
     out vec4 v_Color;
-	void main() { 
-		gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-		v_Color = a_Color;
-	}
+    void main() { 
+        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+        v_Color = a_Color;
+    }
 """
 
 fshader = """
-	#version 330 core
-	in vec4 v_Color;
-	void main() { 
-		gl_FragColor = v_Color; 
-	} 
+    #version 330 core
+    in vec4 v_Color;
+    void main() { 
+        gl_FragColor = v_Color; 
+    } 
 """
 
 m = wxgl.Model(wxgl.TRIANGLE_STRIP, vshader, fshader) # 实例化模型，设置绘图方法和着色器源码
