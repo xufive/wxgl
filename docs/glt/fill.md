@@ -17,5 +17,5 @@ glt.mesh(x, y, z, color=y, cm='hsv', fill='FLBC')
 glt.show()
 ```
 
-[doc_fill.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_fill.jpg)
+![doc_fill.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_fill.jpg)
 

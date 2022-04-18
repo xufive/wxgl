@@ -23,5 +23,5 @@ glt.grid()
 glt.show()
 ```
 
-[doc_isosurface.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_isosurface.jpg)
+![doc_isosurface.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_isosurface.jpg)
 

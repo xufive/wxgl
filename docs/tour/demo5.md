@@ -28,4 +28,4 @@ glt.cylinder((0,1,0), (0,-1,0), 1, texture=tx, light=light)
 glt.show()
 ```
 
-[readme_05.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_05.jpg)
+![readme_05.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_05.jpg)

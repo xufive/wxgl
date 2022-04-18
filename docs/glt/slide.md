@@ -16,4 +16,4 @@ glt.cone((0,1,0), (0,-1,0), 0.8, slide=sf)
 glt.show()
 ```
 
-[doc_slide.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_slide.jpg)
+![doc_slide.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_slide.jpg)

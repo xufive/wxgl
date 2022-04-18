@@ -14,5 +14,5 @@ glt.uvsphere((0,0,0), 1, color='cyan')
 glt.show()
 ```
 
-[readme_01.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_01.jpg)
+![readme_01.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_01.jpg)
 

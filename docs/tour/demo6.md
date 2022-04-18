@@ -43,4 +43,4 @@ glt.model(m) # 添加模型到画布
 glt.show() # 显示画布
 ```
 
-[readme_06.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_06.jpg)
+![readme_06.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_06.jpg)

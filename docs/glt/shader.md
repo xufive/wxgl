@@ -94,5 +94,5 @@ glt.model(m)
 glt.show()
 ```
 
-[doc_shader.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_shader.jpg)
+![doc_shader.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_shader.jpg)
 

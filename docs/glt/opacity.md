@@ -17,5 +17,5 @@ glt.text3d('WxGL', [[-1,1,-0.5], [-1,-1,-0.5], [1,1,-0.5], [1,-1,-0.5]], color='
 glt.show()
 ```
 
-[doc_opacity.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_opacity.jpg)
+![doc_opacity.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_opacity.jpg)
 

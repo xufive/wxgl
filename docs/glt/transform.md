@@ -33,5 +33,5 @@ glt.uvsphere((0,0,0), 0.2, fill=False, transform=tf_2)
 glt.show()
 ```
 
-[doc_tf.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_tf.jpg)
+![doc_tf.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_tf.jpg)
 

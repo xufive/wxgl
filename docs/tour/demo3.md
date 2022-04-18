@@ -23,5 +23,5 @@ glt.colorbar('rainbow', [0, 240], loc='bottom', subject='速度', margin_right=5
 glt.show()
 ```
 
-[readme_03.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_03.jpg)
+![readme_03.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_03.jpg)
 
