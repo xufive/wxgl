@@ -12,9 +12,9 @@ WxGL纹理类。参数说明如下：
 tsrc        - 图像全路径或者np.array数组
 ttype       - 纹理类型，可选项
                 - wxgl.TEXTURE_1D
-				- wxgl.TEXTURE_2D
-				- wxgl.TEXTURE_2D_ARRAY
-				- wxgl.TEXTURE_3D
+                - wxgl.TEXTURE_2D
+                - wxgl.TEXTURE_2D_ARRAY
+                - wxgl.TEXTURE_3D
 kwds        - 关键字参数
                 level       - 纹理分级数，默认1
                 min_filter  - 纹理缩小滤波器，可选项：

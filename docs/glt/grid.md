@@ -12,7 +12,7 @@ xf/yf/zf缺省默认以str函数作为格式化函数，用户可以通过自定
 import numpy as np
 import wxgl.glplot as glt
 
-z, x = np.mgrid[1:-1:20j,-1:1:20j]
+z, x = np.mgrid[1:-1:100j,-1:1:100j]
 y = x*x + z*z
 glt.mesh(x, y, z, color=y, cm='hsv')
 

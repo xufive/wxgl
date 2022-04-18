@@ -6,7 +6,7 @@ sort: 2
 
 一个场景可以创建多个视区。标题或Colorbar，可以绘制在一个锁定的（fixed）视区上——模型不能缩放，也不响应拖拽操作。
 
-```
+```python
 import wx
 import numpy as np
 import wxgl
