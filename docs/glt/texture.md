@@ -24,3 +24,6 @@ zs = -r * np.cos(np.radians(lats)) * np.sin(np.radians(lons))
 glt.mesh(xs, ys, zs, texture=tx)
 glt.show()
 ```
+
+[doc_texture.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_texture.jpg)
+

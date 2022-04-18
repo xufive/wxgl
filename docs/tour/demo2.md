@@ -22,3 +22,6 @@ glt.grid()
 
 glt.show()
 ```
+
+[readme_02.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_02.jpg)
+

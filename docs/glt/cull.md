@@ -39,3 +39,6 @@ glt.grid()
 
 glt.show()
 ```
+
+[doc_cull.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_cull.jpg)
+

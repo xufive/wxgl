@@ -30,3 +30,5 @@ glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=wxgl.SphereLight(5, factor=0.8))
 
 glt.show()
 ```
+
+[doc_light.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_light.jpg)

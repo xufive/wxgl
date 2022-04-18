@@ -23,3 +23,5 @@ glt.colorbar('Paired', [-50, 50], loc='bottom', subject='温度', margin_left=5)
 glt.colorbar('rainbow', [0, 240], loc='bottom', subject='速度', margin_right=5)
 glt.show()
 ```
+
+[doc_cb.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_cb.jpg)

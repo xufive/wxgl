@@ -40,3 +40,5 @@ glt.surface(vs, method='fan', light=wxgl.SphereLight(9), transform=lambda durati
 
 glt.show()
 ```
+
+[doc_sp.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_sp.jpg)

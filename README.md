@@ -30,6 +30,9 @@ glt.uvsphere((0,0,0), 1, color='cyan')
 glt.show()
 ```
 
+[readme_01.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_01.jpg)
+
+
 * 在一张画布上可以任意放置多个子图。下面的代码演示了子图布局函数subplot的经典用法，代码中的纹理图片在example路径下。
 
 ```python
@@ -46,6 +49,9 @@ glt.isosphere((0,0,0), 1, color=(0,1,1), fill=False, iterations=5)
 glt.grid()
 glt.show()
 ```
+
+[readme_02.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_02.jpg)
+
 
 * 对于数据快速可视化工具来说，ColorBar是必不可少的。下面的代码演示了ColorBar最简单的用法。
 
@@ -66,6 +72,9 @@ glt.colorbar('rainbow', [0, 240], loc='bottom', subject='速度', margin_right=5
 glt.show()
 ```
 
+[readme_03.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_03.jpg)
+
+
 * WxGL提供了多种光照方案，配合光洁度、粗糙度、金属度、透光度等参数，可模拟出不同的质感。
 
 ```python
@@ -78,6 +87,9 @@ glt.torus((0,0,0), 1, 3, vec=(0,1,1), light=light)
 glt.grid()
 glt.show()
 ```
+
+[readme_04.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_04.jpg)
+
 
 * 通过transform参数传递一个以累计渲染时长为参数的函数给模型，可以实现复杂的模型动画。相机巡航也以类似的方式实现。下面代码中，模型渲染使用了射向右后方的平行光，模型旋转时光照位置随之改变，而相机旋转时光照位置不变。
 
@@ -102,6 +114,9 @@ glt.cylinder((0,1,0), (0,-1,0), 1, texture=tx, light=light)
 
 glt.show()
 ```
+
+[readme_05.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_05.jpg)
+
 
 * 除了内置的绘图函数，wxgl还提供了GLSL接口，允许用户定制着色器代码。下面的代码演示了使用顶点着色器源码和片元着色器源码的基本流程。
 
@@ -141,3 +156,5 @@ m.set_model_matrix('u_ModelMatrix') # 设置模型矩阵
 glt.model(m) # 添加模型到画布
 glt.show() # 显示画布
 ```
+
+[readme_06.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/readme_06.jpg)

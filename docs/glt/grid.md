@@ -22,3 +22,5 @@ yf = lambda y:'%0.3fKm'%y
 glt.grid(xlabel='经度', ylabel='高度', zlabel='纬度', yd=2, xf=xf, yf=yf)
 glt.show()
 ```
+
+[doc_grid.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_grid.jpg)

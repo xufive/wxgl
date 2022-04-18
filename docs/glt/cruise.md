@@ -22,3 +22,6 @@ glt.uvsphere((0,0,0), 1, fill=False)
 
 glt.show()
 ```
+
+[doc_cruise.jpg](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/doc_cruise.jpg)
+
