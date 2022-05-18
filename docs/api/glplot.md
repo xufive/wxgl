@@ -123,9 +123,9 @@ kwds        - 关键字参数
                 margin_bottom   - 色条下方留空，默认0.5
 ```
 
-## wxgl.Region.grid
+## wxgl.glplot.grid
 
-**wxgl.Region.grid(xlabel='X', ylabel='Y', zlabel='Z', \*\*kwds)**
+**wxgl.glplot.grid(xlabel='X', ylabel='Y', zlabel='Z', \*\*kwds)**
 
 绘制网格和刻度。参数说明如下：
 
@@ -188,9 +188,9 @@ zrange     	- z轴范围：2元组
 m          	- wxgl.Model实例
 ```
 
-## wxgl.Region.text
+## wxgl.glplot.text
 
-**wxgl.Region.text(text, pos, color=None, size=32, loc='left_bottom', \*\*kwds)**
+**wxgl.glplot.text(text, pos, color=None, size=32, loc='left_bottom', \*\*kwds)**
 
 2d文字。参数说明如下：
 
@@ -211,17 +211,15 @@ loc         - pos对应文本区域的位置
                 'right-bottom'  - 右下
 kwds        - 关键字参数
                 name            - 模型名
-                visible         - 是否可见，默认True
-                inside          - 模型顶点是否影响模型空间，默认True
+			    visible         - 是否可见，默认True
                 slide           - 幻灯片函数，默认None
-                ambient         - 环境光，默认(1.0,1.0,1.0)
                 family          - 字体：None表示当前默认的字体
                 weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
 ```
 
-## wxgl.Region.text3d
+## wxgl.glplot.text3d
 
-**wxgl.Region.text3d(text, box, color=None, align='fill', valign='fill', \*\*kwds)**
+**wxgl.glplot.text3d(text, box, color=None, align='fill', valign='fill', \*\*kwds)**
 
 3d文字。参数说明如下：
 
@@ -243,7 +241,6 @@ kwds        - 关键字参数
                 name            - 模型名
                 visible         - 是否可见，默认True
                 inside          - 模型顶点是否影响模型空间，默认True
-                cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
                 slide           - 幻灯片函数，默认None
                 transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
                 ambient         - 环境光，默认(1.0,1.0,1.0)
@@ -252,9 +249,9 @@ kwds        - 关键字参数
                 size            - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
 ```
 
-## wxgl.Region.point
+## wxgl.glplot.point
 
-**wxgl.Region.point(vs, color=None, cm=None, alpha=None, size=1.0, \*\*kwds)**
+**wxgl.glplot.point(vs, color=None, cm=None, alpha=None, size=1.0, \*\*kwds)**
 
 散列点。参数说明如下：
 
@@ -267,16 +264,14 @@ size        - 点的大小：数值或数值型元组、列表或numpy数组
 kwds        - 关键字参数
                 name            - 模型名
                 visible         - 是否可见，默认True
-                opacity         - 模型不透明属性，默认True（不透明）
                 inside          - 模型顶点是否影响模型空间，默认True
                 slide           - 幻灯片函数，默认None
                 transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-                ambient         - 环境光，默认(1.0,1.0,1.0)
 ```
 
-## wxgl.Region.line
+## wxgl.glplot.line
 
-**wxgl.Region.line(vs, color=None, cm=None, alpha=None, method='strip', width=None, style='solid', \*\*kwds)**
+**wxgl.glplot.line(vs, color=None, cm=None, alpha=None, width=None, style='solid', method='strip', \*\*kwds)**
 
 线段。参数说明如下：
 
@@ -285,16 +280,16 @@ vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
 color       - 颜色或数据：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色；若为数据，其长度等于顶点数量
 cm          - 颜色映射表：默认None。若该参数有效，color参数被视为与顶点一一对应的数据
 alpha       - 透明度：None或0到1之间的浮点数（cm有效时有效）。默认None，表示不改变当前透明度
-method      - 绘制方法
-                'isolate'       - 独立线段
-                'strip'         - 连续线段
-                'loop'          - 闭合线段
 width       - 线宽：0.0~10.0之间，None使用默认设置
 style       - 线型, 默认实线
                 'solid'         - 实线 
                 'dashed'        - 虚线
                 'dotted'        - 点线
                 'dash-dot'      - 虚点线
+method      - 绘制方法
+                'isolate'       - 独立线段
+                'strip'         - 连续线段
+                'loop'          - 闭合线段
 kwds        - 关键字参数
                 name            - 模型名
                 visible         - 是否可见，默认True
@@ -305,9 +300,9 @@ kwds        - 关键字参数
                 ambient         - 环境光，默认(1.0,1.0,1.0)
 ```
 
-## wxgl.Region.surface
+## wxgl.glplot.surface
 
-**wxgl.Region.surface(vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, \*\*kwds)**
+**wxgl.glplot.surface(vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, \*\*kwds)**
 
 三角曲面。参数说明如下：
 
@@ -336,9 +331,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.quad
+## wxgl.glplot.quad
 
-**wxgl.Region.quad(vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, \*\*kwds)**
+**wxgl.glplot.quad(vs, color=None, cm=None, alpha=None, texture=None, texcoord=None, method='isolate', indices=None, closed=False, \*\*kwds)**
 
 四角曲面。参数说明如下：
 
@@ -366,9 +361,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.mesh
+## wxgl.glplot.mesh
 
-**wxgl.Region.mesh(xs, ys, zs, color=None, cm=None, alpha=None, texture=None, ur=(0,1), vr=(0,1), method='T', uclosed=False, vclosed=False, \*\*kwds)**
+**wxgl.glplot.mesh(xs, ys, zs, color=None, cm=None, alpha=None, texture=None, ur=(0,1), vr=(0,1), method='T', uclosed=False, vclosed=False, \*\*kwds)**
 
 网格面。参数说明如下：
 
@@ -395,9 +390,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.cylinder
+## wxgl.glplot.cylinder
 
-**wxgl.Region.cylinder(c1, c2, r, color=None, texture=None, ur=(0,1), vr=(0,1), arc=(0,360), cell=5, \*\*kwds)**
+**wxgl.glplot.cylinder(c1, c2, r, color=None, texture=None, ur=(0,1), vr=(0,1), arc=(0,360), cell=5, \*\*kwds)**
 
 圆柱。参数说明如下：
 
@@ -423,9 +418,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.torus
+## wxgl.glplot.torus
 
-**wxgl.Region.torus(center, r1, r2, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-180,180), cell=5, \*\*kwds)**
+**wxgl.glplot.torus(center, r1, r2, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-180,180), cell=5, \*\*kwds)**
 
 球环。参数说明如下：
 
@@ -453,9 +448,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.uvsphere
+## wxgl.glplot.uvsphere
 
-**wxgl.Region.uvsphere(center, r, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-90,90), cell=5, \*\*kwds)**
+**wxgl.glplot.uvsphere(center, r, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-90,90), cell=5, \*\*kwds)**
 
 使用经纬度网格生成球。参数说明如下：
 
@@ -482,9 +477,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.isosphere
+## wxgl.glplot.isosphere
 
-**wxgl.Region.isosphere(center, r, color=None, iterations=5, \*\*kwds)**
+**wxgl.glplot.isosphere(center, r, color=None, iterations=5, \*\*kwds)**
 
 通过对正八面体的迭代细分生成球。参数说明如下：
 
@@ -505,9 +500,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.circle
+## wxgl.glplot.circle
 
-**wxgl.Region.circle(center, r, vec=(0,1,0), color=None, arc=(0,360), cell=5, \*\*kwds)**
+**wxgl.glplot.circle(center, r, vec=(0,1,0), color=None, arc=(0,360), cell=5, \*\*kwds)**
 
 圆。参数说明如下：
 
@@ -530,9 +525,9 @@ kwds        - 关键字参数
 				light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.cone
+## wxgl.glplot.cone
 
-**wxgl.Region.cone(spire, center, r, color=None, arc=(0,360), cell=5, \*\*kwds)**
+**wxgl.glplot.cone(spire, center, r, color=None, arc=(0,360), cell=5, \*\*kwds)**
 
 圆锥。参数说明如下：
 
@@ -555,9 +550,9 @@ kwds        - 关键字参数
 				light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.cube
+## wxgl.glplot.cube
 
-**wxgl.Region.cube(center, side, vec=(0,1,0), color=None, \*\*kwds)**
+**wxgl.glplot.cube(center, side, vec=(0,1,0), color=None, \*\*kwds)**
 
 六面体。参数说明如下：
 
@@ -578,9 +573,9 @@ kwds        - 关键字参数
                 light           - 光照情景模式，默认太阳光照情景模式
 ```
 
-## wxgl.Region.isosurface
+## wxgl.glplot.isosurface
 
-**wxgl.Region.isosurface(data, level, color=None, x=None, y=None, z=None, \*\*kwds)**
+**wxgl.glplot.isosurface(data, level, color=None, x=None, y=None, z=None, \*\*kwds)**
 
 基于MarchingCube算法的三维等值面。参数说明如下：
 
