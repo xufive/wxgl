@@ -376,8 +376,8 @@ class Axes:
         kwds        - 关键字参数
             name            - 模型名
             visible         - 是否可见，默认True
-            slide           - 幻灯片函数，默认None
             inside          - 模型顶点是否影响模型空间，默认True
+            slide           - 幻灯片函数，默认None
             transform       - 由旋转、平移和缩放组成的模型几何变换序列
         """
         
@@ -652,6 +652,8 @@ class Axes:
         vec         - 环面法向量
         color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         u           - u方向范围：默认0°~360°
         v           - v方向范围：默认-180°~180°
         cell        - 网格精度：默认5°
@@ -681,6 +683,8 @@ class Axes:
         vec         - 轴向量
         color       - 颜色：支持预定义颜色、十六进制颜色，以及元组、列表或numpy数组颜色
         texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
         u           - 经度范围：默认0°~360°
         v           - 纬度范围：默认-90°~90°
         cell        - 网格精度：默认5°
