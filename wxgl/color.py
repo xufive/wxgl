@@ -7,10 +7,11 @@ from matplotlib import cm as mcm
 
 class ColorManager:
     """颜色管理类"""
-    
+ 
     def __init__(self):
         """构造函数"""
-        
+ 
+        self.cid = -1
         self.default_colors = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#1f77b4', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
         self._colors = matplotlib.colors.cnames
         self._cmaps = [
@@ -30,22 +31,11 @@ class ColorManager:
             'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c', 'tab20c_r', 'terrain', 'terrain_r', 'twilight', 'twilight_r', 
             'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter', 'winter_r'
         ]
-    
+ 
     @property    
-    def color_list(self):
-        """颜色列表"""
-        
-        return list(self._colors.keys())
-    
-    @property
-    def cmap_list(self):
-        """调色板列表"""
-        
-        return self._cmaps
-    
-    def color_help(self):
-        """返回颜色中英文对照表"""
-        
+    def colors(self):
+        """全部颜色"""
+ 
         return [
             ('aliceblue', '爱丽丝蓝'), ('antiquewhite', '古董白'), ('aqua', '青'), ('aquamarine', '碧绿'), ('azure', '青白'), 
             ('beige', '米'), ('bisque', '橘黄'), ('black', '黑'), ('blanchedalmond', '杏仁白'), ('blue', '蓝'), ('blueviolet', '蓝紫'), 
@@ -76,10 +66,11 @@ class ColorManager:
             ('thistle', '蓟紫'), ('tomato', '番茄红'), ('turquoise', '松石绿'), ('violet', '紫罗兰'), ('wheat', '麦'), ('white', '白'), 
             ('whitesmoke', '烟雾白'), ('yellow', '黄'), ('yellowgreen', '暗黄绿')
         ]
-    
-    def cmap_help(self):
-        """返回调色板分类列表"""
-        
+ 
+    @property
+    def cmaps(self):
+        """调色板列表"""
+ 
         return {
             '视觉均匀类': ['viridis', 'plasma', 'inferno', 'magma', 'cividis'], 
             '单调变化类': ['Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds', 'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 
@@ -91,99 +82,86 @@ class ColorManager:
             '分段阶梯类': ['Pastel1', 'Pastel2', 'Paired', 'Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10', 'tab20', 'tab20b', 'tab20c'], 
             '专属定制类': ['flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix', 'brg', 'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral', 'gist_ncar']
         }
-    
-    def hex2color(self, str_hex):
+
+    def _hex2color(self, str_hex):
         """以#为前缀的十六进制颜色转numpy数组颜色"""
-        
+ 
         if len(str_hex) == 3:
             color = np.array((int(str_hex[1:2],base=16)/16, int(str_hex[2:3],base=16)/16, int(str_hex[3:],base=16)/16), dtype=np.float32)
         else:
             color = np.array((int(str_hex[1:3],base=16)/255, int(str_hex[3:5],base=16)/255, int(str_hex[5:],base=16)/255), dtype=np.float32)
-        
+ 
         return color
 
-    def str2color(self, color):
+    def _str2color(self, color):
         """字符串表示的颜色转numpy数组颜色"""
-        
+ 
         if color in self._colors:
-            return self.hex2color(self._colors[color])
+            return self._hex2color(self._colors[color])
         elif re.compile(r'#[\da-fA-F]{3}$').match(color) or re.compile(r'#[\da-fA-F]{6}$').match(color):
-            return self.hex2color(color)
+            return self._hex2color(color)
         else:
             raise ValueError('未定义的或不符合规则的颜色：%s'%color)
-    
-    def color2c(self, color, drop=False, outsize=None):
-        """检查颜色参数，将字符串、元组、列表等类型的颜色转numpy数组颜色
-        
-        color       - 待处理的颜色
-        drop        - 舍弃alpha通道
-        outsize     - 返回颜色的数量：整型或整型元组，None表示不改变返回颜色的数量
+ 
+    def _none2color(self):
+        """返回下一个默认的颜色"""
+
+        self.cid = (self.cid+1)%10
+
+        return self._hex2color(self.default_colors[self.cid])
+
+    def format_color(self, color, repeat=None):
+        """检查颜色参数，将字符串、元组、列表等类型的颜色转为浮点型的numpy数组
+
+        color       - 预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组
+        repeat      - 若color为单个颜色，repeat表示重复次数或重复行列数
         """
-        
+
         if color is None:
-            return None
-        
-        if isinstance(color, str):
-            color = self.str2color(color)
+            color = self._none2color()
+        elif isinstance(color, str):
+            color = self._str2color(color)
         elif isinstance(color, (list, tuple, np.ndarray)):
             color = np.array(color, dtype=np.float32)
+            cmin, cmax = color.min(), color.max()
+            if cmax > 1 or cmin < 0:
+                color = (color - cmin) / (cmax - cmin)
         else:
             raise ValueError('未定义的或不符合规则的颜色')
-        
-        if color.shape[-1] not in (3,4) or np.nanmin(color) < 0 or np.nanmax(color) > 255:
+
+        if color.shape[-1] not in (3,4):
             raise ValueError('未定义的或不符合规则的颜色')
-        
-        if np.nanmax(color) > 1.0:
-            color /= 255
-        
-        if not outsize is None:
-            if isinstance(outsize, int):
-                if color.ndim == 1:
-                    color = np.tile(color, (outsize,1))
-                if color.ndim > 2 or color.ndim == 2 and color.shape[0] != outsize:
-                    raise ValueError('颜色数量和期望的输出数量不一致')
-            elif isinstance(outsize, (tuple, list)):
-                if color.ndim == 1:
-                    color = np.tile(color, (*outsize,1))
-                else:
-                    if color.shape[:-1] != tuple(outsize):
-                        raise ValueError('颜色数量和期望的输出数量不一致')
-        
-        if drop and color.shape[-1] == 4:
-            color = color[..., :-1]
-        
+
+        if color.ndim == 1:
+            if isinstance(repeat, int): 
+                color = np.tile(color, (repeat,1))
+            elif isinstance(repeat, (tuple, list)):
+                color = np.tile(color, (*repeat,1))
+
         return color
-    
-    def cmap(self, data, cm, invalid=np.nan, invalid_c=(0,0,0,0), drange=None, alpha=None, drop=False):
+ 
+    def colormap(self, data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
         """数值映射到颜色
-        
+ 
         data        - 数据
         cm          - 调色板
-        invalid     - 无效数据的标识
-        invalid_c   - 无效数据的颜色
         drange      - 数据动态范围，None表示使用data的动态范围
         alpha       - 透明度，None表示不改变当前透明度
-        drop        - 舍弃alpha通道
+        invalid     - 无效数据的标识
+        invalid_c   - 无效数据的颜色
         """
-        
-        assert cm in self._cmaps, '未定义的调色板%s'%cm
-        assert isinstance(invalid_c, (list, tuple, np.ndarray)), '期望参数invalid_c是元组、列表或numpy数组'
-        
-        if not isinstance(invalid_c, np.ndarray):
-            invalid_c = np.array(invalid_c, dtype=np.float64)
-        
+ 
+        if cm not in self._cmaps:
+            raise ValueError('未知的调色板%s'%cm)
+ 
         if not np.isnan(invalid):
             data[data==invalid] = np.nan
         invalid_pos = np.isnan(data) # 记录无效数据位置
-        
-        if drange is None:
-            dmin, dmax = np.nanmin(data), np.nanmax(data)
-        else:
-            dmin, dmax = drange
-        
+ 
+        dmin, dmax = (np.nanmin(data), np.nanmax(data)) if drange is None else drange
         data[data<dmin] = dmin
         data[data>dmax] = dmax
-        
+ 
         cmo = mcm.get_cmap(cm)
         cs, k = list(), 256/cmo.N
         for i in range(cmo.N):
@@ -191,23 +169,17 @@ class ColorManager:
             for j in range(int(i*k), int((i+1)*k)):
                 cs.append(c)
         cs = np.array(cs)
-        
+ 
         data = np.uint8(255*(data-dmin)/(dmax-dmin))
         color = cs[data]
         color[invalid_pos] = invalid_c
-        
+ 
         if isinstance(alpha, (int, float)) and 0 <= alpha <= 1:
             color[..., 3] = alpha
-        
-        if drop:
-            color = color[..., :-1]
-        
+ 
         return color
 
-if __name__  == '__main__':
-    cm = ColorManager()
-    s1 = set(cm.color_list)
-    s2 = set([item[1] for item in cm.color_help()])
-    print(len(s1), len(s2))
-    print(s1-s2)
-    print(s2-s1)
+    def get_cmap_colors(self, cm):
+        """返回调色板的颜色列表"""
+
+        return mcm.get_cmap(cm).colors

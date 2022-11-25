@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 import os
 import numpy as np
 from PIL import Image
 from OpenGL.GL import *
-
 
 class Texture:
     """WxGL纹理对象"""

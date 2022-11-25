@@ -1,133 +1,188 @@
-# -*- coding: utf-8 -*-
-#
-# MIT License
-# 
-# Copyright (c) 2021 Tianyuan Langzi
-# 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-# 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-# 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
+#!/usr/bin/env python3
 
-
-"""
-WxGL: 基于PyOpenGL的三维数据绘图工具包
-
-以wx为显示后端，提供Matplotlib风格的应用方式
-也可以和wxpython无缝结合，在wx的窗体上绘制三维模型
-"""
-
-
-import os, time
-from pynput import keyboard
-import wx
-from wx import glcanvas
+import time
 import numpy as np
 from PIL import Image
-import imageio
-import queue
-import threading
-from OpenGL.GL import *
 
-from . import region
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGL.GL import shaders
+
 from . import util
 
+class BaseScene:
+    """场景基类"""
 
-class Scene(glcanvas.GLCanvas):
-    """WxGL场景类"""
-    
-    def __init__(self, parent, smooth=True, style='blue'):
-        """构造函数
+    _DIST = 6.0
+    _NEAR = 3.0
+    _FAR = 1000.0
+
+    def __init__(self, scheme, **kwds):
+        """构造函数"""
         
-        parent      - 父级窗口对象
-        smooth      - 直线、多边形和点的反走样开关
-        style       - 场景风格，默认太空蓝
-            'blue'      - 太空蓝
-            'gray'      - 国际灰
-            'black'     - 石墨黑
-            'white'     - 珍珠白
-            'royal'     - 宝石蓝
+        self.scheme = scheme                                        # 展示方案
+        self.viewport = [None, None, None]                          # 主视区、标题区、调色板区视口
+        self.mns = [[[],[]], [[],[]], [[],[]]]                      # 主视区、标题区、调色板区不透明/透明模型名列表
+
+        self.csize = kwds.get('size', (960, 640))                   # 画布分辨率
+        self.bg = kwds.get('bg', [0.0, 0.0, 0.0])                   # 背景色
+        self.haxis = kwds.get('haxis', 'y').lower()                 # 高度轴
+        self.fovy = kwds.get('fovy', 50.0)                          # 相机水平视野角度
+        self.azim = kwds.get('azim', 0.0)                           # 方位角
+        self.elev = kwds.get('elev', 0.0)                           # 高度角
+        self.azim_range = kwds.get('azim_range', (-180.0, 180.0))   # 方位角变化范围
+        self.elev_range = kwds.get('elev_range', (-180.0, 180.0))   # 高度角变化范围
+        self.smooth = kwds.get('smooth', True)                      # 直线和点的反走样开关
+
+        self.oecs = [0.0, 0.0, 0.0]                                 # 视点坐标系ECS原点
+        self.dist = self._DIST                                      # 相机ECS原点的距离
+        self.near = self._NEAR                                      # 相机与视椎体前端面的距离
+        self.far = self._FAR                                        # 相机与视椎体后端面的距离
+        self.aspect = self.csize[0]/self.csize[1]                   # 画布宽高比
+        self.cam = None                                             # 相机位置
+        self.up = None                                              # 指向相机上方的单位向量
+        self.origin = None                                          # 初始位置和姿态
+        self.mmat = np.eye(4, dtype=np.float32)                     # 模型矩阵
+        self.vmat = np.eye(4, dtype=np.float32)                     # 视点矩阵
+        self.pmat = np.eye(4, dtype=np.float32)                     # 投影矩阵
+
+        self.gl_init_done = False                                   # GL初始化标志
+        self.left_down = False                                      # 左键按下
+        self.mouse_pos = None                                       # 鼠标位置
+        self.scale = 1.0                                            # 眼睛位置自适应调整系数
+
+        self.tn = 0                                                 # 计数器
+        self.start= time.time()                                     # 开始渲染时的时间戳
+        self.duration = 0                                           # 累计渲染时长，单位毫秒
+        self.tbase = 0                                              # 累计渲染时长基数，单位毫秒
+
+        self._update_cam_and_up()                                   # 更新眼睛位置和指向观察者上方的单位向量
+        self._update_view_matrix()                                  # 更新视点矩阵
+        self._update_proj_matrix()                                  # 更新投影矩阵
+
+    def _update_cam_and_up(self, oecs=None, dist=None, azim=None, elev=None):
+        """根据当前ECS原点位置、距离、方位角、仰角等参数，重新计算眼睛位置和up向量"""
+
+        if not oecs is None:
+            self.oecs = [*oecs,]
+ 
+        if not dist is None:
+            self.dist = dist
+ 
+        if not azim is None:
+            azim = (azim+180)%360 - 180
+            if azim < self.azim_range[0]:
+                self.azim = self.azim_range[0]
+            elif azim > self.azim_range[1]:
+                self.azim = self.azim_range[1]
+            else:
+                self.azim = azim
+ 
+        if not elev is None:
+            elev = (elev+180)%360 - 180
+            if elev < self.elev_range[0]:
+                self.elev = self.elev_range[0]
+            elif elev > self.elev_range[1]:
+                self.elev = self.elev_range[1]
+            else:
+                self.elev = elev
+ 
+        up = 1.0 if -90 <= self.elev <= 90 else -1.0
+        azim, elev  = np.radians(self.azim), np.radians(self.elev)
+        d = self.dist * np.cos(elev)
+
+        if self.haxis == 'z':
+            azim -= 0.5 * np.pi
+            self.cam = [d*np.cos(azim)+self.oecs[0], d*np.sin(azim)+self.oecs[1], self.dist*np.sin(elev)+self.oecs[2]]
+            self.up = [0.0, 0.0, up]
+        else:
+            self.cam = [d*np.sin(azim)+self.oecs[0], self.dist*np.sin(elev)+self.oecs[1], d*np.cos(azim)+self.oecs[2]]
+            self.up = [0.0, up, 0.0]
+
+    def _update_proj_matrix(self):
+        """更新投影矩阵"""
+ 
+        self.pmat[:] = util.proj_matrix(self.fovy, self.aspect, self.near, self.far)
+
+    def _update_view_matrix(self):
+        """更新视点矩阵"""
+ 
+        self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
+
+    def _get_buffer(self, alpha=True, crop=False):
+        """以PIL对象的格式返回场景缓冲区数据
+ 
+        alpha       - 是否使用透明通道
+        crop        - 是否将宽高裁切为16的倍数
         """
-        
-        self.parent = parent
-        glcanvas.GLCanvas.__init__(self, self.parent, -1, style=glcanvas.WX_GL_RGBA|glcanvas.WX_GL_DOUBLEBUFFER|glcanvas.WX_GL_DEPTH_SIZE)
-        
-        self.smooth = smooth                                                # 反走样开关
-        self.style = self._set_style(style)                                 # 设置风格（背景和文本颜色）
-        
-        self.csize = self.GetClientSize()                                   # OpenGL窗口的大小
-        self.context = glcanvas.GLContext(self)                             # OpenGL上下文
-        self.regions = list()                                               # 视区列表
-        self.selected = list()                                              # 选中的模型列表
-        
-        self.leftdown = False                                               # 鼠标左键按下
-        self.mpos = wx._core.Point()                                        # 鼠标位置
-        self.ctr = False                                                    # Ctr键按下
-        
-        self.tn = 0                                                         # 计数器
-        self.tstamp = None                                                  # 开始渲染时的时间戳
-        self.tbase = 0                                                      # 开始渲染时的累计时长
-        self.duration = 0;                                                  # 累计渲染时长，单位毫秒
-        self.islive = False                                                 # 存在动画模型
-        self.playing = False                                                # 动画播放中
-        self.creating = False                                               # 动画文件生成中
-        self.capturing = False                                              # 截屏中
-        self.ft = 0                                                         # 录制和输出的帧间隔，单位毫秒
-        self.fn = 0                                                         # 录屏总帧数
-        self.cn = 0                                                         # 已完成帧数
-        self.q = None                                                       # PIL对象数据队列
-        
-        self._init_gl()                                                     # 画布初始化
-        
-        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)                  # 绑定canvas销毁事件
-        self.Bind(wx.EVT_SIZE, self._on_resize)                             # 绑定canvas大小改变事件
-        
-        self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)                     # 绑定鼠标左键按下事件
-        self.Bind(wx.EVT_LEFT_UP, self._on_left_up)                         # 绑定鼠标左键弹起事件                   
-        self.Bind(wx.EVT_RIGHT_UP, self._on_right_up)                       # 绑定鼠标右键弹起事件                   
-        self.Bind(wx.EVT_MOTION, self._on_mouse_motion)                     # 绑定鼠标移动事件
-        self.Bind(wx.EVT_MOUSEWHEEL, self._on_mouse_wheel)                  # 绑定鼠标滚轮事件
-        
-        monitor_k = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
-        monitor_k.start()
-    
-    def _set_style(self, style):
-        """设置风格，返回背景色和前景色"""
-        
-        if not style in ('black', 'white', 'gray', 'blue', 'royal'):
-            raise ValueError('不支持的风格选项：%s'%style)
-        
-        if style == 'black':
-            return (0.0, 0.0, 0.0, 1.0), (0.9, 0.9, 0.9)
-        if style == 'white':
-            return (1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
-        if style == 'gray':
-            return (0.9, 0.9, 0.9, 1.0), (0.0, 0.0, 0.3)
-        if style == 'blue':
-            return (0.0, 0.0, 0.2, 1.0), (0.9, 1.0, 1.0)
-        if style == 'royal':
-            return (0.133, 0.302, 0.361, 1.0), (1.0, 1.0, 0.7)
-    
-    def _init_gl(self):
-        """初始化GL"""
-        
-        self.SetCurrent(self.context)
-        
-        glClearColor(*self.style[0],)                                       # 设置画布背景色
+ 
+        gl_mode = GL_RGBA if alpha else GL_RGB
+        pil_mode = 'RGBA' if alpha else 'RGB'
+
+        glReadBuffer(GL_FRONT)
+ 
+        data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
+        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
+        im = im.transpose(Image.FLIP_TOP_BOTTOM)
+ 
+        if crop:
+            w, h = im.size
+            nw, nh = 16*(w//16), 16*(h//16)
+            x0, y0 = (w-nw)//2, (h-nh)//2
+            x1, y1 = x0+nw, y0+nh
+            im = im.crop((x0, y0, x1, y1))
+ 
+        return im
+
+    def _resize(self):
+        """改变窗口"""
+ 
+        if not self.scheme.models[1] and not self.scheme.models[2]:
+            self.viewport[0] = (0, 0, *self.csize)
+        elif self.scheme.models[1] and not self.scheme.models[2]:
+            self.viewport[1] = (0, int(self.csize[1]*0.85), self.csize[0], int(self.csize[1]*0.15))
+            self.viewport[0] = (0, 0, self.csize[0], int(self.csize[1]*0.85))
+        elif not self.scheme.models[1] and self.scheme.models[2]:
+            self.viewport[2] = (int(self.csize[0]*0.85), 0, int(self.csize[0]*0.15), self.csize[1])
+            self.viewport[0] = (0, 0, int(self.csize[0]*0.85), self.csize[1])
+        else:
+            self.viewport[1] = (0, int(self.csize[1]*0.85), self.csize[0], int(self.csize[1]*0.15))
+            self.viewport[2] = (int(self.csize[0]*0.85), 0, int(self.csize[0]*0.15), int(self.csize[1]*0.85))
+            self.viewport[0] = (0, 0, int(self.csize[0]*0.85), int(self.csize[1]*0.85))
+
+        if self.viewport[0][2] == 0:
+            self.aspect = 1e-5
+        elif self.viewport[0][3] == 0:
+            self.aspect = self.viewport[0][2]
+        else:
+            self.aspect = self.viewport[0][2]/self.viewport[0][3]
+
+        self._update_proj_matrix()
+
+    def _paint(self):
+        """绘制函数"""
+ 
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
+
+        for i in range(3):
+            if self.scheme.models[i]:
+                glViewport(*self.viewport[i])
+                for name, depth in self.mns[i][0]:
+                    self._render(self.scheme.models[i][name])
+
+                glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
+                if (self.up[1]+self.up[2]) > 0 and -90 <= self.azim < 90 or (self.up[1]+self.up[2]) < 0 and (self.azim < -90 or self.azim >= 90):
+                    for name, depth in self.mns[i][1]:
+                        self._render(self.scheme.models[i][name])
+                else:
+                    for name, depth in self.mns[i][1][::-1]:
+                        self._render(self.scheme.models[i][name])
+                glDepthMask(True) # 释放深度缓冲区
+
+    def _initialize_gl(self):
+        """GL初始化函数"""
+ 
+        glClearColor(*self.bg, 1.0)                                         # 设置画布背景色
         glEnable(GL_DEPTH_TEST)                                             # 开启深度测试，实现遮挡关系        
         glDepthFunc(GL_LEQUAL)                                              # 设置深度测试函数
         glShadeModel(GL_SMOOTH)                                             # GL_SMOOTH(光滑着色)/GL_FLAT(恒定着色)
@@ -139,171 +194,170 @@ class Scene(glcanvas.GLCanvas):
         if self.smooth:
             glEnable(GL_POINT_SMOOTH)                                       # 开启点反走样
             glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)                         # 最高质量点反走样
-            glEnable(GL_POLYGON_SMOOTH)                                     # 开启多边形反走样
-            glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST)                       # 最高质量多边形反走样
             glEnable(GL_LINE_SMOOTH)                                        # 开启直线反走样
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                          # 最高质量直线反走样
-    
-    def _on_destroy(self, evt):
-        """canvas销毁事件函数"""
-        
-        for reg in self.regions:
-            reg._clear_buffer()
-        
-        evt.Skip()
-    
-    def _on_resize(self, evt):
-        """窗口改变事件函数"""
-        
-        self.SetCurrent(self.context)
-        self.csize = self.GetClientSize()
-        
-        for reg in self.regions:
-            reg.reset_box()
-        
-        self.render()
-        evt.Skip()
-        
-    def _on_left_down(self, evt):
-        """响应鼠标左键按下事件"""
-        
-        self.leftdown = True
-        self.mpos = evt.GetPosition()
-        
-    def _on_left_up(self, evt):
-        """响应鼠标左键弹起事件"""
-        
-        self.leftdown = False
-        
-    def _on_right_up(self, evt):
-        """响应鼠标右键弹起事件"""
-        
-        x, y = evt.GetPosition()
-        self._render_pick(x, self.csize[1]-y)
-        
-    def _on_mouse_motion(self, evt):
-        """响应鼠标移动事件"""
-        
-        if evt.Dragging() and self.leftdown:
-            pos = evt.GetPosition()
-            dx, dy = pos - self.mpos
-            self.mpos = pos
-            
-            for reg in self.regions:
-                reg._motion(self.ctr, dx, dy)
-            
-            self.render()
-        
-    def _on_mouse_wheel(self, evt):
-        """响应鼠标滚轮事件"""
-        
-        for reg in self.regions:
-            reg._wheel(self.ctr, evt.WheelRotation)
-            
-        self.render()
-    
-    def _on_press(self, key):
-        """键按下"""
-        
-        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
-            self.ctr = True
-    
-    def _on_release(self, key):
-        """键弹起"""
-        
-        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
-            self.ctr = False
-        elif key == keyboard.Key.esc:
-            wx.CallAfter(self.restore_posture)
-    
-    def _render_on_timer(self):
-        """定时器事件函数"""
-        
-        self.tn += 1
-        if self.capturing:
-            self.duration = self.tbase + self.ft * self.cn
+
+    def _timer(self):
+        """定时函数"""
+
+        if self.scheme.animate:
+            self.tn += 1 
+            self.duration = self.tbase + 1000*time.time() - self.start
+
+            if self.scheme.cruise:
+                v = self.scheme.cruise(self.duration)
+                self._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+                self._update_view_matrix()
+
+    def _home(self):
+        """恢复初始位置和姿态"""
+
+        self.fovy = self.origin['fovy']
+        self._update_cam_and_up(dist=self.origin['dist'], azim=self.origin['azim'], elev=self.origin['elev'])
+        self._update_view_matrix()
+        self._update_proj_matrix()
+
+    def _pause(self):
+        """动画/暂停"""
+
+        if self.scheme.animate:
+            self.scheme.animate = False
+            self.tbase = self.duration
         else:
-            self.duration = self.tbase + int((time.time() - self.tstamp) * 1000)
+            self.start = 1000 * time.time()
+            self.scheme.animate = True
+
+    def _drag(self, dx, dy):
+        """鼠标拖拽"""
+
+        azim = self.azim - (180*dx/self.csize[0]) * (self.up[2] if self.haxis == 'z' else self.up[1])
+        elev = self.elev + 90*dy/self.csize[1]
+        self._update_cam_and_up(azim=azim, elev=elev)
+        self._update_view_matrix()
+
+    def _wheel(self, delta):
+        """鼠标滚轮"""
         
-        wx.CallAfter(self.render)
-        
-        if self.playing:
-            wx.CallLater(10, self._render_on_timer)
-    
-    def _reset_timer(self):
-        """复位和定时器相关的参数"""
-        
-        self.playing = False
-        self.capturing = False
-        self.creating = False
-        self.cn = 0
-        self.tn = 0 
-        self.tbase = 0
-        self.duration = 0
-        
-    def _get_scene_buffer(self, alpha=True, buffer='front', crop=False):
-        """以PIL对象的格式返回场景缓冲区数据
-        
-        alpha       - 是否使用透明通道
-        buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
-        crop        - 是否将宽高裁切为16的倍数
-        """
-        
-        if alpha:
-            gl_mode = GL_RGBA
-            pil_mode = 'RGBA'
-        else:
-            gl_mode = GL_RGB
-            pil_mode = 'RGB'
-        
-        if buffer.upper() == 'FRONT':
-            glReadBuffer(GL_FRONT)
-        else:
-            glReadBuffer(GL_BACK)
-        
-        data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
-        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
-        im = im.transpose(Image.FLIP_TOP_BOTTOM)
-        
-        if crop:
-            w, h = im.size
-            nw, nh = 16*(w//16), 16*(h//16)
-            x0, y0 = (w-nw)//2, (h-nh)//2
-            x1, y1 = x0+nw, y0+nh
-            im = im.crop((x0, y0, x1, y1))
-        
-        return im
-    
-    def _create_gif_or_video(self, out_file, fps, loop):
-        """生成gif或视频文件的线程函数"""
-        
-        if os.path.splitext(out_file)[1] == '.gif':
-            writer = imageio.get_writer(out_file, fps=fps, loop=loop)
-        else:
-            writer = imageio.get_writer(out_file, fps=fps)
-        
-        while True:
-            if self.q.empty():
-                if not self.capturing:
-                    break
+        if delta > 0: # 滚轮前滚
+            self.fovy *= 0.95
+            self._update_proj_matrix()
+        else: # 滚轮后滚
+            self.fovy += (180 - self.fovy) / 180
+            self._update_proj_matrix()
+
+    def _assemble(self):
+        """模型装配"""
+
+        if self.scheme.ticks:
+            self.scheme._grid()
+
+        for i in range(3):
+            for name in self.scheme.models[i]:
+                m = self.scheme.models[i][name]
+
+                if i == 1 and name == 'caption_text':
+                    m.attribute['a_Position']['data'][:,0] /= self.viewport[i][2]/self.viewport[i][3]
+
+                if i == 2 and name == 'cb_label':
+                    m.attribute['a_Position']['data'][:,0] /= self.viewport[i][2]/self.viewport[i][3]
+                    #m.attribute['a_Position']['data'][3::4,0] /= self.viewport[i][2]/self.viewport[i][3]
+
+                for src, genre in m.shaders:
+                    m.cshaders.append(shaders.compileShader(src, genre))
+ 
+                m.program = shaders.compileProgram(*m.cshaders)
+                glUseProgram(m.program)
+
+                if m.indices:
+                    m.indices.update({'ibo':vbo.VBO(m.indices['data'], target=GL_ELEMENT_ARRAY_BUFFER)})
+
+                for key in m.attribute:
+                    item = m.attribute[key]
+                    item.update({'bo': vbo.VBO(item['data'])})
+ 
+                    if 'loc' not in item:
+                        item.update({'loc': glGetAttribLocation(m.program, key)})
+ 
+                for key in m.uniform:
+                    item = m.uniform[key]
+                    if item['tag'] == 'texture':
+                        if item['data'].tid is None:
+                            item['data'].create_texture()
+                        item.update({'tid': item['data'].tid})
+                    elif item['tag'] == 'pmat':
+                        if 'v' not in item and 'f' not in item:
+                            item.update({'v': self.pmat})
+                    elif item['tag'] == 'vmat':
+                        if 'v' not in item and 'f' not in item:
+                            item.update({'v': self.vmat})
+                    elif item['tag'] == 'mmat':
+                        if 'v' not in item and 'f' not in item:
+                            item.update({'v': self.mmat})
+                        elif 'v' in item:
+                            item.update({'v': util.model_matrix(*item['v'])})
+ 
+                    if 'loc' not in item:
+                        item.update({'loc': glGetUniformLocation(m.program, key)})
+ 
+                glUseProgram(0)
+
+                if m.opacity:
+                    self.mns[i][0].append((name, m.depth[self.haxis]))
                 else:
-                    time.sleep(0.1)
-            else:
-                im = np.array(self.q.get())
-                writer.append_data(im)
-        
-        writer.close()
-        self.creating = False
-    
-    def _render_core(self, m, campos, azim, elev):
-        """模型渲染核函数"""
-        
+                    self.mns[i][1].append((name, m.depth[self.haxis]))
+            
+            self.mns[i][1].sort(key=lambda item:item[1])
+
+        dx = self.scheme.r_x[1]-self.scheme.r_x[0]
+        dy = self.scheme.r_y[1]-self.scheme.r_y[0]
+        dz = self.scheme.r_z[1]-self.scheme.r_z[0]
+
+        if self.haxis == 'z':
+            if dx > 0 and dz > 0:
+                if self.aspect > dx/dz:
+                    self.scale = 2/dz if self.aspect > 1 else 2/(self.aspect*dz)
+                else:
+                    self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+            elif dx > 0 and dz <= 0:
+                self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+            elif dx <= 0 and dz > 0:
+                self.scale = 2/dz if self.aspect > 1 else 2/(self.aspect*dz)
+
+            if self.scale * dy > 4:
+                self.scale = 4/dy
+        else:
+            if dx > 0 and dy > 0:
+                if self.aspect > dx/dy:
+                    self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
+                else:
+                    self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+            elif dx > 0 and dy <= 0:
+                self.scale = 2*self.aspect/dx if self.aspect > 1 else 2/dx
+            elif dx <= 0 and dy > 0:
+                self.scale = 2/dy if self.aspect > 1 else 2/(self.aspect*dy)
+ 
+            if self.scale * dz > 4:
+                self.scale = 4/dz
+
+        self.dist = self._DIST/self.scale
+        self.near = self._NEAR/self.scale
+        self.far = self._FAR/self.scale
+        self.oecs = [sum(self.scheme.r_x)/2, sum(self.scheme.r_y)/2, sum(self.scheme.r_z)/2]
+        self.origin = {'fovy':self.fovy, 'azim':self.azim, 'elev':self.elev, 'dist':self.dist}
+
+        self._update_cam_and_up()
+        self._update_view_matrix()
+        self._update_proj_matrix()
+
+    def _render(self, m):
+        """绘制单个模型"""
+
         if not m.visible or m.slide and not m.slide(self.duration):
             return
-        
+ 
         glUseProgram(m.program)
         tsid = 0
-        
+ 
         for key in m.attribute:
             loc = m.attribute[key].get('loc')
             bo = m.attribute[key]['bo']
@@ -313,11 +367,11 @@ class Scene(glcanvas.GLCanvas):
             glVertexAttribPointer(loc, un, GL_FLOAT, GL_FALSE, un*usize, bo)
             glEnableVertexAttribArray(loc)
             bo.unbind()
-        
+ 
         for key in m.uniform:
             tag = m.uniform[key]['tag']
             loc = m.uniform[key].get('loc')
-            
+ 
             if tag == 'pmat' or tag == 'vmat':
                 if 'v' in m.uniform[key]:
                     glUniformMatrix4fv(loc, 1, GL_FALSE, m.uniform[key]['v'], None)
@@ -338,9 +392,13 @@ class Scene(glcanvas.GLCanvas):
             elif tag == 'picked':
                 glUniform1i(loc, m.picked)
             elif tag == 'campos':
-                glUniform3f(loc, *campos)
+                glUniform3f(loc, *self.cam)
             elif tag == 'ae':
-                glUniform2f(loc, azim, elev)
+                glUniform2f(loc, self.azim, self.elev)
+            elif tag == 'tsize':
+                k = 0.3/(32*self.scale)
+                tw, th = m.uniform[key].get('v')
+                glUniform2f(loc, tw*k/self.aspect, th*k)
             else:
                 value = m.uniform[key].get('v')
                 if value is None:
@@ -358,190 +416,40 @@ class Scene(glcanvas.GLCanvas):
 
         for glcmd, args in m.before:
             glcmd(*args)
-        
+ 
         if m.indices:
             m.indices['ibo'].bind()
             glDrawElements(m.gltype, m.indices['n'], GL_UNSIGNED_INT, None)
             m.indices['ibo'].unbind()
         else:
             glDrawArrays(m.gltype, 0, m.vshape[0])
-        
+ 
         for glcmd, args in m.after:
             glcmd(*args)
-        
+ 
         glUseProgram(0)
-    
-    def _render_pick(self, x, y):
-        """拾取渲染"""
-        
-        for reg in self.regions:
-            if reg.fixed:
-                continue
-            
-            glViewport(*reg.pos, *reg.size)
-            
-            if reg.cam_cruise:
-                v = reg.cam_cruise(self.duration)
-                reg._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
-            
-            name_hit, depth_hit, idx_hit = None, 1, 0
-            
-            for i in (0, 1):
-                for name, idx, zmean in reg.mnames[i]:
-                    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-                    
-                    d = glReadPixels(x, y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, outputType=None)[0,0]
-                    if d < depth_hit:
-                        name_hit, depth_hit, idx_hit = name, d, idx
-            
-            if name_hit:
-                for m in reg.models[name_hit]:
-                    m.picked = not m.picked
+
+    def clear_buffer(self):
+        """删除纹理、顶点缓冲区等显存对象"""
+
+        for i in range(3):
+            for name in self.scheme.models[i]:
+                m = self.scheme.models[i][name]
+                for item in m.cshaders:
+                    glDeleteShader(item)
+                glDeleteProgram(m.program)
                 
-                if reg.models[name_hit][idx_hit].picked:
-                    self.selected.append((reg, name_hit))
-                else:
-                    self.selected.remove((reg, name_hit))
+                if m.indices:
+                    m.indices['ibo'].delete()
                 
-                break
-        
-        self.render()
-    
-    def render(self):
-        """模型渲染"""
-        
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
-        
-        for reg in self.regions:
-            glViewport(*reg.pos, *reg.size) # 设置视口
-            
-            if reg.cam_cruise:
-                v = reg.cam_cruise(self.duration)
-                reg._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
-            
-            for name, idx, zmean in reg.mnames[0]:
-                self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            
-            glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
-            if reg.up[1] > 0 and -90 <= reg.azim < 90 or reg.up[1] < 0 and (reg.azim < -90 or reg.azim >= 90):
-                for name, idx, zmean in reg.mnames[1]:
-                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            else:
-                for name, idx, zmean in reg.mnames[1][::-1]:
-                    self._render_core(reg.models[name][idx], reg.cam, reg.azim, reg.elev)
-            glDepthMask(True) # 释放深度缓冲区
-        
-        self.SwapBuffers() # 切换缓冲区，以显示绘制内容
-        
-        if self.capturing:
-            if self.cn < self.fn:
-                im = self._get_scene_buffer(alpha=True, crop=True)
-                self.q.put(im)
-                self.cn += 1
-            else:
-                self.stop_record()
-    
-    def start_animate(self):
-        """开始动画"""
-        
-        self.render()
-        if self.islive:
-            self.tstamp = time.time()
-            self.tbase = self.duration
-            self.playing = True
-            self._render_on_timer()
-    
-    def stop_animate(self):
-        """停止动画"""
-        
-        self.playing = False
-    
-    def pause_animate(self):
-        """暂停/重启动画"""
-        
-        if self.playing:
-            self.stop_animate()
-        else:
-            self.start_animate()
-    
-    def estimate(self):
-        """动画渲染帧频评估"""
-        
-        return 0 if self.duration == 0 else 1000*self.tn/self.duration
-    
-    def set_style(self, style):
-        """设置风格"""
-        
-        self.style = self._set_style(style)
-        self._init_gl()
-        self.render()
-    
-    def restore_posture(self):
-        """还原场景内各视区的相机初始姿态"""
-        
-        for reg in self.regions:
-            reg.restore_posture()
-        
-        self._reset_timer()
-        self.render()
-        
-    def save_scene(self, fn, alpha=True, buffer='front', crop=False):
-        """保存场景为图像文件
-        
-        fn          - 保存的文件名
-        alpha       - 是否使用透明通道
-        buffer      - 显示缓冲区。默认使用前缓冲区（当前显示内容）
-        crop        - 是否将宽高裁切为16的倍数
-        """
-        
-        im = self._get_scene_buffer(alpha=alpha, buffer=buffer, crop=crop)
-        im.save(fn)
-    
-    def start_record(self, out_file, fps, fn, loop):
-        """开始生成gif或视频文件
-        
-        out_file    - 文件名，支持gif和mp4、avi、wmv等格式
-        fps         - 每秒帧数
-        fn          - 总帧数
-        loop        - 循环播放次数（仅gif格式有效，0表示无限循环）
-        """
-        
-        self.cn = 0
-        self.fn = fn
-        self.ft = round(1000/fps)
-        self.q = queue.Queue()
-        self.capturing = True
-        self.creating = True
-        self.start_animate()
-        
-        self.threading_record = threading.Thread(target=self._create_gif_or_video, args=(out_file, fps, loop))
-        self.threading_record.setDaemon(True)
-        self.threading_record.start()
-    
-    def stop_record(self):
-        """停止生成gif或视频文件"""
-        
-        self.cn = 0
-        self.capturing = False
-        self.stop_animate()
-    
-    def add_region(self, box, **kwds):
-        """添加视区
-        
-        box         - 视区位置四元组：四个元素分别表示视区左下角坐标、宽度、高度，元素值域[0,1]
-        kwds        - 关键字参数
-            proj        - 投影模式：'O' - 正射投影，'P' - 透视投影（默认）
-            fixed       - 锁定模式：固定ECS原点、相机位置和角度，以及视口缩放因子等。布尔型，默认False
-            azim        - 方位角：-180°~180°范围内的浮点数，默认0°
-            elev        - 高度角：-180°~180°范围内的浮点数，默认0°
-            azim_range  - 方位角限位器：默认-180°~180°
-            elev_range  - 仰角限位器：默认-180°~180°
-            zoom        - 视口缩放因子：默认1.0
-            name        - 视区名
-        """
-        
-        reg = region.Region(self, box, **kwds)
-        self.regions.append(reg)
-        
-        return reg
+                for key in m.attribute:
+                    if 'bo' in m.attribute[key]:
+                        m.attribute[key]['bo'].delete()
+                
+                textures = list()
+                for key in m.uniform:
+                    if 'texture' in m.uniform[key]:
+                        textures.append(m.attribute[key]['texture'])
+                if textures:
+                    glDeleteTextures(len(textures), textures)
+
