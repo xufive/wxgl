@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from OpenGL.GL import *
+
 import numpy as np
 np.seterr(invalid='ignore')
 
@@ -18,7 +20,7 @@ def format_color(color, repeat=None):
 
     return CM.format_color(color, repeat=repeat)
 
-def colormap(data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
+def cmap(data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
     """数值映射到颜色
  
     data        - 数据
@@ -29,12 +31,12 @@ def colormap(data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0
     invalid_c   - 无效数据的颜色
     """
 
-    return CM.colormap(data, cm, drange=drange, alpha=alpha, invalid=invalid, invalid_c=invalid_c)
+    return CM.cmap(data, cm, drange=drange, alpha=alpha, invalid=invalid, invalid_c=invalid_c)
 
-def get_cmap_colors(cm):
-    """返回调色板的颜色列表"""
+def get_cm_colors(cm):
+    """返回给定调色板的颜色列表"""
 
-    return CM.get_cmap_colors(cm)
+    return CM.get_cm_colors(cm)
 
 def text2img(text, size, color, bg=None, family=None, weight='normal'):
     """文本转图像，返回图像数据和size元组
@@ -195,25 +197,25 @@ def proj_matrix(fovy, aspect, near, far):
 def get_normal(gltype, vs, indices=None):
     """返回法线集"""
  
-    if gltype not in (4, 5, 6, 7, 8):
+    if gltype not in (GL_TRIANGLES, GL_TRIANGLES, GL_TRIANGLE_FAN, GL_QUADS, GL_QUAD_STRIP):
         raise KeyError('%s不支持法线计算'%(str(gltype)))
  
-    if not indices is None and gltype != 4 and gltype != 7:
+    if not indices is None and gltype != GL_TRIANGLES and gltype != GL_QUADS:
         raise KeyError('%s不支持indices参数'%(str(gltype)))
  
     n = vs.shape[0]
     if indices is None:
-        if gltype == 6:
+        if gltype == GL_TRIANGLE_FAN:
             a = np.zeros(n-2, dtype=np.int32)
             b = np.arange(1, n-1, dtype=np.int32)
             c = np.arange(2, n, dtype=np.int32)
             idx = np.stack((a, b, c), axis=1).ravel()
-        elif gltype == 5:
+        elif gltype == GL_TRIANGLES:
             a = np.repeat(np.arange(0, n-1, 2, dtype=np.int32), 2)[1:n-1]
             b = np.repeat(np.arange(1, n-1, 2, dtype=np.int32), 2)[:n-2]
             c = np.arange(2, n, dtype=np.int32)
             idx = np.stack((a, b, c), axis=1).ravel()
-        elif gltype == 8:
+        elif gltype == GL_QUAD_STRIP:
             a = np.arange(0, n-2, 2, dtype=np.int32)
             b = np.arange(1, n-2, 2, dtype=np.int32)
             c = np.arange(3, n, 2, dtype=np.int32)
@@ -225,19 +227,19 @@ def get_normal(gltype, vs, indices=None):
         idx = np.array(indices, dtype=np.int32)
  
     primitive = vs[idx]
-    if gltype == 7 or gltype == 8:
+    if gltype == GL_QUADS or gltype == GL_QUAD_STRIP:
         a = primitive[::4]
         b = primitive[1::4]
         c = primitive[2::4]
         d = primitive[3::4]
-        normal = np.repeat(np.cross(c-a, b-d), 4, axis=0)
+        normal = np.repeat(np.cross(c-a, d-b), 4, axis=0)
     else:
         a = primitive[::3]
         b = primitive[1::3]
         c = primitive[2::3]
-        normal = np.repeat(np.cross(b-a, a-c), 3, axis=0)
+        normal = np.repeat(np.cross(b-a, c-a), 3, axis=0)
  
-    if indices is None and (gltype == 4 or gltype == 7):
+    if indices is None and (gltype == GL_TRIANGLES or gltype == GL_QUADS):
         return normal
  
     result = np.zeros((n,3), dtype=np.float32)

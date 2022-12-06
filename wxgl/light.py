@@ -4,25 +4,43 @@ import numpy as np
 from OpenGL.GL import *
 from . model import Model
 
-class BaseLight:
-    """环境光照情景模式"""
+class _Light:
+    """光照模式基类"""
  
-    def __init__(self, ambient=(1.0,1.0,1.0), fixed=False):
+    def __init__(self, **kwds):
         """构造函数"""
  
-        self.ambient = ambient
-        self.fixed = fixed
+        self.ambient = kwds.get('ambient')              # 环境光亮度
+        self.lamp = kwds.get('lamp')                    # 光源位置
+        self.direction = kwds.get('direction')          # 光的方向
+        self.lightcolor = kwds.get('lightcolor')        # 光的颜色
+        self.sky = kwds.get('sky')                      # 来自天空的环境光
+        self.ground = kwds.get('ground')                # 来自地面的环境光
+        self.diffuse = kwds.get('diffuse')              # 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮
+        self.specular = kwds.get('specular')            # 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮
+        self.shiny = kwds.get('shiny')                  # 高光系数：值域范围[1, 3000]，数值越大，高光区域越小
+        self.pellucid = kwds.get('pellucid')            # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
+        self.factor = kwds.get('factor')                # 反射衰减因子：值域范围[0.0,1.0]，仅用于球谐光照模型
+        self.cpos = kwds.get('cpos')                    # 相机位置
+
+        self.a_dtype = None                             # 纹理坐标数据类型（attribute变量）
+        self.u_dtype = None                             # 纹理采样器类型（uniform变量）
  
     def get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
  
         indices = kwds.get('indices')
         color = kwds.get('color')
+        normal = kwds.get('normal')
         texture = kwds.get('texture')
         texcoord = kwds.get('texcoord')
+        align = kwds.get('align')
+        tsize = kwds.get('tsize')
+        psize = kwds.get('psize')
+        cpos = kwds.get('cpos')
         lw = kwds.get('lw')
         ls = kwds.get('ls')
- 
+
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
@@ -30,216 +48,97 @@ class BaseLight:
         fill = kwds.get('fill')
         slide = kwds.get('slide')
         transform = kwds.get('transform')
+
+        if texture:
+            if texture.ttype == GL_TEXTURE_1D:
+                self.a_dtype = 'float'
+                self.u_dtype = 'sampler1D'
+            elif texture.ttype == GL_TEXTURE_2D:
+                self.a_dtype = 'vec2'
+                self.u_dtype = 'sampler2D'
+            elif texture.ttype == GL_TEXTURE_2D_ARRAY:
+                self.a_dtype = 'vec3'
+                slef.u_dtype = 'sampler2DArray'
+            elif texture.ttype == GL_TEXTURE_3D:
+                self.a_dtype = 'vec3'
+                self.u_dtype = 'sampler3D'
+
+        vshader = self.get_vshader(texture)
+        fshader = self.get_fshader(texture)
  
-        if color is None:
-            vshader = self.get_texture_vshader(texture.ttype)
-            fshader = self.get_texture_fshader(texture.ttype)
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_vertex('a_Position', vs, indices)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-            m.set_argument('u_AmbientColor', self.ambient)
-            m.set_picked('u_Picked')
-            if not self.fixed:
-                m.set_proj_matrix('u_ProjMatrix')
-                m.set_view_matrix('u_ViewMatrix')
-                m.set_model_matrix('u_ModelMatrix', transform)
-            m.set_cull_mode(cull)
-            m.set_fill_mode(fill)
-            m.set_slide(slide)
-        else:
-            vshader = self.get_color_vshader()
-            fshader = self.get_color_fshader()
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_vertex('a_Position', vs, indices)
+        m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
+        m.set_vertex('a_Position', vs, indices)
+        m.set_proj_matrix('u_ProjMatrix')
+        m.set_view_matrix('u_ViewMatrix')
+        m.set_model_matrix('u_ModelMatrix', transform)
+        m.set_cull_mode(cull)
+        m.set_fill_mode(fill)
+        m.set_slide(slide)
+
+        if not color is None:
             m.set_color('a_Color', color)
+        if not psize is None:
+            m.set_psize('a_Psize', psize)
+        if not normal is None:
+            m.set_normal('a_Normal', normal)
+        if not texcoord is None:
+            m.set_texcoord('a_Texcoord', texcoord)
+        if not texture is None:
+            m.add_texture('u_Texture', texture)
+        
+        if not self.ambient is None:
             m.set_argument('u_AmbientColor', self.ambient)
-            m.set_picked('u_Picked')
-            if not self.fixed:
-                m.set_proj_matrix('u_ProjMatrix')
-                m.set_view_matrix('u_ViewMatrix')
-                m.set_model_matrix('u_ModelMatrix', transform)
+        if not self.lamp is None:
+            m.set_argument('u_LightPos', self.lamp)
+        if not self.direction is None:
+            m.set_argument('u_LightDir', self.direction)
+        if not self.lightcolor is None:
+            m.set_argument('u_LightColor', self.lightcolor)
+        if not self.sky is None:
+            m.set_argument('u_SkyColor', self.sky)
+        if not self.ground is None:
+            m.set_argument('u_GroundColor', self.ground)
+        if not self.shiny is None:
+            m.set_argument('u_Shiny', self.shiny)
+        if not self.diffuse is None:
+            m.set_argument('u_Diffuse', self.diffuse)
+        if not self.specular is None:
+            m.set_argument('u_Specular', self.specular)
+        if not self.pellucid is None:
+            m.set_argument('u_Pellucid', self.pellucid)
+        if not self.factor is None:
+            m.set_argument('u_ScaleFactor', self.factor)
+        if not self.cpos is None:
+            m.set_cam_pos('u_CamPos')
+        if not lw is None or not ls is None:
             m.set_line_style(width=lw, stipple=ls)
-            m.set_cull_mode(cull)
-            m.set_fill_mode(fill)
-            m.set_slide(slide)
+        if not tsize is None:
+            m.set_text_size('u_TextSize', tsize)
+        if not align is None:
+            m.set_argument('u_Align', align)
  
         return m.verify()
  
-    def get_color_vshader(self):
-        """返回颜色模型的顶点着色器源码"""
+    def get_vshader(self, texture):
+        """返回顶点着色器源码"""
  
-        if self.fixed:
-            shader_src = """
-                #version 330 core
+        pass
  
-                in vec4 a_Position;
-                in vec4 a_Color;
-                out vec4 v_Color;
+    def get_fshader(self, texture):
+        """返回片元着色器源码"""
  
-                void main() { 
-                    gl_Position = a_Position; 
-                    v_Color = a_Color;
-                }
-            """
-        else:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec4 a_Color;
-                uniform mat4 u_ProjMatrix;
-                uniform mat4 u_ViewMatrix;
-                uniform mat4 u_ModelMatrix;
-                out vec4 v_Color;
- 
-                void main() { 
-                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                    v_Color = a_Color;
-                }
-            """
-        
-        return shader_src
- 
-    def get_texture_vshader(self, ttype):
-        """返回纹理模型的顶点着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-        elif ttype == GL_TEXTURE_2D_ARRAY or ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
- 
-        if self.fixed:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in %s a_Texcoord;
-                out %s v_Texcoord;
- 
-                void main() { 
-                    gl_Position = a_Position; 
-                    v_Texcoord = a_Texcoord;
-                }
-            """ % (a_dtype, a_dtype)
-        else:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in %s a_Texcoord;
-                uniform mat4 u_ProjMatrix;
-                uniform mat4 u_ViewMatrix;
-                uniform mat4 u_ModelMatrix;
-                out %s v_Texcoord;
- 
-                void main() { 
-                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                    v_Texcoord = a_Texcoord;
-                }
-            """ % (a_dtype, a_dtype)
+        pass
 
-        return shader_src
- 
-    def get_color_fshader(self):
-        """返回颜色的片元着色器源码"""
- 
-        return """
-            #version 330 core
- 
-            in vec4 v_Color;
-            uniform vec3 u_AmbientColor;
-            uniform int u_Picked;
- 
-            void main() { 
-                vec3 rgb = v_Color.rgb * u_AmbientColor;
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, v_Color.a); 
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
-            } 
-        """
- 
-    def get_texture_fshader(self, ttype):
-        """返回纹理的片元着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-            u_dtype = 'sampler1D'
-            f_name = 'texture1D'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-            u_dtype = 'sampler2D'
-            f_name = 'texture2D'
-        elif ttype == GL_TEXTURE_2D_ARRAY:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler2DArray'
-            f_name = 'texture'
-        elif ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler3D'
-            f_name = 'texture3D'
- 
-        return """
-            #version 330 core
- 
-            in %s v_Texcoord;
-            uniform vec3 u_AmbientColor;
-            uniform %s u_Texture;
-            uniform int u_Picked;
- 
-            void main() { 
-                vec4 color = %s(u_Texture, v_Texcoord);
-                vec3 rgb = color.rgb * u_AmbientColor;
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """ % (a_dtype, u_dtype, f_name)
-
-class ScatterLight:
+class ScatterLight(_Light):
     """适用于散列点的环境光照情景模式"""
  
     def __init__(self, ambient=(1.0,1.0,1.0)):
         """构造函数"""
  
-        self.ambient = ambient
+        _Light.__init__(self, ambient=ambient)
  
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        color = kwds.get('color')
-        psize = kwds.get('psize')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', False)
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
- 
-        vshader = self.get_point_vshader()
-        fshader = self.get_point_fshader()
- 
-        m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-        m.set_vertex('a_Position', vs)
-        m.set_color('a_Color', color)
-        m.set_psize('a_Psize', psize)
-        m.set_picked('u_Picked')
-        m.set_argument('u_AmbientColor', self.ambient)
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_slide(slide)
- 
-        return m.verify()
- 
-    def get_point_vshader(self):
-        """返回点的顶点着色器源码"""
+    def get_vshader(self, texure):
+        """返回顶点着色器源码"""
  
         return """
             #version 330 core
@@ -253,21 +152,20 @@ class ScatterLight:
             out vec4 v_Color;
  
             void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
-                gl_PointSize = a_Psize;
                 v_Color = a_Color;
+                gl_PointSize = a_Psize;
+                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
             }
         """
  
-    def get_point_fshader(self):
-        """返回散点的片元着色器源码"""
+    def get_fshader(self,texture):
+        """返回片元着色器源码"""
  
         return """
             #version 330 core
  
             in vec4 v_Color;
             uniform vec3 u_AmbientColor;
-            uniform int u_Picked;
  
             void main() { 
                 vec2 temp = gl_PointCoord - vec2(0.5);
@@ -278,54 +176,20 @@ class ScatterLight:
  
                 vec3 rgb = v_Color.rgb * u_AmbientColor;
                 vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
-                if (u_Picked == 0)
-                    gl_FragColor = color;
-                else
-                    gl_FragColor = vec4(min(color.rgb*1.5, vec3(1.0)), color.a);
+                
+                gl_FragColor = color;
             } 
         """
 
-class Text2dLight:
+class Text2dLight(_Light):
     """适用于2d文本的环境光照情景模式"""
  
     def __init__(self, ambient=(1.0,1.0,1.0)):
         """构造函数"""
  
-        self.ambient = ambient
+        _Light.__init__(self, ambient=ambient)
  
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        color = kwds.get('color')
-        texture = kwds.get('texture')
-        texcoord = kwds.get('texcoord')
-        align = kwds.get('align')
-        tsize = kwds.get('tsize')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        slide = kwds.get('slide')
- 
-        vshader = self.get_text2d_vshader()
-        fshader = self.get_text2d_fshader()
- 
-        m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-        m.set_vertex('a_Position', vs)
-        m.set_texcoord('a_Texcoord', texcoord)
-        m.add_texture('u_Texture', texture)
-        m.set_text_size('u_TextSize', tsize)
-        m.set_argument('u_AmbientColor', self.ambient)
-        m.set_argument('u_Align', align)
-        m.set_picked('u_Picked')
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix')
-        m.set_slide(slide)
- 
-        return m.verify()
- 
-    def get_text2d_vshader(self):
+    def get_vshader(self, texture):
         """返回2d文本的顶点着色器源码"""
  
         return """
@@ -455,8 +319,8 @@ class Text2dLight:
             }
         """
  
-    def get_text2d_fshader(self):
-        """返回2d文本的片元着色器源码"""
+    def get_fshader(self, texture):
+        """返回片元着色器源码"""
  
         return """
             #version 330 core
@@ -464,679 +328,519 @@ class Text2dLight:
             in vec2 v_Texcoord;
             uniform vec3 u_AmbientColor;
             uniform sampler2D u_Texture;
-            uniform int u_Picked;
  
             void main() { 
                 vec4 color = texture2D(u_Texture, v_Texcoord);
                 vec3 rgb = color.rgb * u_AmbientColor;
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
+
+                gl_FragColor = vec4(rgb, color.a);
             } 
         """
 
-class SunLight:
+class BaseLight(_Light):
+    """环境光"""
+ 
+    def __init__(self, ambient=(1.0,1.0,1.0)):
+        """构造函数"""
+ 
+        _Light.__init__(self, ambient=ambient)
+ 
+    def get_vshader(self, texture):
+        """返回顶点着色器源码"""
+ 
+        if texture is None:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 a_Position;
+                in vec4 a_Color;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                out vec4 v_Color;
+ 
+                void main() { 
+                    v_Color = a_Color;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                }
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 a_Position;
+                in %s a_Texcoord;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                out %s v_Texcoord;
+ 
+                void main() { 
+                    v_Texcoord = a_Texcoord;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                }
+            """ % (self.a_dtype, self.a_dtype)
+ 
+        return shader_src
+ 
+    def get_fshader(self, texture):
+        """返回片元着色器源码"""
+ 
+        if texture is None:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 v_Color;
+                uniform vec3 u_AmbientColor;
+ 
+                void main() { 
+                    vec3 rgb = v_Color.rgb * u_AmbientColor;
+                    gl_FragColor = vec4(rgb, v_Color.a); 
+                } 
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                in %s v_Texcoord;
+                uniform vec3 u_AmbientColor;
+                uniform %s u_Texture;
+ 
+                void main() { 
+                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec3 rgb = color.rgb * u_AmbientColor;
+                    
+                    gl_FragColor = vec4(rgb, color.a);
+                } 
+            """ % (self.a_dtype, self.u_dtype)
+ 
+        return shader_src
+
+class SunLight(_Light):
     """太阳光照情景模式"""
- 
-    def __init__(self, direction=(0.0,0.0,-1.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
+
+    def __init__(self, direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
         """构造函数"""
- 
-        self.direction = direction                                  # 光的方向
-        self.color = color                                          # 光的颜色
-        self.ambient = ambient                                      # 环境光
-        self.stray = kwds.get('stray', False)                       # 杂散光
-        self.roughness = kwds.get('roughness', 0.2)                 # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
-        self.metalness = kwds.get('metalness', 0.2)                 # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
-        self.pellucidness = kwds.get('pellucidness', 0.2)           # 透光度：值域范围[0.0,1.0]
-        self.shininess = np.exp(8*(1-kwds.get('shininess', 0.5)))   # 光洁度（高光系数）：值域范围(0.0,1.0]
- 
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        indices = kwds.get('indices')
-        color = kwds.get('color')
-        normal = kwds.get('normal')
-        texture = kwds.get('texture')
-        texcoord = kwds.get('texcoord')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull')
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
- 
-        if color is None:
-            vshader = self.get_texture_vshader(texture.ttype)
-            fshader = self.get_texture_fshader(texture.ttype)
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-        else:
-            vshader = self.get_color_vshader()
-            fshader = self.get_color_fshader()
 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_color('a_Color', color)
+        _Light.__init__(self, 
+            ambient     = ambient,                      # 环境光
+            direction   = direction,                    # 光的方向
+            lightcolor  = lightcolor,                   # 光的颜色
+            diffuse     = kwds.get('diffuse', 0.8),     # 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮
+            specular    = kwds.get('specular', 0.6),    # 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮
+            shiny       = kwds.get('shiny', 50),        # 高光系数：值域范围[1, 3000]，数值越大，高光区域越小
+            pellucid    = kwds.get('pellucid', 0.5),    # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
+            cpos        = True                          # 着色器需要传入相机位置
+        )
  
-        m.set_vertex('a_Position', vs, indices)
-        m.set_normal('a_Normal', normal)
-        m.set_cam_pos('u_CamPos')
-        m.set_picked('u_Picked')
-        m.set_argument('u_AmbientColor', self.ambient)
-        m.set_argument('u_LightDir', self.direction)
-        m.set_argument('u_LightColor', self.color)
-        m.set_argument('u_Shininess', self.shininess)
-        m.set_argument('u_Roughness', self.roughness)
-        m.set_argument('u_Metalness', self.metalness)
-        m.set_argument('u_Pellucidness', self.pellucidness)
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_cull_mode(cull)
-        m.set_fill_mode(fill)
-        m.set_slide(slide)
+    def get_vshader(self, texture):
+        """返回顶点着色器源码"""
  
-        return m.verify()
+        if texture is None:
+            shader_src =  """
+                #version 330 core
  
-    def get_color_vshader(self):
-        """返回使用颜色的顶点着色器源码"""
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in vec4 a_Color;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_CamPos;
+                uniform vec3 u_LightDir; // 定向光方向
+                out vec4 v_Color;
+                out vec3 v_Normal;
+                out vec3 v_LightDir;
+                out vec3 v_MiddleDir;
  
-        return """
-            #version 330 core
+                void main() { 
+                    v_Color = a_Color;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
  
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in vec4 a_Color;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec4 v_Color;
-            out vec3 v_Position;
-            out vec3 v_Normal;
- 
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Color = a_Color;
-                v_Position= vec3(u_ModelMatrix * a_Position);
- 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """
- 
-    def get_texture_vshader(self, ttype):
-        """返回使用纹理的顶点着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-        elif ttype == GL_TEXTURE_2D_ARRAY or ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-
-        return """
-            #version 330 core
- 
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in %s a_Texcoord;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out %s v_Texcoord;
-            out vec3 v_Position;
-            out vec3 v_Normal;
- 
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Texcoord = a_Texcoord;
-                v_Position= vec3(u_ModelMatrix * a_Position);
- 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """ % (a_dtype, a_dtype)
- 
-    def get_color_fshader(self):
-        """返回使用颜色的片元着色器源码"""
- 
-        if self.stray:
-            diffuse_str = '(1 - u_Metalness) * (dot(lightDir, v_Normal) + 1.0) / 2.0'
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix)); // 法向量矩阵
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0))); // 重新计算模型变换后的法向量
+                    vec3 camDir = normalize(u_CamPos - vec3(u_ModelMatrix * a_Position)); // 从当前顶点指向相机的向量
+                    v_LightDir = normalize(-u_LightDir); // 光线向量取反后单位化
+                    v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
+                }
+            """
         else:
-            diffuse_str = '(1 - u_Metalness) * max(0.0, dot(lightDir, v_Normal))'
+            shader_src = """
+                #version 330 core
  
-        return """
-            #version 330 core
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in %s a_Texcoord;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_CamPos;
+                uniform vec3 u_LightDir; // 定向光方向
+                out %s v_Texcoord;
+                out vec3 v_Normal;
+                out vec3 v_LightDir;
+                out vec3 v_MiddleDir;
  
-            in vec4 v_Color;
-            in vec3 v_Position;
-            in vec3 v_Normal;
-            uniform vec3 u_LightDir; // 定向光方向
-            uniform vec3 u_LightColor; // 定向光颜色
-            uniform vec3 u_AmbientColor; // 环境光颜色
-            uniform vec3 u_CamPos; // 相机位置
-            uniform int u_Picked; // 拾取标志
-            uniform float u_Shininess; // 光洁度
-            uniform float u_Roughness; // 粗糙度
-            uniform float u_Metalness; // 金属度
-            uniform float u_Pellucidness; // 透光度
+                void main() { 
+                    v_Texcoord = a_Texcoord;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
  
-            void main() { 
-                vec3 lightDir = normalize(u_LightDir); // 光线向量
-                vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
-                vec3 middleDir = normalize(camDir + lightDir); // 视线和光线的中间向量
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix)); // 法向量矩阵
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0))); // 重新计算模型变换后的法向量
+                    vec3 camDir = normalize(u_CamPos - vec3(u_ModelMatrix * a_Position)); // 从当前顶点指向相机的向量
+                    v_LightDir = normalize(-u_LightDir); // 光线向量取反后单位化
+                    v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
+                }
+            """ % (self.a_dtype, self.a_dtype)
+
+        return shader_src
  
-                float diffuseCos = %s; // 光线向量和法向量的内积
-                float specularCos = (1 - u_Roughness) * max(0.0, dot(middleDir, v_Normal)); // 中间向量和法向量内积
+    def get_fshader(self, texture):
+        """返回片元着色器源码"""
  
-                specularCos = pow(specularCos, u_Shininess);
-                if (!gl_FrontFacing) diffuseCos *= u_Pellucidness;
+        if texture is None:
+            shader_src = """
+                #version 330 core
  
-                vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
-                vec3 reflectedLight = u_LightColor * specularCos; // 反射光
-                vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
+                in vec4 v_Color;
+                in vec3 v_Normal;
+                in vec3 v_LightDir;
+                in vec3 v_MiddleDir;
+                uniform vec3 u_LightColor; // 定向光颜色
+                uniform vec3 u_AmbientColor; // 环境光颜色
+                uniform float u_Shiny; // 高光系数
+                uniform float u_Specular; // 镜面反射系数
+                uniform float u_Diffuse; // 漫反射系数
+                uniform float u_Pellucid; // 透光系数
  
-                if (u_Picked == 0)
+                void main() { 
+                    float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
+                    float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
+ 
+                    if (!gl_FrontFacing) 
+                        diffuseCos *= u_Pellucid; // 背面受透光系数影响
+ 
+                    if (diffuseCos == 0.0) 
+                        specularCos = 0.0;
+                    else
+                        specularCos = pow(specularCos, u_Shiny);
+ 
+                    vec3 scatteredLight = min(u_AmbientColor + u_LightColor * diffuseCos, vec3(1.0)); // 散射光
+                    vec3 reflectedLight = u_LightColor * specularCos; // 反射光
+                    vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
+ 
                     gl_FragColor = vec4(rgb, v_Color.a);
-                else
-                    gl_FragColor = vec4(min(rgb * 1.5, vec3(1.0)), v_Color.a);
-            }
-        """ % diffuse_str
- 
-    def get_texture_fshader(self, ttype):
-        """返回使用纹理的片元着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-            u_dtype = 'sampler1D'
-            f_name = 'texture1D'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-            u_dtype = 'sampler2D'
-            f_name = 'texture2D'
-        elif ttype == GL_TEXTURE_2D_ARRAY:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler2DArray'
-            f_name = 'texture'
-        elif ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler3D'
-            f_name = 'texture3D'
- 
-        if self.stray:
-            diffuse_str = '(1 - u_Metalness) * (dot(lightDir, v_Normal) + 1.0) / 2.0'
+                }
+            """
         else:
-            diffuse_str = '(1 - u_Metalness) * max(0.0, dot(lightDir, v_Normal))'
-
-        return """
-            #version 330 core
+            shader_src = """
+                #version 330 core
  
-            in %s v_Texcoord;
-            in vec3 v_Position;
-            in vec3 v_Normal;
-            uniform %s u_Texture;
-            uniform vec3 u_LightDir; // 定向光方向
-            uniform vec3 u_LightColor; // 定向光颜色
-            uniform vec3 u_AmbientColor; // 环境光颜色
-            uniform vec3 u_CamPos; // 相机位置
-            uniform int u_Picked; // 拾取标志
-            uniform float u_Shininess; // 光洁度
-            uniform float u_Roughness; // 粗糙度
-            uniform float u_Metalness; // 金属度
-            uniform float u_Pellucidness; // 透光度
+                in %s v_Texcoord;
+                in vec3 v_Normal;
+                in vec3 v_LightDir;
+                in vec3 v_MiddleDir;
+                uniform %s u_Texture;
+                uniform vec3 u_LightColor; // 定向光颜色
+                uniform vec3 u_AmbientColor; // 环境光颜色
+                uniform float u_Shiny; // 高光系数
+                uniform float u_Specular; // 镜面反射系数
+                uniform float u_Diffuse; // 漫反射系数
+                uniform float u_Pellucid; // 透光系数
  
-            void main() { 
-                vec3 lightDir = normalize(u_LightDir); // 光线向量
-                vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
-                vec3 middleDir = normalize(camDir + lightDir); // 视线和光线的中间向量
-                vec4 color = %s(u_Texture, v_Texcoord);
+                void main() { 
+                    vec4 color = texture(u_Texture, v_Texcoord);
+                    float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
+                    float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
  
-                float diffuseCos = %s; // 光线向量和法向量的内积
-                float specularCos = (1 - u_Roughness) * max(0.0, dot(middleDir, v_Normal)); // 中间向量和法向量内积
+                    if (!gl_FrontFacing) 
+                        diffuseCos *= u_Pellucid; // 背面受透光系数影响
  
-                if (!gl_FrontFacing) 
-                    diffuseCos *= u_Pellucidness;
+                    if (diffuseCos == 0.0) 
+                        specularCos = 0.0;
+                    else
+                        specularCos = pow(specularCos, u_Shiny);
  
-                if (diffuseCos == 0.0 || u_Shininess > 2980.0) 
-                    specularCos = 0.0;
-                else
-                    specularCos = pow(specularCos, u_Shininess);
+                    vec3 scatteredLight = min(u_AmbientColor + u_LightColor * diffuseCos, vec3(1.0)); // 散射光
+                    vec3 reflectedLight = u_LightColor * specularCos; // 反射光
+                    vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
  
-                vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
-                vec3 reflectedLight = u_LightColor * specularCos; // 反射光
-                vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
- 
-                if (u_Picked == 0)
                     gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """ % (a_dtype, u_dtype, f_name, diffuse_str)
+                } 
+            """ % (self.a_dtype, self.u_dtype)
 
-class LampLight:
+        return shader_src
+
+class LampLight(_Light):
     """定位光照情景模式"""
- 
-    def __init__(self, position=(5.0,1.0,5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
-        """构造函数"""
- 
-        self.position = position                                    # 光源位置
-        self.color = color                                          # 光的颜色
-        self.ambient = ambient                                      # 环境光
-        self.stray = kwds.get('stray', False)                       # 杂散光
-        self.roughness = kwds.get('roughness', 0.2)                 # 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]
-        self.metalness = kwds.get('metalness', 0.2)                 # 金属度（1-漫反射系数）：值域范围[0.0,1.0]
-        self.pellucidness = kwds.get('pellucidness', 0.2)           # 透光度：值域范围[0.0,1.0]
-        self.shininess = np.exp(8*(1-kwds.get('shininess', 0.5)))   # 光洁度（高光系数）：值域范围(0.0,1.0]
- 
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        indices = kwds.get('indices')
-        color = kwds.get('color')
-        normal = kwds.get('normal')
-        texture = kwds.get('texture')
-        texcoord = kwds.get('texcoord')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull')
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
- 
-        if color is None:
-            vshader = self.get_texture_vshader(texture.ttype)
-            fshader = self.get_texture_fshader(texture.ttype)
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-        else:
-            vshader = self.get_color_vshader()
-            fshader = self.get_color_fshader()
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_color('a_Color', color)
- 
-        m.set_vertex('a_Position', vs, indices)
-        m.set_normal('a_Normal', normal)
-        m.set_cam_pos('u_CamPos')
-        m.set_picked('u_Picked')
-        m.set_argument('u_AmbientColor', self.ambient)
-        m.set_argument('u_LightPos', self.position)
-        m.set_argument('u_LightColor', self.color)
-        m.set_argument('u_Shininess', self.shininess)
-        m.set_argument('u_Roughness', self.roughness)
-        m.set_argument('u_Metalness', self.metalness)
-        m.set_argument('u_Pellucidness', self.pellucidness)
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_cull_mode(cull)
-        m.set_fill_mode(fill)
-        m.set_slide(slide)
- 
-        return m.verify()
- 
-    def get_color_vshader(self):
-        """返回使用颜色的顶点着色器源码"""
- 
-        return """
-            #version 330 core
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in vec4 a_Color;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec4 v_Color;
-            out vec3 v_Position;
-            out vec3 v_Normal;
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Color = a_Color;
-                v_Position= vec3(u_ModelMatrix * a_Position);
-                
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """
- 
-    def get_texture_vshader(self):
-        """返回使用纹理的顶点着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-        elif ttype == GL_TEXTURE_2D_ARRAY or ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
- 
-        return """
-            #version 330 core
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in %s a_Texcoord;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out %s v_Texcoord;
-            out vec3 v_Position;
-            out vec3 v_Normal;
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Texcoord = a_Texcoord;
-                v_Position= vec3(u_ModelMatrix * a_Position);
- 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """ % (a_dtype, a_dtype)
- 
-    def get_color_fshader(self):
-        """返回使用颜色的片元着色器源码"""
- 
-        if self.stray:
-            diffuse_str = '(1 - u_Metalness) * (dot(lightDir, v_Normal) + 1.0) / 2.0'
-        else:
-            diffuse_str = '(1 - u_Metalness) * max(0.0, dot(lightDir, v_Normal))'
- 
-        return """
-            #version 330 core
-            in vec4 v_Color;
-            in vec3 v_Position;
-            in vec3 v_Normal;
-            uniform vec3 u_LightPos; // 光源位置
-            uniform vec3 u_LightColor; // 光源颜色
-            uniform vec3 u_AmbientColor; // 环境光颜色
-            uniform vec3 u_CamPos; // 相机位置
-            uniform int u_Picked; // 拾取标志
-            uniform float u_Shininess; // 光洁度
-            uniform float u_Roughness; // 粗糙度
-            uniform float u_Metalness; // 金属度
-            uniform float u_Pellucidness; // 透光度
-            void main() { 
-                vec3 lightDir = normalize(v_Position - u_LightPos); // 光线向量
-                vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
-                vec3 middleDir = normalize(camDir + lightDir); // 视线和光线的中间向量
-                
-                float diffuseCos = %s; // 光线向量和法向量的内积
-                float specularCos = (1 - u_Roughness) * max(0.0, dot(middleDir, v_Normal)); // 中间向量和法向量内积
-                
-                specularCos = pow(specularCos, u_Shininess);
-                if (!gl_FrontFacing) diffuseCos *= u_Pellucidness;
-                
-                vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
-                vec3 reflectedLight = u_LightColor * specularCos; // 反射光
-                vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
-                
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, v_Color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
-            }
-        """ % diffuse_str
- 
-    def get_texture_fshader(self):
-        """返回使用纹理的片元着色器源码"""
- 
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-            u_dtype = 'sampler1D'
-            f_name = 'texture1D'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-            u_dtype = 'sampler2D'
-            f_name = 'texture2D'
-        elif ttype == GL_TEXTURE_2D_ARRAY:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler2DArray'
-            f_name = 'texture'
-        elif ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler3D'
-            f_name = 'texture3D'
- 
-        if self.stray:
-            diffuse_str = '(1 - u_Metalness) * (dot(lightDir, v_Normal) + 1.0) / 2.0'
-        else:
-            diffuse_str = '(1 - u_Metalness) * max(0.0, dot(lightDir, v_Normal))'
- 
-        return """
-            #version 330 core
-            in %s v_Texcoord;
-            in vec3 v_Position;
-            in vec3 v_Normal;
-            uniform %s u_Texture;
-            uniform vec3 u_LightPos; // 光源位置
-            uniform vec3 u_LightColor; // 光源颜色
-            uniform vec3 u_AmbientColor; // 环境光颜色
-            uniform vec3 u_CamPos; // 相机位置
-            uniform int u_Picked; // 拾取标志
-            uniform float u_Shininess; // 光洁度
-            uniform float u_Roughness; // 粗糙度
-            uniform float u_Metalness; // 金属度
-            uniform float u_Pellucidness; // 透光度
-            void main() { 
-                vec3 lightDir = normalize(v_Position - u_LightPos); // 光线向量
-                vec3 camDir = normalize(v_Position - u_CamPos); // 视线向量
-                vec3 middleDir = normalize(camDir + lightDir); // 视线和光线的中间向量
-                vec4 color = %s(u_Texture, v_Texcoord);
- 
-                float diffuseCos = %s; // 光线向量和法向量的内积
-                float specularCos = (1 - u_Roughness) * max(0.0, dot(middleDir, v_Normal)); // 中间向量和法向量内积
- 
-                if (!gl_FrontFacing) 
-                    diffuseCos *= u_Pellucidness;
- 
-                if (diffuseCos == 0.0 || u_Shininess > 2980.0) 
-                    specularCos = 0.0;
-                else
-                    specularCos = pow(specularCos, u_Shininess);
- 
-                vec3 scatteredLight = u_AmbientColor + u_LightColor * diffuseCos; // 散射光
-                vec3 reflectedLight = u_LightColor * specularCos; // 反射光
-                vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
- 
-                if (u_Picked == 0)
-                    gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """ % (a_dtype, u_dtype, f_name, diffuse_str)
 
-class SkyLight:
-    """户外光照情景模式"""
+    def __init__(self, lamp=(0.0,0.0,2.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
+        """构造函数"""
+
+        _Light.__init__(self, 
+            ambient     = ambient,                      # 环境光
+            lamp        = lamp,                         # 光源位置
+            lightcolor  = lightcolor,                   # 光的颜色
+            diffuse     = kwds.get('diffuse', 0.8),     # 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮
+            specular    = kwds.get('specular', 0.6),    # 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮
+            shiny       = kwds.get('shiny', 50),        # 高光系数：值域范围[1, 3000]，数值越大，高光区域越小
+            pellucid    = kwds.get('pellucid', 0.5),    # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
+            cpos        = True                          # 着色器需要传入相机位置
+        )
+
+    def get_vshader(self, texture):
+        """返回顶点着色器源码"""
  
+        if texture is None:
+            shader_src =  """
+                #version 330 core
+ 
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in vec4 a_Color;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_CamPos;
+                uniform vec3 u_LightPos;
+                out vec4 v_Color;
+                out vec3 v_Normal;
+                out vec3 v_LightDir;
+                out vec3 v_MiddleDir;
+ 
+                void main() { 
+                    v_Color = a_Color;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+ 
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix)); // 法向量矩阵
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0))); // 重新计算模型变换后的法向量
+                    
+                    vec3 camDir = normalize(u_CamPos - vec3(u_ModelMatrix * a_Position)); // 从当前顶点指向相机的向量
+                    v_LightDir = normalize(u_LightPos - a_Position.xyz); // 光线向量单位化
+                    v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
+                }
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in %s a_Texcoord;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_CamPos;
+                uniform vec3 u_LightPos;
+                out %s v_Texcoord;
+                out vec3 v_Normal;
+                out vec3 v_LightDir;
+                out vec3 v_MiddleDir;
+ 
+                void main() { 
+                    v_Texcoord = a_Texcoord;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+ 
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix)); // 法向量矩阵
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0))); // 重新计算模型变换后的法向量
+                    
+                    vec3 camDir = normalize(u_CamPos - vec3(u_ModelMatrix * a_Position)); // 从当前顶点指向相机的向量
+                    v_LightDir = normalize(u_LightPos - a_Position.xyz); // 光线向量单位化
+                    v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
+                }
+            """ % (self.a_dtype, self.a_dtype)
+
+        return shader_src
+ 
+    def get_fshader(self, texture):
+        """返回片元着色器源码"""
+ 
+        if texture is None:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 v_Color;
+                in vec3 v_Normal;
+                in vec3 v_LightDir;
+                in vec3 v_MiddleDir;
+                uniform vec3 u_LightColor; // 灯光颜色
+                uniform vec3 u_AmbientColor; // 环境光颜色
+                uniform float u_Shiny; // 高光系数
+                uniform float u_Specular; // 镜面反射系数
+                uniform float u_Diffuse; // 漫反射系数
+                uniform float u_Pellucid; // 透光系数
+ 
+                void main() { 
+                    float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
+                    float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
+ 
+                    if (!gl_FrontFacing) 
+                        diffuseCos *= u_Pellucid; // 背面受透光系数影响
+ 
+                    if (diffuseCos == 0.0) 
+                        specularCos = 0.0;
+                    else
+                        specularCos = pow(specularCos, u_Shiny);
+ 
+                    vec3 scatteredLight = min(u_AmbientColor + u_LightColor * diffuseCos, vec3(1.0)); // 散射光
+                    vec3 reflectedLight = u_LightColor * specularCos; // 反射光
+                    vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
+ 
+                    gl_FragColor = vec4(rgb, v_Color.a);
+                }
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                in %s v_Texcoord;
+                in vec3 v_Normal;
+                in vec3 v_LightDir;
+                in vec3 v_MiddleDir;
+                uniform %s u_Texture;
+                uniform vec3 u_LightColor; // 灯光颜色
+                uniform vec3 u_AmbientColor; // 环境光颜色
+                uniform float u_Shiny; // 高光系数
+                uniform float u_Specular; // 镜面反射系数
+                uniform float u_Diffuse; // 漫反射系数
+                uniform float u_Pellucid; // 透光系数
+ 
+                void main() { 
+                    vec4 color = texture(u_Texture, v_Texcoord);
+                    float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
+                    float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
+ 
+                    if (!gl_FrontFacing) 
+                        diffuseCos *= u_Pellucid; // 背面受透光系数影响
+ 
+                    if (diffuseCos == 0.0) 
+                        specularCos = 0.0;
+                    else
+                        specularCos = pow(specularCos, u_Shiny);
+ 
+                    vec3 scatteredLight = min(u_AmbientColor + u_LightColor * diffuseCos, vec3(1.0)); // 散射光
+                    vec3 reflectedLight = u_LightColor * specularCos; // 反射光
+                    vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
+ 
+                    gl_FragColor = vec4(rgb, color.a);
+                } 
+            """ % (self.a_dtype, self.u_dtype)
+
+        return shader_src
+
+class SkyLight(_Light):
+    """户外光照情景模式"""
+
     def __init__(self, direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.5,0.5,0.5)):
         """构造函数"""
+
+        _Light.__init__(self, 
+            direction   = direction,                    # 光的方向
+            sky         = sky,                          # 来自天空的环境光
+            ground      = ground,                       # 来自地面的环境光
+        )
  
-        self.direction = direction          # 光的方向
-        self.sky = sky                      # 来自天空的环境光
-        self.ground = ground                # 来自地面的环境光
- 
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        indices = kwds.get('indices')
-        color = kwds.get('color')
-        normal = kwds.get('normal')
-        texture = kwds.get('texture')
-        texcoord = kwds.get('texcoord')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull')
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
- 
-        if color is None:
-            vshader = self.get_texture_vshader(texture.ttype)
-            fshader = self.get_texture_fshader(texture.ttype)
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-        else:
-            vshader = self.get_color_vshader()
-            fshader = self.get_color_fshader()
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_color('a_Color', color)
- 
-        m.set_vertex('a_Position', vs, indices)
-        m.set_normal('a_Normal', normal)
-        m.set_argument('u_LightDir', self.direction)
-        m.set_argument('u_SkyColor', self.sky)
-        m.set_argument('u_GroundColor', self.ground)
-        m.set_picked('u_Picked')
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_cull_mode(cull)
-        m.set_fill_mode(fill)
-        m.set_slide(slide)
- 
-        return m.verify()
- 
-    def get_color_vshader(self):
+    def get_vshader(self, texture):
         """返回使用颜色的顶点着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            return """
+                #version 330 core
  
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in vec4 a_Color;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec3 v_Normal;
-            out vec4 v_Color;
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in vec4 a_Color;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_LightDir; // 定向光方向
+                out vec4 v_Color;
+                out float v_Costheta;
  
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Color = a_Color;
+                void main() { 
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                    v_Color = a_Color;
  
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    vec3 normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
+                    v_Costheta = dot(normal, normalize(-u_LightDir)) * 0.5 + 0.5;
+                }
+            """
+        else:
+            return """
+                #version 330 core
  
-    def get_texture_vshader(self):
-        """返回使用纹理的顶点着色器源码"""
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in %s a_Texcoord;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                uniform vec3 u_LightDir; // 定向光方向
+                out %s v_Texcoord;
+                out float v_Costheta;
  
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-        elif ttype == GL_TEXTURE_2D_ARRAY or ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
+                void main() { 
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                    v_Texcoord = a_Texcoord;
  
-        return """
-            #version 330 core
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    vec3 normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
+                    v_Costheta = dot(normal, normalize(-u_LightDir)) * 0.5 + 0.5;
+                }
+            """ % (self.a_dtype, self.a_dtype)
  
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in %s a_Texcoord;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec3 v_Normal;
-            out %s v_Texcoord;
- 
-            void main() { 
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                v_Texcoord = a_Texcoord;
- 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-            }
-        """ % (a_dtype, a_dtype)
- 
-    def get_color_fshader(self):
+    def get_fshader(self, texture):
         """返回使用颜色的片元着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            return """
+                #version 330 core
  
-            in vec4 v_Color;
-            in vec3 v_Normal;
-            uniform vec3 u_LightDir; // 定向光方向
-            uniform vec3 u_SkyColor; // 天空光线颜色
-            uniform vec3 u_GroundColor; // 地面光线颜色
-            uniform int u_Picked; // 拾取标志
+                in vec4 v_Color;
+                in float v_Costheta;
+                uniform vec3 u_SkyColor; // 天空光线颜色
+                uniform vec3 u_GroundColor; // 地面光线颜色
  
-            void main() { 
-                float costheta = dot(v_Normal, normalize(u_LightDir)) * 0.5 + 0.5;
-                if (!gl_FrontFacing) costheta *= 0.5;
+                void main() { 
+                    float costheta = v_Costheta;
+                    if (!gl_FrontFacing) 
+                        costheta *= 0.5;
  
-                vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * v_Color.rgb;
-                if (u_Picked == 0)
+                    vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * v_Color.rgb;
                     gl_FragColor = vec4(rgb, v_Color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
-            } 
-        """
+                } 
+            """
+        else:
+            return """
+                #version 330 core
  
-    def get_texture_fshader(self):
-        """返回使用纹理的片元着色器源码"""
+                in %s v_Texcoord;
+                in float v_Costheta;
+                uniform %s u_Texture;
+                uniform vec3 u_SkyColor; // 天空光线颜色
+                uniform vec3 u_GroundColor; // 地面光线颜色
  
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-            u_dtype = 'sampler1D'
-            f_name = 'texture1D'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-            u_dtype = 'sampler2D'
-            f_name = 'texture2D'
-        elif ttype == GL_TEXTURE_2D_ARRAY:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler2DArray'
-            f_name = 'texture'
-        elif ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler3D'
-            f_name = 'texture3D'
- 
-        return """
-            #version 330 core
- 
-            in vec3 v_Normal;
-            in %s v_Texcoord;
-            uniform %s u_Texture;
-            uniform vec3 u_LightDir; // 定向光方向
-            uniform vec3 u_SkyColor; // 天空光线颜色
-            uniform vec3 u_GroundColor; // 地面光线颜色
-            uniform int u_Picked; // 拾取标志
- 
-            void main() { 
-                float costheta = dot(v_Normal, normalize(u_LightDir)) * 0.5 + 0.5;
-                if (!gl_FrontFacing) costheta *= 0.5;
-                vec4 color = %s(u_Texture, v_Texcoord);
-                vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * color.rgb;
- 
-                if (u_Picked == 0)
+                void main() { 
+                    vec4 color = texture(u_Texture, v_Texcoord);
+                    float costheta = v_Costheta;
+                    if (!gl_FrontFacing) 
+                        costheta *= 0.5;
+
+                    vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * color.rgb;
                     gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """ % (a_dtype, u_dtype, f_name)
+                } 
+            """ % (self.a_dtype, self.u_dtype)
  
-class SphereLight:
+class SphereLight(_Light):
     """球谐光照情景模式"""
- 
-    def __init__(self, key=0, factor=0.8):
+
+    def __init__(self, factor=0.8, style=0):
         """构造函数"""
  
-        self.factor = factor                # 反射衰减因子
+        _Light.__init__(self)
+
+        self.factor = factor # 反射衰减因子
         self.parameter = [
             # 0. Old Town square 
             """
@@ -1267,197 +971,119 @@ class SphereLight:
             const vec3 L21 = vec3(0.16, 0.14, 0.10);
             const vec3 L22 = vec3(0.37, 0.31, 0.20);
             """
-        ][key]
+        ][style]
  
-    def get_model(self, gltype, vs, **kwds):
-        """返回模型对象"""
- 
-        indices = kwds.get('indices')
-        color = kwds.get('color')
-        normal = kwds.get('normal')
-        texture = kwds.get('texture')
-        texcoord = kwds.get('texcoord')
- 
-        visible = kwds.get('visible', True)
-        inside = kwds.get('inside', True)
-        opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull')
-        fill = kwds.get('fill')
-        slide = kwds.get('slide')
-        transform = kwds.get('transform')
- 
-        if color is None:
-            vshader = self.get_texture_vshader(texture.ttype)
-            fshader = self.get_texture_fshader(texture.ttype)
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-        else:
-            vshader = self.get_color_vshader()
-            fshader = self.get_color_fshader()
- 
-            m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
-            m.set_color('a_Color', color)
- 
-        m.set_vertex('a_Position', vs, indices)
-        m.set_normal('a_Normal', normal)
-        m.set_picked('u_Picked')
-        m.set_argument('u_ScaleFactor', self.factor)
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_cull_mode(cull)
-        m.set_fill_mode(fill)
-        m.set_slide(slide)
- 
-        return m.verify()
- 
-    def get_color_vshader(self):
+    def get_vshader(self, texture):
         """返回使用颜色的顶点着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            return """
+                #version 330 core
  
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in vec4 a_Color;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec4 v_Color;
-            out vec3 v_Normal;
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in vec4 a_Color;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                out vec4 v_Color;
+                out vec3 v_Normal;
  
-            void main() { 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-                v_Color = a_Color;
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-            }
-        """
+                void main() { 
+                    v_Color = a_Color;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
+                }
+            """
+        else:
+            return """
+                #version 330 core
  
-    def get_texture_vshader(self):
-        """返回使用纹理的顶点着色器源码"""
+                in vec4 a_Position;
+                in vec3 a_Normal;
+                in %s a_Texcoord;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                out %s v_Texcoord;
+                out vec3 v_Normal;
  
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-        elif ttype == GL_TEXTURE_2D_ARRAY or ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
+                void main() { 
+                    v_Texcoord = a_Texcoord;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+
+                    mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
+                    v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
+                }
+            """ % (self.a_dtype, self.a_dtype)
  
-        return """
-            #version 330 core
- 
-            in vec4 a_Position;
-            in vec3 a_Normal;
-            in %s a_Texcoord;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out %s v_Texcoord;
-            out vec3 v_Normal;
- 
-            void main() { 
-                mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
-                v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
-                v_Texcoord = a_Texcoord;
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-            }
-        """ % (a_dtype, a_dtype)
- 
-    def get_color_fshader(self):
+    def get_fshader(self, texture):
         """返回使用颜色的片元着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            return """
+                #version 330 core
  
-            in vec4 v_Color;
-            in vec3 v_Normal;
-            const float C1 = 0.429043;
-            const float C2 = 0.511664;
-            const float C3 = 0.743125;
-            const float C4 = 0.886227;
-            const float C5 = 0.247708;
-            %s
-            uniform float u_ScaleFactor;
-            uniform int u_Picked;
+                in vec4 v_Color;
+                in vec3 v_Normal;
+                const float C1 = 0.429043;
+                const float C2 = 0.511664;
+                const float C3 = 0.743125;
+                const float C4 = 0.886227;
+                const float C5 = 0.247708;
+                %s
+                uniform float u_ScaleFactor;
  
-            void main() { 
-                vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
-                        + C3 * L20 * v_Normal.z * v_Normal.z
-                        + C4 * L00
-                        - C5 * L20
-                        + 2.0 * C1 * L2m2 * v_Normal.x * v_Normal.y
-                        + 2.0 * C1 * L21 * v_Normal.x * v_Normal.z
-                        + 2.0 * C1 * L2m1 * v_Normal.y * v_Normal.z
-                        + 2.0 * C2 * L11 * v_Normal.x
-                        + 2.0 * C2 * L1m1 * v_Normal.y
-                        + 2.0 * C2 * L10 * v_Normal.z;
+                void main() { 
+                    vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
+                            + C3 * L20 * v_Normal.z * v_Normal.z
+                            + C4 * L00
+                            - C5 * L20
+                            + 2.0 * C1 * L2m2 * v_Normal.x * v_Normal.y
+                            + 2.0 * C1 * L21 * v_Normal.x * v_Normal.z
+                            + 2.0 * C1 * L2m1 * v_Normal.y * v_Normal.z
+                            + 2.0 * C2 * L11 * v_Normal.x
+                            + 2.0 * C2 * L1m1 * v_Normal.y
+                            + 2.0 * C2 * L10 * v_Normal.z;
  
-                diffuse *= u_ScaleFactor;
-                vec3 rgb = v_Color.rgb * diffuse;
-                if (u_Picked == 0)
+                    diffuse *= u_ScaleFactor;
+                    vec3 rgb = v_Color.rgb * diffuse;
                     gl_FragColor = vec4(rgb, v_Color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
-            } 
-        """ % self.parameter
+                } 
+            """ % self.parameter
+        else: 
+            return """
+                #version 330 core
  
-    def get_texture_fshader(self):
-        """返回使用纹理的片元着色器源码"""
+                in %s v_Texcoord;
+                in vec3 v_Normal;
+                const float C1 = 0.429043;
+                const float C2 = 0.511664;
+                const float C3 = 0.743125;
+                const float C4 = 0.886227;
+                const float C5 = 0.247708;
+                %s
+                uniform %s u_Texture;
+                uniform float u_ScaleFactor;
  
-        if ttype == GL_TEXTURE_1D:
-            a_dtype = 'float'
-            u_dtype = 'sampler1D'
-            f_name = 'texture1D'
-        elif ttype == GL_TEXTURE_2D:
-            a_dtype = 'vec2'
-            u_dtype = 'sampler2D'
-            f_name = 'texture2D'
-        elif ttype == GL_TEXTURE_2D_ARRAY:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler2DArray'
-            f_name = 'texture'
-        elif ttype == GL_TEXTURE_3D:
-            a_dtype = 'vec3'
-            u_dtype = 'sampler3D'
-            f_name = 'texture3D'
+                void main() { 
+                    vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
+                            + C3 * L20 * v_Normal.z * v_Normal.z
+                            + C4 * L00
+                            - C5 * L20
+                            + 2.0 * C1 * L2m2 * v_Normal.x * v_Normal.y
+                            + 2.0 * C1 * L21 * v_Normal.x * v_Normal.z
+                            + 2.0 * C1 * L2m1 * v_Normal.y * v_Normal.z
+                            + 2.0 * C2 * L11 * v_Normal.x
+                            + 2.0 * C2 * L1m1 * v_Normal.y
+                            + 2.0 * C2 * L10 * v_Normal.z;
  
-        return """
-            #version 330 core
- 
-            in %s v_Texcoord;
-            in vec3 v_Normal;
-            const float C1 = 0.429043;
-            const float C2 = 0.511664;
-            const float C3 = 0.743125;
-            const float C4 = 0.886227;
-            const float C5 = 0.247708;
-            %s
-            uniform %s u_Texture;
-            uniform float u_ScaleFactor;
-            uniform int u_Picked;
- 
-            void main() { 
-                vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
-                        + C3 * L20 * v_Normal.z * v_Normal.z
-                        + C4 * L00
-                        - C5 * L20
-                        + 2.0 * C1 * L2m2 * v_Normal.x * v_Normal.y
-                        + 2.0 * C1 * L21 * v_Normal.x * v_Normal.z
-                        + 2.0 * C1 * L2m1 * v_Normal.y * v_Normal.z
-                        + 2.0 * C2 * L11 * v_Normal.x
-                        + 2.0 * C2 * L1m1 * v_Normal.y
-                        + 2.0 * C2 * L10 * v_Normal.z;
- 
-                diffuse *= u_ScaleFactor;
-                vec4 color = %s(u_Texture, v_Texcoord);
-                vec3 rgb = color.rgb * diffuse;
-                if (u_Picked == 0)
+                    diffuse *= u_ScaleFactor;
+                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec3 rgb = color.rgb * diffuse;
                     gl_FragColor = vec4(rgb, color.a);
-                else
-                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-            } 
-        """ % (a_dtype, self.parameter, u_dtype, f_name)
+                } 
+            """ % (self.a_dtype, self.parameter, self.u_dtype)
         

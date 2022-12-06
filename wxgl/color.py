@@ -140,7 +140,7 @@ class ColorManager:
 
         return color
  
-    def colormap(self, data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
+    def cmap(self, data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
         """数值映射到颜色
  
         data        - 数据
@@ -179,7 +179,7 @@ class ColorManager:
  
         return color
 
-    def get_cmap_colors(self, cm):
-        """返回调色板的颜色列表"""
+    def get_cm_colors(self, cm):
+        """返回给定调色板的颜色列表"""
 
         return mcm.get_cmap(cm).colors

@@ -22,9 +22,6 @@ class Scheme:
         self.bg = np.array(bg)                                  # 背景色
         self.fg = 1 - self.bg                                   # 前景色
 
-        if self.haxis != 'z':
-            self.haxis = 'y'
-
         self.reset()
 
     def reset(self):
@@ -68,7 +65,7 @@ class Scheme:
 
         self.models[0].update({name: m})
 
-    def get_series(self, v_min, v_max, endpoint=False, extend=0):
+    def _get_series(self, v_min, v_max, endpoint=False, extend=0):
         """返回标注序列
  
         v_min       - 数据最小值
@@ -263,7 +260,7 @@ class Scheme:
             data = np.array(data)
             if data.shape != (vs.shape[0],):
                 raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.colormap(data, cm, alpha=alpha)
+            color = util.cmap(data, cm, alpha=alpha)
  
         if self.haxis=='z':
             idx = np.argsort(-vs[...,1])
@@ -318,7 +315,7 @@ class Scheme:
             data = np.array(data)
             if data.shape != (vs.shape[0],):
                 raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.colormap(data, cm, alpha=alpha)
+            color = util.cmap(data, cm, alpha=alpha)
  
         method = method.lower()
         if method == 'isolate':
@@ -390,7 +387,7 @@ class Scheme:
                 normal[1] += normal[-1]
                 normal[-2] = normal[0]
                 normal[-1] = normal[1]
-            if gltype == GL_TRIANGLE_FAN:
+            elif gltype == GL_TRIANGLE_FAN:
                 normal[1] += normal[-1]
                 normal[-1] = normal[1]
 
@@ -402,7 +399,7 @@ class Scheme:
             data = np.array(data)
             if data.shape != (vs.shape[0],):
                 raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.colormap(data, cm, alpha=alpha)
+            color = util.cmap(data, cm, alpha=alpha)
         else:
             if isinstance(texture, str):
                 if os.path.exists(texture):
@@ -420,7 +417,7 @@ class Scheme:
                 raise KeyError('期望纹理坐标参数texcoord为%d行%d列的浮点型数组'%(vs.shape[0], tn))
  
         name = kwds.pop('name') if 'name' in kwds else uuid.uuid1().hex
-        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-10))
+        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-1))
         kwds.update({'normal':normal, 'color':color, 'texture':texture, 'texcoord':texcoord, 'indices':indices})
 
         m = light.get_model(gltype, vs, **kwds)
@@ -488,7 +485,7 @@ class Scheme:
             data = np.array(data)
             if data.shape != (vs.shape[0],):
                 raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.colormap(data, cm, alpha=alpha)
+            color = util.cmap(data, cm, alpha=alpha)
         else:
             if isinstance(texture, str):
                 if os.path.exists(texture):
@@ -506,7 +503,7 @@ class Scheme:
                 raise KeyError('期望纹理坐标参数texcoord为%d行%d列的浮点型数组'%(vs.shape[0], tn))
  
         name = kwds.pop('name') if 'name' in kwds else uuid.uuid1().hex
-        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-10))
+        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-1))
         kwds.update({'normal':normal, 'color':color, 'texture':texture, 'texcoord':texcoord, 'indices':indices})
 
         m = light.get_model(gltype, vs, **kwds)
@@ -565,7 +562,7 @@ class Scheme:
             data = np.array(data)
             if data.shape != (rows, cols):
                 raise KeyError('期望参数data为%d行%d列长度等于%d的二维数组'%(rows, cols))
-            color = util.colormap(data, cm, alpha=alpha).reshape(-1, 4)
+            color = util.cmap(data, cm, alpha=alpha).reshape(-1, 4)
         else:
             if isinstance(texture, str):
                 if os.path.exists(texture):
@@ -581,7 +578,7 @@ class Scheme:
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)).reshape(-1,2))        
  
         name = kwds.pop('name') if 'name' in kwds else uuid.uuid1().hex
-        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-10))
+        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-1))
         kwds.update({'normal':normal, 'color':color, 'texture':texture, 'texcoord':texcoord, 'indices':indices})
 
         m = light.get_model(gltype, vs, **kwds)
@@ -672,7 +669,7 @@ class Scheme:
             texcoord = np.float32(np.dstack(np.meshgrid(u,v)).reshape(-1,2))
  
         name = kwds.pop('name') if 'name' in kwds else uuid.uuid1().hex
-        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-10))
+        light = kwds.pop('light') if 'light' in kwds else SunLight(direction=(0,1,0) if self.haxis=='z' else (0,0,-1))
         kwds.update({'normal':normal, 'color':color, 'texture':texture, 'texcoord':texcoord, 'indices':indices})
 
         m = light.get_model(gltype, vs, **kwds)
@@ -779,9 +776,9 @@ class Scheme:
         yfunc = self.ticks['yfunc']
         zfunc = self.ticks['zfunc']
 
-        xx = self.get_series(*self.r_x, extend=0.03)
-        yy = self.get_series(*self.r_y, extend=0.03)
-        zz = self.get_series(*self.r_z, extend=0.03)
+        xx = self._get_series(*self.r_x, extend=0.03)
+        yy = self._get_series(*self.r_y, extend=0.03)
+        zz = self._get_series(*self.r_z, extend=0.03)
 
         # -----------------------------------------------------------------------------------------
         def mesh2quad(xs, ys, zs):
@@ -1110,7 +1107,7 @@ class Scheme:
         # 绘制颜色条
         # --------------------------------------------------------------------
         vs_bar = list()
-        colors = util.get_cmap_colors(cm)
+        colors = util.get_cm_colors(cm)
         qs = np.linspace(bottom, top, len(colors)+1)
         for i in range(len(colors)):
             vs_bar.extend([[left,qs[i+1],0], [left,qs[i],0], [right,qs[i],0], [right,qs[i+1],0]])
@@ -1125,7 +1122,7 @@ class Scheme:
         # --------------------------------------------------------------------
         dmin, dmax = data[0], data[-1]
         if len(data) == 2:
-            data = self.get_series(data[0], data[-1], endpoint)
+            data = self._get_series(data[0], data[-1], endpoint)
 
         vs_line = list()
         ys = list()
