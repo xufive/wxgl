@@ -116,18 +116,17 @@ class Scheme:
         size        - 字号：整型，默认32
         align       - 水平对齐方式：'left'-左对齐（默认），'center'-水平居中，'right'-右对齐
         valign      - 垂直对齐方式：'bottom'-底部对齐（默认），'middle'-垂直居中，'top'-顶部对齐
-        family          - 字体：None表示当前默认的字体
-        weight          - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
+        family      - 字体：None表示当前默认的字体
+        weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
-            slide           - 幻灯片函数，默认None
-            ambient         - 环境光，默认(1.0,1.0,1.0)
+            name        - 模型名
+            visible     - 是否可见，默认True
+            slide       - 幻灯片函数，默认None
+            ambient     - 环境光，默认(1.0,1.0,1.0)
         """
  
         for key in kwds:
-            if key not in ['name', 'visible', 'cull', 'slide', 'ambient']:
+            if key not in ['name', 'visible', 'slide', 'ambient']:
                 raise KeyError('不支持的关键字参数：%s'%key)
  
         if not kwds.get('slide') is None:
@@ -158,21 +157,21 @@ class Scheme:
         color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
         bg          - 背景色，None表示背景透明
         align       - 文本宽度方向对齐方式
-            'fill'          - 填充
-            'left'          - 左对齐
-            'right'         - 右对齐
-            'center'        - 居中对齐
+            'fill'      - 填充
+            'left'      - 左对齐
+            'right'     - 右对齐
+            'center'    - 居中对齐
         family      - 字体：None表示当前默认的字体
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         size        - 字号：整型，默认64。此参数影响文本显示质量，不改变文本大小
         kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            inside          - 模型顶点是否影响模型空间，默认True
-            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
-            slide           - 幻灯片函数，默认None
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-            ambient         - 环境光，默认(1.0,1.0,1.0)
+            name        - 模型名
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            cull        - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient     - 环境光，默认(1.0,1.0,1.0)
         """
  
         for key in kwds:
@@ -225,13 +224,12 @@ class Scheme:
         cm          - 调色板
         alpha       - 透明度
         kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            opacity         - 模型不透明属性，默认True（不透明）
-            inside          - 模型顶点是否影响模型空间，默认True
-            slide           - 幻灯片函数，默认None
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-            ambient         - 环境光，默认(1.0,1.0,1.0)
+            name        - 模型名
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient     - 环境光，默认(1.0,1.0,1.0)
         """
  
         for key in kwds:
@@ -249,18 +247,11 @@ class Scheme:
             size = np.ones(vs.shape[0], dtype=np.float32) * size
         else:
             size = np.float32(size)
-            if size.shape != (vs.shape[0],):
-                raise KeyError('期望size参数为长度等于%d的浮点型数组'%vs.shape[0])
  
-        if (not color is None) + (not data is None) > 1:
-            raise KeyError('color参数和data参数互斥')
-        elif data is None:
+        if data is None:
             color = util.format_color(color, vs.shape[0])
         else:
-            data = np.array(data)
-            if data.shape != (vs.shape[0],):
-                raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.cmap(data, cm, alpha=alpha)
+            color = util.cmap(np.array(data), cm, alpha=alpha)
  
         if self.haxis=='z':
             idx = np.argsort(-vs[...,1])
@@ -281,51 +272,36 @@ class Scheme:
         cm          - 调色板
         alpha       - 透明度
         method      - 绘制方法
-            'isolate'       - 独立线段
-            'strip'         - 连续线段
-            'loop'          - 闭合线段
+            'isolate'   - 独立线段
+            'strip'     - 连续线段
+            'loop'      - 闭合线段
         width       - 线宽：0.0~10.0之间，None使用默认设置
         stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
         kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            inside          - 模型顶点是否影响模型空间，默认True
-            opacity         - 模型不透明属性，默认True（不透明）
-            slide           - 幻灯片函数，默认None
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-            ambient         - 环境光，默认(1.0,1.0,1.0)
+            name        - 模型名
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient     - 环境光，默认(1.0,1.0,1.0)
         """
  
         for key in kwds:
-            if key not in ['name', 'visible', 'inside', 'opacity', 'slide', 'transform', 'ambient']:
+            if key not in ['name', 'visible', 'inside', 'slide', 'transform', 'ambient']:
                 raise KeyError('不支持的关键字参数：%s'%key)
- 
+
         if not kwds.get('slide') is None or not kwds.get('transform') is None:
             self.animate = True
 
         name = kwds.pop('name') if 'name' in kwds else uuid.uuid1().hex
         light = BaseLight(kwds.pop('ambient') if 'ambient' in kwds else (1.0,1.0,1.0))
+        gltype = {'isolate':GL_LINES, 'strip':GL_LINE_STRIP, 'loop':GL_LINE_LOOP}[method.lower()]
         vs = np.array(vs, dtype=np.float32)
  
-        if (not color is None) + (not data is None) > 1:
-            raise KeyError('color参数和data参数互斥')
-        elif data is None:
+        if data is None:
             color = util.format_color(color, vs.shape[0])
         else:
-            data = np.array(data)
-            if data.shape != (vs.shape[0],):
-                raise KeyError('期望参数data为长度等于%d的一维数组'%vs.shape[0])
-            color = util.cmap(data, cm, alpha=alpha)
- 
-        method = method.lower()
-        if method == 'isolate':
-            gltype = GL_LINES
-        elif method == 'strip':
-            gltype = GL_LINE_STRIP
-        elif method == 'loop':
-            gltype = GL_LINE_LOOP
-        else:
-            raise ValueError('不支持的线段方法：%s'%method)
+            color = util.cmap(np.array(data), cm, alpha=alpha)
 
         m = light.get_model(gltype, vs, color=color, lw=width, ls=stipple, **kwds)
         self.add_model(name, m)
@@ -341,21 +317,21 @@ class Scheme:
         texture     - 纹理图片，或2D/3D纹理对象
         texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
         method      - 绘制方法
-            'isolate'       - 独立三角面
-            'strip'         - 带状三角面
-            'fan'           - 扇面
+            'isolate'   - 独立三角面
+            'strip'     - 带状三角面
+            'fan'       - 扇面
         indices     - 顶点索引集，默认None，表示不使用索引
         closed      - 带状三角面或扇面两端闭合：布尔型
         kwds        - 关键字参数
-            name            - 模型名
-            visible         - 是否可见，默认True
-            inside          - 模型顶点是否影响模型空间，默认True
-            opacity         - 模型不透明属性，默认True（不透明）
-            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
-            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
-            slide           - 幻灯片函数，默认None
-            transform       - 由旋转、平移和缩放组成的模型几何变换序列
-            light           - 光照情景模式，默认太阳光照情景模式
+            name        - 模型名
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            opacity     - 模型不透明属性，默认True（不透明）
+            cull        - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill        - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列
+            light       - 光照情景模式，默认太阳光照情景模式
         """
  
         for key in kwds:
@@ -365,18 +341,7 @@ class Scheme:
         if not kwds.get('slide') is None or not kwds.get('transform') is None:
             self.animate = True
  
-        method = method.lower()
-        if method == 'isolate':
-            gltype = GL_TRIANGLES
-        elif method == 'strip':
-            gltype = GL_TRIANGLE_STRIP
-        elif method == 'fan':
-            gltype = GL_TRIANGLE_FAN
-        else:
-            raise ValueError('不支持的三角面方法：%s'%method)
- 
-        if gltype != GL_TRIANGLES and not indices is None:
-            raise ValueError('带状三角面或扇面不支持indices参数')
+        gltype = {'isolate':GL_TRIANGLES, 'strip':GL_TRIANGLE_STRIP, 'fan':GL_TRIANGLE_FAN}[method.lower()]
  
         vs = np.array(vs, dtype=np.float32)
         normal = util.get_normal(gltype, vs, indices)
@@ -764,6 +729,54 @@ class Scheme:
         if bottom:
             vs_b = np.vstack((center, vs[::-1]))
             self.surface(vs_b, color=color, method='fan', closed=closed, **kwds)
+
+    def torus(self, center, r1, r2, vec=(0,1,0), color=None, texture=None, ur=(0,1), vr=(0,1), u=(0,360), v=(-180,180), cell=5, **kwds):
+        """球环
+        
+        center      - 球环中心坐标：元组、列表或numpy数组
+        r1          - 球半径：浮点型
+        r2          - 环半径：浮点型
+        vec         - 环面法向量
+        color       - 颜色：浮点型元组、列表或numpy数组
+        texture     - 纹理：wxgl.Texture对象
+        ur          - u方向纹理坐标范围
+        vr          - v方向纹理坐标范围
+        u           - u方向范围：默认0°~360°
+        v           - v方向范围：默认-90°~90°
+        cell        - 网格精度：默认5°
+        kwds        - 关键字参数
+            name            - 模型名
+            visible         - 是否可见，默认True
+            inside          - 模型顶点是否影响模型空间，默认True
+            opacity         - 模型不透明属性，默认不透明
+            cull            - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill            - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide           - 幻灯片函数，默认None
+            transform       - 由旋转、平移和缩放组成的模型几何变换序列
+            light           - 光照情景模式，默认太阳光照情景模式
+        """
+        
+        u_0, u_1 = np.radians(min(u)), np.radians(max(u))
+        v_0, v_1 = np.radians(max(v)), np.radians(min(v))
+        cell = np.radians(cell)
+        u_slices, v_slices = round(abs(u_0-u_1)/cell), round(abs(v_0-v_1)/cell)
+        gv, gu = np.mgrid[v_0:v_1:complex(0,v_slices), u_0:u_1:complex(0,u_slices)]
+        
+        xs = (r2 + r1 * np.cos(gv)) * np.cos(gu)
+        zs = -(r2 + r1 * np.cos(gv)) * np.sin(gu)
+        ys = r1 * np.sin(gv)
+        
+        m_rotate = util.y2v(vec)
+        vs = np.dot(np.dstack((xs, ys, zs)), m_rotate) + center
+        xs, ys, zs = vs[...,0], vs[...,1], vs[...,2]
+        
+        uclosed = abs(u[0]-u[1])==360
+        vclosed = abs(v[0]-v[1])==360
+        
+        if color is None and texture is None:
+            color = self.scene.style[1]
+        
+        self.mesh(xs, ys, zs, color=color, texture=texture, ur=ur, vr=vr, uclosed=uclosed, vclosed=vclosed, **kwds)
 
     def _grid(self):
         """网格和刻度 """
