@@ -49,7 +49,7 @@ class WxFigure(wx.Frame):
         self.tb.AddSimpleTool(self.ID_RESTORE, '复位', bmp_home, '初始位置')
         self.tb.AddSimpleTool(self.ID_ANIMATE, '动画', self.bmp_play, '动画', kind=aui.ITEM_CHECK)
  
-        if scheme.animate:
+        if scheme.alive:
             self.tb.SetToolBitmap(self.ID_ANIMATE, self.bmp_pause)
             self.tb.SetToolShortHelp(self.ID_ANIMATE, '暂停')
         else:
@@ -84,7 +84,7 @@ class WxFigure(wx.Frame):
 
         self.scene.pause()
 
-        if self.scene.scheme.animate:
+        if self.scene.playing:
             self.tb.SetToolBitmap(self.ID_ANIMATE, self.bmp_pause)
             self.tb.SetToolShortHelp(self.ID_ANIMATE, '暂停')
         else:

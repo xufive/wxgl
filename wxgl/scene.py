@@ -55,6 +55,7 @@ class BaseScene:
         self.start= time.time()                                     # 开始渲染时的时间戳
         self.duration = 0                                           # 累计渲染时长，单位毫秒
         self.tbase = 0                                              # 累计渲染时长基数，单位毫秒
+        self.playing = False                                        # 动画播放中
 
         self._update_cam_and_up()                                   # 更新眼睛位置和指向观察者上方的单位向量
         self._update_view_matrix()                                  # 更新视点矩阵
@@ -200,7 +201,7 @@ class BaseScene:
     def _timer(self):
         """定时函数"""
 
-        if self.scheme.animate:
+        if self.scheme.alive and self.playing:
             self.tn += 1 
             self.duration = self.tbase + 1000*time.time() - self.start
 
@@ -220,12 +221,12 @@ class BaseScene:
     def _pause(self):
         """动画/暂停"""
 
-        if self.scheme.animate:
-            self.scheme.animate = False
+        if self.playing:
+            self.playing = False
             self.tbase = self.duration
         else:
             self.start = 1000 * time.time()
-            self.scheme.animate = True
+            self.playing = True
 
     def _drag(self, dx, dy):
         """鼠标拖拽"""
@@ -339,6 +340,7 @@ class BaseScene:
             if self.scale * dz > 4:
                 self.scale = 4/dz
 
+        self.playing = self.scheme.alive
         self.dist = self._DIST/self.scale
         self.near = self._NEAR/self.scale
         self.far = self._FAR/self.scale

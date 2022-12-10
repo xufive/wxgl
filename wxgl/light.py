@@ -5,7 +5,7 @@ from OpenGL.GL import *
 from . model import Model
 
 class _Light:
-    """光照模式基类"""
+    """光照模型基类"""
  
     def __init__(self, **kwds):
         """构造函数"""
@@ -22,11 +22,12 @@ class _Light:
         self.pellucid = kwds.get('pellucid')            # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
         self.factor = kwds.get('factor')                # 反射衰减因子：值域范围[0.0,1.0]，仅用于球谐光照模型
         self.cpos = kwds.get('cpos')                    # 相机位置
+        self.mvp = kwds.get('mvp', True)                # 使用MVP矩阵
 
         self.a_dtype = None                             # 纹理坐标数据类型（attribute变量）
         self.u_dtype = None                             # 纹理采样器类型（uniform变量）
  
-    def get_model(self, gltype, vs, **kwds):
+    def _get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
  
         indices = kwds.get('indices')
@@ -58,7 +59,7 @@ class _Light:
                 self.u_dtype = 'sampler2D'
             elif texture.ttype == GL_TEXTURE_2D_ARRAY:
                 self.a_dtype = 'vec3'
-                slef.u_dtype = 'sampler2DArray'
+                self.u_dtype = 'sampler2DArray'
             elif texture.ttype == GL_TEXTURE_3D:
                 self.a_dtype = 'vec3'
                 self.u_dtype = 'sampler3D'
@@ -68,12 +69,6 @@ class _Light:
  
         m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
         m.set_vertex('a_Position', vs, indices)
-        m.set_proj_matrix('u_ProjMatrix')
-        m.set_view_matrix('u_ViewMatrix')
-        m.set_model_matrix('u_ModelMatrix', transform)
-        m.set_cull_mode(cull)
-        m.set_fill_mode(fill)
-        m.set_slide(slide)
 
         if not color is None:
             m.set_color('a_Color', color)
@@ -117,77 +112,131 @@ class _Light:
         if not align is None:
             m.set_argument('u_Align', align)
  
-        return m.verify()
- 
+        m.set_cull_mode(cull)
+        m.set_fill_mode(fill)
+        m.set_slide(slide)
+
+        if self.mvp:
+            m.set_proj_matrix('u_ProjMatrix')
+            m.set_view_matrix('u_ViewMatrix')
+            m.set_model_matrix('u_ModelMatrix', transform)
+
+        return m
+
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
- 
+
         pass
- 
+
     def get_fshader(self, texture):
         """返回片元着色器源码"""
  
         pass
 
 class ScatterLight(_Light):
-    """适用于散列点的环境光照情景模式"""
+    """散列点专用的光照模型"""
  
     def __init__(self, ambient=(1.0,1.0,1.0)):
         """构造函数"""
  
         _Light.__init__(self, ambient=ambient)
  
-    def get_vshader(self, texure):
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        kwds.update({'normal':None, 'texcoord':None})
+        return self._get_model(gltype, vs, **kwds)
+ 
+    def get_vshader(self, texture):
         """返回顶点着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            shader_src = """
+                #version 330 core
  
-            in vec4 a_Position;
-            in vec4 a_Color;
-            in float a_Psize;
-            uniform mat4 u_ProjMatrix;
-            uniform mat4 u_ViewMatrix;
-            uniform mat4 u_ModelMatrix;
-            out vec4 v_Color;
+                in vec4 a_Position;
+                in vec4 a_Color;
+                in float a_Psize;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+                out vec4 v_Color;
  
-            void main() { 
-                v_Color = a_Color;
-                gl_PointSize = a_Psize;
-                gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
-            }
-        """
+                void main() { 
+                    v_Color = a_Color;
+                    gl_PointSize = a_Psize;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+                }
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                in vec4 a_Position;
+                in float a_Psize;
+                uniform mat4 u_ProjMatrix;
+                uniform mat4 u_ViewMatrix;
+                uniform mat4 u_ModelMatrix;
+ 
+                void main() { 
+                    gl_PointSize = a_Psize;
+                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+                }
+            """
+
+        return shader_src
  
     def get_fshader(self,texture):
         """返回片元着色器源码"""
  
-        return """
-            #version 330 core
+        if texture is None:
+            shader_src = """
+                #version 330 core
  
-            in vec4 v_Color;
-            uniform vec3 u_AmbientColor;
+                in vec4 v_Color;
+                uniform vec3 u_AmbientColor;
  
-            void main() { 
-                vec2 temp = gl_PointCoord - vec2(0.5);
-                float f = dot(temp, temp);
+                void main() { 
+                    vec2 temp = gl_PointCoord - vec2(0.5);
+                    float f = dot(temp, temp);
  
-                if (f > 0.25)
-                    discard;
+                    if (f > 0.25)
+                        discard;
  
-                vec3 rgb = v_Color.rgb * u_AmbientColor;
-                vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
-                
-                gl_FragColor = color;
-            } 
-        """
+                    vec3 rgb = v_Color.rgb * u_AmbientColor;
+                    vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
+                    
+                    gl_FragColor = color;
+                } 
+            """
+        else:
+            shader_src = """
+                #version 330 core
+ 
+                uniform vec3 u_AmbientColor;
+                uniform sampler2D u_Texture;
+ 
+                void main() { 
+                    vec4 color = texture(u_Texture, gl_PointCoord);
+                    gl_FragColor = vec4(color.rgb * u_AmbientColor, color.a);
+                } 
+            """
+        
+        return shader_src
 
 class Text2dLight(_Light):
-    """适用于2d文本的环境光照情景模式"""
+    """2d文本专用的光照模型"""
  
     def __init__(self, ambient=(1.0,1.0,1.0)):
         """构造函数"""
  
         _Light.__init__(self, ambient=ambient)
+ 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        kwds.update({'normal':None})
+        return self._get_model(gltype, vs, **kwds)
  
     def get_vshader(self, texture):
         """返回2d文本的顶点着色器源码"""
@@ -330,7 +379,7 @@ class Text2dLight(_Light):
             uniform sampler2D u_Texture;
  
             void main() { 
-                vec4 color = texture2D(u_Texture, v_Texcoord);
+                vec4 color = texture(u_Texture, v_Texcoord);
                 vec3 rgb = color.rgb * u_AmbientColor;
 
                 gl_FragColor = vec4(rgb, color.a);
@@ -338,48 +387,82 @@ class Text2dLight(_Light):
         """
 
 class BaseLight(_Light):
-    """环境光"""
+    """环境光照模型"""
  
-    def __init__(self, ambient=(1.0,1.0,1.0)):
+    def __init__(self, ambient=(1.0,1.0,1.0), mvp=True):
         """构造函数"""
  
-        _Light.__init__(self, ambient=ambient)
+        _Light.__init__(self, ambient=ambient, mvp=mvp)
+ 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        kwds.update({'normal':None})
+        return self._get_model(gltype, vs, **kwds)
  
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
  
-        if texture is None:
-            shader_src = """
-                #version 330 core
+        if self.mvp:
+            if texture is None:
+                shader_src = """
+                    #version 330 core
  
-                in vec4 a_Position;
-                in vec4 a_Color;
-                uniform mat4 u_ProjMatrix;
-                uniform mat4 u_ViewMatrix;
-                uniform mat4 u_ModelMatrix;
-                out vec4 v_Color;
+                    in vec4 a_Position;
+                    in vec4 a_Color;
+                    uniform mat4 u_ProjMatrix;
+                    uniform mat4 u_ViewMatrix;
+                    uniform mat4 u_ModelMatrix;
+                    out vec4 v_Color;
  
-                void main() { 
-                    v_Color = a_Color;
-                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                }
-            """
+                    void main() { 
+                        v_Color = a_Color;
+                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                    }
+                """
+            else:
+                shader_src = """
+                    #version 330 core
+ 
+                    in vec4 a_Position;
+                    in %s a_Texcoord;
+                    uniform mat4 u_ProjMatrix;
+                    uniform mat4 u_ViewMatrix;
+                    uniform mat4 u_ModelMatrix;
+                    out %s v_Texcoord;
+ 
+                    void main() { 
+                        v_Texcoord = a_Texcoord;
+                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                    }
+                """ % (self.a_dtype, self.a_dtype)
         else:
-            shader_src = """
-                #version 330 core
+            if texture is None:
+                shader_src = """
+                    #version 330 core
  
-                in vec4 a_Position;
-                in %s a_Texcoord;
-                uniform mat4 u_ProjMatrix;
-                uniform mat4 u_ViewMatrix;
-                uniform mat4 u_ModelMatrix;
-                out %s v_Texcoord;
+                    in vec4 a_Position;
+                    in vec4 a_Color;
+                    out vec4 v_Color;
  
-                void main() { 
-                    v_Texcoord = a_Texcoord;
-                    gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
-                }
-            """ % (self.a_dtype, self.a_dtype)
+                    void main() { 
+                        v_Color = a_Color;
+                        gl_Position = a_Position; 
+                    }
+                """
+            else:
+                shader_src = """
+                    #version 330 core
+ 
+                    in vec4 a_Position;
+                    in %s a_Texcoord;
+                    out %s v_Texcoord;
+ 
+                    void main() { 
+                        v_Texcoord = a_Texcoord;
+                        gl_Position = a_Position; 
+                    }
+                """ % (self.a_dtype, self.a_dtype)
  
         return shader_src
  
@@ -417,9 +500,9 @@ class BaseLight(_Light):
         return shader_src
 
 class SunLight(_Light):
-    """太阳光照情景模式"""
+    """平行光照模型"""
 
-    def __init__(self, direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
+    def __init__(self, direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.5,0.5,0.5), **kwds):
         """构造函数"""
 
         _Light.__init__(self, 
@@ -432,6 +515,11 @@ class SunLight(_Light):
             pellucid    = kwds.get('pellucid', 0.5),    # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
             cpos        = True                          # 着色器需要传入相机位置
         )
+ 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        return self._get_model(gltype, vs, **kwds)
  
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
@@ -572,9 +660,9 @@ class SunLight(_Light):
         return shader_src
 
 class LampLight(_Light):
-    """定位光照情景模式"""
+    """定位光照模型"""
 
-    def __init__(self, lamp=(0.0,0.0,2.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
+    def __init__(self, lamp=(0.0,0.0,2.0), lightcolor=(1.0,1.0,1.0), ambient=(0.5,0.5,0.5), **kwds):
         """构造函数"""
 
         _Light.__init__(self, 
@@ -588,6 +676,11 @@ class LampLight(_Light):
             cpos        = True                          # 着色器需要传入相机位置
         )
 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        return self._get_model(gltype, vs, **kwds)
+ 
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
  
@@ -729,9 +822,9 @@ class LampLight(_Light):
         return shader_src
 
 class SkyLight(_Light):
-    """户外光照情景模式"""
+    """户外光照模型"""
 
-    def __init__(self, direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.5,0.5,0.5)):
+    def __init__(self, direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.3,0.3,0.3)):
         """构造函数"""
 
         _Light.__init__(self, 
@@ -739,6 +832,11 @@ class SkyLight(_Light):
             sky         = sky,                          # 来自天空的环境光
             ground      = ground,                       # 来自地面的环境光
         )
+ 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        return self._get_model(gltype, vs, **kwds)
  
     def get_vshader(self, texture):
         """返回使用颜色的顶点着色器源码"""
@@ -833,7 +931,7 @@ class SkyLight(_Light):
             """ % (self.a_dtype, self.u_dtype)
  
 class SphereLight(_Light):
-    """球谐光照情景模式"""
+    """球谐光照模型"""
 
     def __init__(self, factor=0.8, style=0):
         """构造函数"""
@@ -867,7 +965,7 @@ class SphereLight(_Light):
             const vec3 L21 = vec3(0.56, 0.21, 0.14);
             const vec3 L22 = vec3(0.21, -0.05, -0.30);
             """,
- 
+
             # 2. Eucalyptus grove
             """
             const vec3 L00 = vec3(0.38, 0.43, 0.45);
@@ -972,6 +1070,11 @@ class SphereLight(_Light):
             const vec3 L22 = vec3(0.37, 0.31, 0.20);
             """
         ][style]
+ 
+    def get_model(self, gltype, vs, **kwds):
+        """返回模型对象"""
+
+        return self._get_model(gltype, vs, **kwds)
  
     def get_vshader(self, texture):
         """返回使用颜色的顶点着色器源码"""

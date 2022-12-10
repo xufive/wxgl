@@ -42,7 +42,7 @@ class Model:
         self.sprite = sprite                            # 开启点精灵，默认False
         self.slide = None                               # 幻灯片函数
         self.depth = dict()                             # 深度轴均值
-        self.islive = False                             # 模型是否有动画函数
+        self.alive = False                              # 模型是否有动画函数
         self.picked = False                             # 模型被拾取
  
         self.program = None                             # 着色器程序
@@ -212,7 +212,7 @@ class Model:
             self.uniform.update({var_name: {'tag':'vmat'}})
         elif hasattr(vmatrix, '__call__'):
             self.uniform.update({var_name: {'tag':'vmat', 'f':vmatrix}})
-            self.islive = True
+            self.alive = True
         else:
             self.uniform.update({var_name: {'tag':'vmat', 'v':vmatrix}})
  
@@ -227,7 +227,7 @@ class Model:
             self.uniform.update({var_name: {'tag':'pmat'}})
         elif hasattr(pmatrix, '__call__'):
             self.uniform.update({var_name: {'tag':'pmat', 'f':pmatrix}})
-            self.islive = True
+            self.alive = True
         else:
             self.uniform.update({var_name: {'tag':'pmat', 'v':pmatrix}})
  
@@ -242,7 +242,7 @@ class Model:
             self.uniform.update({var_name: {'tag':'mmat'}})
         elif hasattr(mmatrix, '__call__'):
             self.uniform.update({var_name: {'tag':'mmat', 'f':mmatrix}})
-            self.islive = True
+            self.alive = True
         else:
             self.uniform.update({var_name: {'tag':'mmat', 'v':mmatrix}})
 
@@ -333,7 +333,7 @@ class Model:
  
         self.slide = slide
         if hasattr(slide, '__call__'):
-            self.islive = True
+            self.alive = True
  
     def verify(self):
         """验证并返回正确的模型对象"""
@@ -401,7 +401,7 @@ class Model:
                         else:
                             if hasattr(data, '__call__'):
                                 self.uniform.update({var_name: {'tag':'other', 'f':data}})
-                                self.islive = True
+                                self.alive = True
                             else:
                                 self.uniform.update({var_name: {'tag':'other', 'v':data}})
  
@@ -443,6 +443,4 @@ class Model:
                     r3 = p3.match(line.strip())
                     if r3:
                         self.__getattribute__(qualifier)[var_name].update({'loc': int(r3.groups()[0])})
-
-        return self
 

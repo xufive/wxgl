@@ -55,7 +55,7 @@ class QtFigure(QMainWindow):
         self.animateAction.setStatusTip('动画')
         self.animateAction.triggered.connect(self.on_pause)
  
-        if scheme.animate:
+        if scheme.alive:
             self.animateAction.setIcon(self.icon_pause)
             self.animateAction.setToolTip('暂停')
         else:
@@ -105,7 +105,7 @@ class QtFigure(QMainWindow):
         self.animateAction.setIcon(self.icon_pause)
         self.animateAction.setToolTip('暂停')
 
-        if self.scene.scheme.animate:
+        if self.scene.playing:
             self.animateAction.setIcon(self.icon_pause)
             self.animateAction.setToolTip('暂停')
         else:

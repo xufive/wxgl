@@ -60,17 +60,17 @@ class GlutFigure(BaseScene):
             else: # 弹起
                 self.left_down = False 
         elif btn == 2 and state ==1: # 右键弹起
-            if self.scheme.animate: # 暂停
-                self.scheme.animate = False
-                self.tbase = self.duration
-            elif self.duration == 0: # 恢复初始位置和姿态
+            if self.scheme.alive: # 恢复初始位置和姿态
                 self.fovy = self.origin['fovy']
                 self._update_cam_and_up(dist=self.origin['dist'], azim=self.origin['azim'], elev=self.origin['elev'])
                 self._update_view_matrix()
                 self._update_proj_matrix()
+            elif self.playing: # 暂停
+                self.playing = False
+                self.tbase = self.duration
             else: # 动画
                 self.start = 1000 * time.time()
-                self.scheme.animate = True
+                self.playing = True
         elif btn == 3 and state == 0: # 滚轮前滚
             self.fovy *= 0.95
             self._update_proj_matrix()
