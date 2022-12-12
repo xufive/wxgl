@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf8") as fp:
 
 setuptools.setup(
     name="wxgl",
-    version="0.9.3",
+    version="1.0.0",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",
@@ -20,29 +20,14 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    data_files = [
-        ('lib/site-packages/wxgl/res', [
-            'wxgl/res/tb_config_32.png', 
-            'wxgl/res/tb_hide_32.png', 
-            'wxgl/res/tb_show_32.png', 
-            'wxgl/res/tb_play_32.png', 
-            'wxgl/res/tb_stop_32.png', 
-            'wxgl/res/tb_rplay_32.png', 
-            'wxgl/res/tb_rstop_32.png', 
-            'wxgl/res/tb_restore_32.png', 
-            'wxgl/res/tb_save_32.png', 
-            'wxgl/res/tb_style_32.png',
-            'wxgl/res/wxplot.ico'
-        ])
-    ],
     install_requires = [ 
         'pyopengl>=3.1.5',
         'numpy>=1.20.2', 
         'matplotlib>=3.1.2', 
-        'wxpython>=4.0.7.post2',
         'pillow>=8.2.0',
         'freetype-py>=2.2.0',
-        'pynput>=1.7.6',
-        'imageio>=2.8.0'
+        #'wxpython>=4.0.7.post2',
+        #'pynput>=1.7.6',
+        #'imageio>=2.8.0'
     ]
 )

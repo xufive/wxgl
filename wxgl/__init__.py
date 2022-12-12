@@ -6,10 +6,10 @@ from wxgl.scheme import Scheme
 from wxgl.texture import Texture
 from wxgl.model import Model
 from wxgl.light import BaseLight, SunLight, LampLight, SkyLight, SphereLight
-#from wxgl.util import font_list, color_list, color_help, cmap_list, cmap_help, cmap, text2image
+from wxgl.util import get_fonts, get_colors, get_cms, cmap, text2img, get_normal
 
 name = 'wxgl'
-version = '1.0.0 Beta'
+version = '1.0.0'
 version_info = (1, 0, 0, 0)
 
 VERTEX_SHADER                   = GL_VERTEX_SHADER

@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
 
-from OpenGL.GL import *
-
 import numpy as np
 np.seterr(invalid='ignore')
 
+from OpenGL.GL import *
 from . color import ColorManager
 from . text import FontManager
 
 CM = ColorManager()
 FM = FontManager()
+
+def get_fonts():
+    """返回可用字体"""
+
+    return FM.get_font_list()
+
+def get_colors():
+    """返回可用颜色"""
+
+    return CM.colors
+
+def get_cms():
+    """返回可用调色板"""
+
+    return CM.cmaps
 
 def format_color(color, repeat=None):
     """检查颜色参数，将字符串、元组、列表等类型的颜色转为浮点型的numpy数组
@@ -40,7 +54,7 @@ def get_cm_colors(cm):
 
 def text2img(text, size, color, bg=None, family=None, weight='normal'):
     """文本转图像，返回图像数据和size元组
-    
+ 
     text        - 文本字符串
     size        - 文字大小，整型
     color       - 文本颜色，numpy数组，值域范围[0,1]
@@ -289,7 +303,7 @@ def _get_data_cache():
         0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
         0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0   
     ], dtype=np.uint16)
-    
+ 
     triTable = [
         [],
         [0, 8, 3],
@@ -548,7 +562,7 @@ def _get_data_cache():
         [0, 3, 8],
         []
     ]
-    
+ 
     edge_shifts = np.array([
         [0, 0, 0, 0],   
         [1, 0, 0, 1],
@@ -563,7 +577,7 @@ def _get_data_cache():
         [1, 1, 0, 2],
         [0, 1, 0, 2]
     ], dtype=np.uint16) 
-    
+ 
     n_table_faces = np.array([len(f)/3 for f in triTable], dtype=np.ubyte)
     face_shift_tables = [None]
     for i in range(1, 6):
@@ -572,16 +586,16 @@ def _get_data_cache():
         faceTableI[faceTableInds] = np.array([triTable[j] for j in faceTableInds])
         faceTableI = faceTableI.reshape((len(triTable), i, 3))
         face_shift_tables.append(edge_shifts[faceTableI])
-        
+ 
     return face_shift_tables, edge_shifts, edge_table, n_table_faces
 
 def _isosurface(data, level):
     """返回基于MarchingCube算法的等值面"""
-    
+ 
     data = np.ascontiguousarray(data)
     mask = data < level
     face_shift_tables, edge_shifts, edge_table, n_table_faces = _get_data_cache()
-    
+ 
     index = np.zeros([x-1 for x in data.shape], dtype=np.ubyte)
     fields = np.empty((2, 2, 2), dtype=object)
     slices = [slice(0, -1), slice(1, None)]
@@ -591,56 +605,55 @@ def _isosurface(data, level):
                 fields[i, j, k] = mask[slices[i], slices[j], slices[k]]
                 vertIndex = i - 2*j*i + 3*j + 4*k
                 index += (fields[i, j, k] * 2**vertIndex).astype(np.ubyte)
-    
+ 
     cut_edges = np.zeros([x+1 for x in index.shape]+[3], dtype=np.uint32)
     edges = edge_table[index]
     for i, shift in enumerate(edge_shifts[:12]):        
         slices = [slice(shift[j], cut_edges.shape[j]+(shift[j]-1)) 
                   for j in range(3)]
         cut_edges[slices[0], slices[1], slices[2], shift[3]] += edges & 2**i
-    
+ 
     m = cut_edges > 0
     vertex_inds = np.argwhere(m)
     vertexes = vertex_inds[:, :3].astype(np.float32).copy()
     dataFlat = data.reshape(data.shape[0]*data.shape[1]*data.shape[2])
-    
+ 
     cut_edges[vertex_inds[:, 0], 
               vertex_inds[:, 1], 
               vertex_inds[:, 2], 
               vertex_inds[:, 3]] = np.arange(vertex_inds.shape[0])
-    
+ 
     for i in [0, 1, 2]:
         vim = vertex_inds[:, 3] == i
         vi = vertex_inds[vim, :3]
-        vi_flat = (vi * (np.array(data.strides[:3]) // 
-                         data.itemsize)[np.newaxis, :]).sum(axis=1)
+        vi_flat = (vi * (np.array(data.strides[:3]) // data.itemsize)[np.newaxis, :]).sum(axis=1)
         v1 = dataFlat[vi_flat]
         v2 = dataFlat[vi_flat + data.strides[i]//data.itemsize]
         vertexes[vim, i] += (level-v1) / (v2-v1)
-    
+ 
     n_faces = n_table_faces[index]
     tot_faces = n_faces.sum()
     faces = np.empty((tot_faces, 3), dtype=np.uint32)
     ptr = 0
-    
+ 
     cs = np.array(cut_edges.strides)//cut_edges.itemsize
     cut_edges = cut_edges.flatten()
-    
+ 
     for i in range(1, 6):
         cells = np.argwhere(n_faces == i)  
         if cells.shape[0] == 0:
             continue
         cellInds = index[cells[:, 0], cells[:, 1], cells[:, 2]]
-        
+ 
         verts = face_shift_tables[i][cellInds]
         verts[..., :3] += (cells[:, np.newaxis, np.newaxis, :]).astype(np.uint16)
         verts = verts.reshape((verts.shape[0]*i,)+verts.shape[2:])
-        
+ 
         verts = (verts * cs[np.newaxis, np.newaxis, :]).sum(axis=2)
         vert_inds = cut_edges[verts]
         nv = vert_inds.shape[0]
         faces[ptr:ptr+nv] = vert_inds
         ptr += nv
-    
+ 
     return vertexes, faces
 

@@ -915,7 +915,7 @@ class Scheme:
  
         self.mesh(xs, ys, zs, color=color, texture=texture, **kwds)
 
-    def isosurface(self, data, level, color=None, x=None, y=None, z=None, **kwds):
+    def isosurface(self, data, level, **kwds):
         """基于MarchingCube算法的三维等值面
  
         data        - 数据集：三维numpy数组
