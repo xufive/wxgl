@@ -1,6 +1,5 @@
 import numpy as np
 import wxgl
-import wxgl.glplot as glt
 
 vshader = """
     #version 330 core
@@ -25,7 +24,6 @@ fshader = """
     void main() { 
         vec3 lightDir = normalize(u_LightDir); 
         float diffuseCos = max(0.0, dot(lightDir, v_Normal));
-        //float diffuseCos = (dot(lightDir, v_Normal) + 1.0) / 2;
         gl_FragColor = texture1D(u_Texture, diffuseCos);
     } 
 """
@@ -77,7 +75,8 @@ m.set_view_matrix('u_ViewMatrix')
 m.set_model_matrix('u_ModelMatrix')
 m.set_cull_mode('back')
 
-glt.figure(elev=10)
-glt.title('以法向量和光线向量的点积作为1D纹理坐标')
-glt.model(m)
-glt.show()
+app = wxgl.App(elev=10)
+app.title('以法向量和光线向量的点积作为1D纹理坐标')
+app.model(m)
+app.show()
+

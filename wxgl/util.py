@@ -25,14 +25,15 @@ def get_cms():
 
     return CM.cmaps
 
-def format_color(color, repeat=None):
+def format_color(color, cid=0, repeat=None):
     """检查颜色参数，将字符串、元组、列表等类型的颜色转为浮点型的numpy数组
 
     color       - 预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组
+    cid         - 缺省颜色id
     repeat      - 若color为单个颜色，repeat表示重复次数或重复行列数
     """
 
-    return CM.format_color(color, repeat=repeat)
+    return CM.format_color(color, cid=cid, repeat=repeat)
 
 def cmap(data, cm, drange=None, alpha=None, invalid=np.nan, invalid_c=(0,0,0,0)):
     """数值映射到颜色
@@ -52,18 +53,19 @@ def get_cm_colors(cm):
 
     return CM.get_cm_colors(cm)
 
-def text2img(text, size, color, bg=None, family=None, weight='normal'):
+def text2img(text, size, color, bg=None, padding=0, family=None, weight='normal'):
     """文本转图像，返回图像数据和size元组
  
     text        - 文本字符串
     size        - 文字大小，整型
     color       - 文本颜色，numpy数组，值域范围[0,1]
     bg          - 背景色，None表示背景透明
+    padding     - 留白
     family      - （系统支持的）字体
     weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
     """
 
-    return FM.text2img(text, size, color, bg=bg, family=family, weight=weight)
+    return FM.text2img(text, size, color, bg=bg, padding=padding, family=family, weight=weight)
 
 def y2v(v):
     """返回y轴正方向到向量v的旋转矩阵"""

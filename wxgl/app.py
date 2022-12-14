@@ -2,14 +2,13 @@
 
 from . scheme import Scheme
 
-#try:
-#    from . wxfigure import WxFigure as Figure
-#except:
-#    from . glutfigure import GlutFigure as Figure
-
-from . wxfigure import WxFigure as Figure
-#from . qtfigure import QtFigure as Figure
-#from . glutfigure import GlutFigure as Figure
+try:
+    from . wxfigure import WxFigure as Figure
+except:
+    try:
+        from . qtfigure import QtFigure as Figure
+    except:
+        from . glutfigure import GlutFigure as Figure
 
 class App(Scheme):
     """应用程序类"""

@@ -18,11 +18,11 @@ class Scheme:
         bg          - 背景色，默认0.0, 0.0, 0.0)
         """
 
-        self.haxis = haxis.lower()                              # 高度轴
-        self.bg = np.array(bg)                                  # 背景色
-        self.fg = 1 - self.bg                                   # 前景色
-
         self.reset()
+
+        self.haxis = haxis.lower()                              # 高度轴
+        self.bg = util.format_color(bg)                         # 背景色
+        self.fg = 1 - self.bg                                   # 前景色
 
     def reset(self):
         """清除模型数据"""
@@ -30,19 +30,13 @@ class Scheme:
         self.r_x = [1e12, -1e12]                                # 数据在x轴上的动态范围
         self.r_y = [1e12, -1e12]                                # 数据在y轴上的动态范围
         self.r_z = [1e12, -1e12]                                # 数据在z轴上的动态范围
+        self.cid = -1                                           # 缺省颜色id
         self.ticks = None                                       # 网格与坐标轴刻度 
-        self.cruise = None                                      # 相机巡航函数
+        self.cruise_func = None                                 # 相机巡航函数
         self.alive = False                                      # 是否使用了动画函数
         self.models = [dict(), dict(), dict()]                  # 主视区、标题区、调色板区模型
 
-    def set_cruise(self, func):
-        """设置相机巡航函数"""
-        
-        if hasattr(func, '__call__'):
-            self.cruise = func
-            self.alive = True
-
-    def set_range(self, r_x=None, r_y=None, r_z=None):
+    def _set_range(self, r_x=None, r_y=None, r_z=None):
         """设置坐标轴范围"""
  
         if r_x:
@@ -57,13 +51,42 @@ class Scheme:
             self.r_z[0] = min(r_z[0], self.r_z[0])
             self.r_z[1] = max(r_z[1], self.r_z[1])
 
-    def model(self, name, m):
+    def _format_color(self, color, repeat=None):
+        """将颜色参数转为浮点型的numpy数组"""
+
+        self.cid = (self.cid+1)%10
+
+        return util.format_color(color, self.cid, repeat=repeat)
+
+    def xrange(self, range_tuple):
+        """设置x轴范围"""
+
+        self._set_range(r_x=range_tuple)
+
+    def yrange(self, range_tuple):
+        """设置y轴范围"""
+
+        self._set_range(r_y=range_tuple)
+
+    def zrange(self, range_tuple):
+        """设置z轴范围"""
+
+        self._set_range(r_z=range_tuple)
+
+    def cruise(self, func):
+        """设置相机巡航函数"""
+        
+        if hasattr(func, '__call__'):
+            self.cruise_func = func
+            self.alive = True
+
+    def model(self, m, name=None):
         """添加模型"""
 
         m.verify()
 
         if m.inside:
-            self.set_range(r_x=m.r_x, r_y=m.r_y, r_z=m.r_z)
+            self._set_range(r_x=m.r_x, r_y=m.r_y, r_z=m.r_z)
 
         if m.alive:
             self.alive = True
@@ -133,7 +156,12 @@ class Scheme:
             ambient     - 环境光，默认(1.0,1.0,1.0)
             name        - 模型名
         """
- 
+
+        keys = ['color', 'size', 'align', 'valign', 'family', 'weight', 'visible', 'inside', 'slide', 'ambient', 'name']
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', self.fg)
         size = kwds.get('size', 32)
         align = kwds.get('align', 'left')
@@ -150,12 +178,12 @@ class Scheme:
         texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
         align = {'left':0, 'center':1, 'right':2}.get(align, 0)*3 + {'top':0, 'middle':1, 'bottom':2}.get(valign, 2)
  
-        im_text = util.text2img(text, size, util.format_color(color), bg=None, family=family, weight=weight)
+        im_text = util.text2img(text, size, self._format_color(color), bg=None, family=family, weight=weight)
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         tsize = (size*im_text.shape[1]/im_text.shape[0], size)
         light = Text2dLight(ambient)
 
-        self.model(name, light.get_model(GL_TRIANGLE_STRIP, box, 
+        self.model(light.get_model(GL_TRIANGLE_STRIP, box, 
             texture     = texture, 
             texcoord    = texcoord, 
             align       = align, 
@@ -163,7 +191,7 @@ class Scheme:
             visible     = visible,
             inside      = inside,
             slide       = slide
-        ))
+        ), name)
 
     def scatter(self, vs, **kwds):
         """散列点
@@ -183,7 +211,12 @@ class Scheme:
             ambient     - 环境光，默认(1.0,1.0,1.0)
             name        - 模型名
         """
- 
+
+        keys = ['color', 'size', 'data', 'cm', 'alpha', 'texture', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', self.fg)
         size = kwds.get('size', 3.0)
         data = kwds.get('data', None)
@@ -213,13 +246,13 @@ class Scheme:
 
         if texture is None:
             if data is None:
-                color = util.format_color(color, vs.shape[0])[idx]
+                color = self._format_color(color, vs.shape[0])[idx]
             else:
                 color = util.cmap(np.array(data), cm, alpha=alpha)[idx]
         else:
             color = None
  
-        self.model(name, light.get_model(GL_POINTS, vs[idx], 
+        self.model(light.get_model(GL_POINTS, vs[idx], 
             color       = color, 
             psize       = size[idx],
             texture     = texture,
@@ -227,7 +260,7 @@ class Scheme:
             inside      = inside,
             slide       = slide,
             transform   = transform
-        ))
+        ), name)
 
     def line(self, vs, **kwds):
         """线段
@@ -249,6 +282,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'color','data','cm','alpha','method','width','stipple',
+            'visible','inside','slide','transform','ambient','name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', None)
         data = kwds.get('data', None)
         cm = kwds.get('cm', 'viridis')
@@ -266,9 +307,9 @@ class Scheme:
         light = BaseLight(kwds.pop('ambient') if 'ambient' in kwds else (1.0,1.0,1.0))
         gltype = {'isolate':GL_LINES, 'strip':GL_LINE_STRIP, 'loop':GL_LINE_LOOP}[method.lower()]
         vs = np.array(vs, dtype=np.float32)
-        color = util.format_color(color, vs.shape[0]) if data is None else util.cmap(np.array(data), cm, alpha=alpha)
+        color = self._format_color(color, vs.shape[0]) if data is None else util.cmap(np.array(data), cm, alpha=alpha)
 
-        self.model(name, light.get_model(gltype, vs, 
+        self.model(light.get_model(gltype, vs, 
             color       = color, 
             lw          = width, 
             ls          = stipple, 
@@ -276,7 +317,7 @@ class Scheme:
             inside      = inside,
             slide       = slide,
             transform   = transform
-        ))
+        ), name)
 
     def surface(self, vs, **kwds):
         """三角曲面
@@ -302,6 +343,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'color', 'data', 'cm', 'alpha', 'texture', 'texcoord', 'method', 'indices', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', None)
         data = kwds.get('data', None)
         cm = kwds.get('cm', 'viridis')
@@ -317,7 +366,7 @@ class Scheme:
         fill = kwds.get('fill', None)
         slide = kwds.get('slide', None)
         transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(0,0,-1) if self.haxis=='z' else (0,-1,0)))
+        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
         name = kwds.get('name', None)
 
         gltype = {'isolate':GL_TRIANGLES, 'strip':GL_TRIANGLE_STRIP, 'fan':GL_TRIANGLE_FAN}[method.lower()]
@@ -342,9 +391,9 @@ class Scheme:
         elif not data is None:
             color = util.cmap(np.array(data), cm, alpha=alpha)
         else:
-            color = util.format_color(color, vs.shape[0])
+            color = self._format_color(color, vs.shape[0])
  
-        self.model(name, light.get_model(gltype, vs, 
+        self.model(light.get_model(gltype, vs, 
             normal      = normal,
             color       = color,
             texture     = texture,
@@ -357,7 +406,7 @@ class Scheme:
             fill        = fill,
             slide       = slide,
             transform   = transform
-        ))
+        ), name)
 
     def quad(self, vs, **kwds):
         """四角曲面
@@ -383,6 +432,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'color', 'data', 'cm', 'alpha', 'texture', 'texcoord', 'method', 'indices', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', None)
         data = kwds.get('data', None)
         cm = kwds.get('cm', 'viridis')
@@ -398,7 +455,7 @@ class Scheme:
         fill = kwds.get('fill', None)
         slide = kwds.get('slide', None)
         transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(0,0,-1) if self.haxis=='z' else (0,-1,0)))
+        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
         name = kwds.get('name', None)
 
         gltype = {'isolate':GL_QUADS, 'strip':GL_QUAD_STRIP}[method.lower()]
@@ -420,9 +477,9 @@ class Scheme:
         elif not data is None:
             color = util.cmap(np.array(data), cm, alpha=alpha)
         else:
-            color = util.format_color(color, vs.shape[0])
+            color = self._format_color(color, vs.shape[0])
  
-        self.model(name, light.get_model(gltype, vs, 
+        self.model(light.get_model(gltype, vs, 
             normal      = normal,
             color       = color,
             texture     = texture,
@@ -435,7 +492,7 @@ class Scheme:
             fill        = fill,
             slide       = slide,
             transform   = transform
-        ))
+        ), name)
 
     def mesh(self, xs, ys, zs, **kwds):
         """网格面
@@ -460,6 +517,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'color', 'data', 'cm', 'alpha', 'texture', 'texcoord', 'ccw', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.get('color', None)
         data = kwds.get('data', None)
         cm = kwds.get('cm', 'viridis')
@@ -474,7 +539,7 @@ class Scheme:
         fill = kwds.get('fill', None)
         slide = kwds.get('slide', None)
         transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(0,0,-1) if self.haxis=='z' else (0,-1,0)))
+        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
         name = kwds.get('name', None)
 
         gltype = GL_TRIANGLES
@@ -521,9 +586,9 @@ class Scheme:
         elif not data is None:
             color = util.cmap(np.array(data), cm, alpha=alpha).reshape(-1, 4)
         else:
-            color = util.format_color(color, rows*cols)
+            color = self._format_color(color, rows*cols)
  
-        self.model(name, light.get_model(gltype, vs, 
+        self.model(light.get_model(gltype, vs, 
             normal      = normal,
             color       = color,
             texture     = texture,
@@ -536,7 +601,7 @@ class Scheme:
             fill        = fill,
             slide       = slide,
             transform   = transform
-        ))
+        ), name)
 
     def text3d(self, text, box, **kwds):
         """3d文字
@@ -559,6 +624,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'color', 'bg', 'align', 'family', 'weight', 'size', 
+            'visible', 'inside', 'cull', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.pop('color') if 'color' in kwds else self.fg
         bg = kwds.pop('bg') if 'bg' in kwds else None
         align = kwds.pop('align') if 'align' in kwds else 'left'
@@ -569,7 +642,7 @@ class Scheme:
         if 'light' not in kwds: 
             kwds.update({'light': BaseLight()})
 
-        im_text = util.text2img(text, size, util.format_color(color), bg=bg, family=family, weight=weight)
+        im_text = util.text2img(text, size, self._format_color(color), bg=bg, family=family, weight=weight)
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
 
@@ -617,6 +690,14 @@ class Scheme:
             name        - 模型名
         """
 
+        keys = [
+            'color', 'texture', 'uarc', 'varc', 'cell', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.pop('color') if 'color' in kwds else None
         texture = kwds.pop('texture') if 'texture' in kwds else None
         uarc = kwds.pop('uarc') if 'uarc' in kwds else (0,360)
@@ -659,10 +740,16 @@ class Scheme:
             name        - 模型名
         """
 
+        keys = ['color', 'iterate', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name']
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.pop('color') if 'color' in kwds else None
         iterate = kwds.pop('iterate') if 'iterate' in kwds else 5
  
-        a, b = 0.525731, 0.850651
+        b = pow((5 + pow(5, 0.5)) / 10, 0.5)
+        a = b * (pow(5, 0.5) - 1) / 2
         vs = np.array([
             [-a,0,b], [a,0,b], [-a,0,-b], [a,0,-b],
             [0,b,a], [0,b,-a], [0,-b,a], [0,-b,-a],
@@ -707,6 +794,11 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = ['vec', 'color', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name']
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         vec = kwds.pop('vec') if 'vec' in kwds else (0,1,0)
         color = kwds.pop('color') if 'color' in kwds else None
  
@@ -749,6 +841,14 @@ class Scheme:
             name        - 模型名
         """
  
+        keys = [
+            'vec', 'color', 'arc', 'cell', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         vec = kwds.pop('vec') if 'vec' in kwds else (0,1,0)
         color = kwds.pop('color') if 'color' in kwds else None
         arc = kwds.pop('arc') if 'arc' in kwds else (0,360)
@@ -793,6 +893,14 @@ class Scheme:
             name        - 模型名
         """
 
+        keys = [
+            'color', 'bottom', 'arc', 'cell', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.pop('color') if 'color' in kwds else None
         bottom = kwds.pop('bottom') if 'bottom' in kwds else False
         arc = kwds.pop('arc') if 'arc' in kwds else (0,360)
@@ -813,7 +921,7 @@ class Scheme:
         vs = np.stack((xs,ys,zs), axis=1)
         vs = np.dot(vs, m_rotate) + center
         vs_c = np.vstack((spire, vs))
-        color = util.format_color(color)
+        color = self._format_color(color)
  
         self.surface(vs_c, color=color, method='fan', **kwds)
         if bottom:
@@ -841,6 +949,14 @@ class Scheme:
             light       - 光照模型（默认户外光照模型）
             name        - 模型名
         """
+        
+        keys = [
+            'color', 'texture', 'arc', 'cell', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
         
         color = kwds.pop('color') if 'color' in kwds else None
         texture = kwds.pop('texture') if 'texture' in kwds else None
@@ -892,6 +1008,14 @@ class Scheme:
             name        - 模型名
         """
 
+        keys = [
+            'vec', 'color', 'texture', 'uarc', 'varc', 'cell', 
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         vec = kwds.pop('vec') if 'vec' in kwds else (0,1,0)
         color = kwds.pop('color') if 'color' in kwds else None
         texture = kwds.pop('texture') if 'texture' in kwds else None
@@ -922,9 +1046,9 @@ class Scheme:
         level       - 阈值：浮点型
         kwds        - 关键字参数
             color       - 颜色：浮点型元组、列表或numpy数组
-            xrange      - 数据集对应的点的x轴的动态范围
-            yrange      - 数据集对应的点的y轴的动态范围
-            zrange      - 数据集对应的点的z轴的动态范围
+            xr          - 数据集对应的点的x轴的动态范围
+            yr          - 数据集对应的点的y轴的动态范围
+            zr          - 数据集对应的点的z轴的动态范围
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明
@@ -936,17 +1060,25 @@ class Scheme:
             name        - 模型名
         """
 
+        keys = [
+            'color', 'xr', 'yr', 'zr',  
+            'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name'
+        ]
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         color = kwds.pop('color') if 'color' in kwds else None
-        xrange = kwds.pop('xrange') if 'xrange' in kwds else None
-        yrange = kwds.pop('yrange') if 'yrange' in kwds else None
-        zrange = kwds.pop('zrange') if 'zrange' in kwds else None
+        xr = kwds.pop('xr') if 'xr' in kwds else None
+        yr = kwds.pop('yr') if 'yr' in kwds else None
+        zr = kwds.pop('zr') if 'zr' in kwds else None
  
         vs, ids = util._isosurface(data, level)
         indices = ids.ravel()
  
-        xs = vs[:,0] if xrange is None else (xrange[1] - xrange[0]) * vs[:,0] / data.shape[0] + xrange[0]
-        ys = vs[:,1] if yrange is None else (yrange[1] - yrange[0]) * vs[:,1] / data.shape[1] + yrange[0]
-        zs = vs[:,2] if zrange is None else (zrange[1] - zrange[0]) * vs[:,2] / data.shape[2] + zrange[0]
+        xs = vs[:,0] if xr is None else (xr[1] - xr[0]) * vs[:,0] / data.shape[0] + xr[0]
+        ys = vs[:,1] if yr is None else (yr[1] - yr[0]) * vs[:,1] / data.shape[1] + yr[0]
+        zs = vs[:,2] if zr is None else (zr[1] - zr[0]) * vs[:,2] / data.shape[2] + zr[0]
         vs = np.stack((xs, ys, zs), axis=1)
  
         self.surface(vs, color=color, method='isolate', indices=indices, **kwds)
@@ -958,9 +1090,9 @@ class Scheme:
             return # '模型空间不存在，返回
 
         size = self.ticks['size']
-        xfunc = self.ticks['xfunc']
-        yfunc = self.ticks['yfunc']
-        zfunc = self.ticks['zfunc']
+        xf = self.ticks['xf']
+        yf = self.ticks['yf']
+        zf = self.ticks['zf']
 
         xx = self._get_series(*self.r_x, extend=0.03)
         yy = self._get_series(*self.r_y, extend=0.03)
@@ -980,7 +1112,7 @@ class Scheme:
             return vs.reshape(-1,3)[idx]
 
         # -----------------------------------------------------------------------------------------
-        def text3d_ticks(text, box, color, bg, loc, cull, align):
+        def text3d_ticks(text, box, color, loc, cull, align, bg=None, padding=0):
             """标注"""
 
             vshader = """
@@ -1049,19 +1181,23 @@ class Scheme:
                 } 
             """
 
-            color = np.array(color, dtype=np.float32)
-            bg = np.array(bg, dtype=np.float32)
             loc = np.repeat(np.array(loc, dtype=np.float32), 4)
+            color = np.array(color, dtype=np.float32)
 
             if color.ndim == 1:
                 color = np.tile(color, (len(text), 1))
-            if bg.ndim == 1:
-                bg = np.tile(bg, (len(text), 1))
+            
+            if bg is None:
+                bg = [None for i in range(len(text))]
+            else:
+                bg = np.array(bg, dtype=np.float32)
+                if bg.ndim == 1:
+                    bg = np.tile(bg, (len(text), 1))
 
             im_arr, texcoord = list(), list()
             rows_max, cols_max = 0, 0
             for i in range(len(text)):
-                im = util.text2img(text[i], 64, color[i], bg=bg[i])
+                im = util.text2img(text[i], 64, color[i], bg=bg[i], padding=padding)
                 rows_max = max(im.shape[0], rows_max)
                 cols_max = max(im.shape[1], cols_max)
                 im_arr.append(im)
@@ -1155,90 +1291,138 @@ class Scheme:
  
         vs = np.vstack((xs_front, xs_back, xs_top, xs_bottom, xs_left, xs_right))
         light = BaseLight()
+        bg = np.where(self.bg>0.5, self.bg-0.05, self.bg)
+        bg = np.where(bg<0.5, bg+0.05, bg)
         self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light)
-        self.quad(vs, color=[*self.fg, 0.1], cull='front', method='isolate', opacity=False, light=light)
+        self.quad(vs, color=[*bg, 1.0], cull='front', method='isolate', opacity=False, light=light)
+        self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light)
 
         # 以下绘制标注文本
         # ----------------------------------------------------------------------------------------------------
         dx = xx[2] - xx[1]
         dy = yy[2] - yy[1]
         dz = zz[2] - zz[1]
-        h = min(dx, dy, dz) * size/240 # 标注文字高度
-        eps = 0.02 * h
+        h = min(dx, dy, dz) * size/200 # 标注文字高度
+        d1, d2 = 1.3*h, 2.5*h
         text, bg, box, loc = list(), list(), list(), list()
 
         for x in xx[1:-1]:
-            x_str = xfunc(x)
+            x_str = xf(x)
             text.extend([x_str, x_str, x_str, x_str])
-            bg.extend([[0.8,0,0], [0.8,0,0], [0.8,0,0], [0.8,0,0]])
 
             if self.haxis == 'z':
                 loc.extend([10, 11, 12, 13])
-                box.append([[x-dx,yy[-1]-eps,zz[-1]], [x-dx,yy[-1]-eps,zz[-1]-h], [x+dx,yy[-1]-eps,zz[-1]-h], [x+dx,yy[-1]-eps,zz[-1]]])
-                box.append([[x+dx,yy[0]+eps,zz[-1]], [x+dx,yy[0]+eps,zz[-1]-h], [x-dx,yy[0]+eps,zz[-1]-h], [x-dx,yy[0]+eps,zz[-1]]])
-                box.append([[x-dx,yy[-1]-eps,zz[0]+h], [x-dx,yy[-1]-eps,zz[0]], [x+dx,yy[-1]-eps,zz[0]], [x+dx,yy[-1]-eps,zz[0]+h]])
-                box.append([[x+dx,yy[0]+eps,zz[0]+h], [x+dx,yy[0]+eps,zz[0]], [x-dx,yy[0]+eps,zz[0]], [x-dx,yy[0]+eps,zz[0]+h]])
-
+                box.append([[x-dx,yy[-1],zz[-1]+h], [x-dx,yy[-1],zz[-1]], [x+dx,yy[-1],zz[-1]], [x+dx,yy[-1],zz[-1]+h]])
+                box.append([[x+dx,yy[0],zz[-1]+h], [x+dx,yy[0],zz[-1]], [x-dx,yy[0],zz[-1]], [x-dx,yy[0],zz[-1]+h]])
+                box.append([[x-dx,yy[-1],zz[0]], [x-dx,yy[-1],zz[0]-h], [x+dx,yy[-1],zz[0]-h], [x+dx,yy[-1],zz[0]]])
+                box.append([[x+dx,yy[0],zz[0]], [x+dx,yy[0],zz[0]-h], [x-dx,yy[0],zz[0]-h], [x-dx,yy[0],zz[0]]])
             else:
                 loc.extend([10, 11, 12, 13])
-                box.append([[x-dx,yy[-1],zz[0]+eps], [x-dx,yy[-1]-h,zz[0]+eps], [x+dx,yy[-1]-h,zz[0]+eps], [x+dx,yy[-1],zz[0]+eps]])
-                box.append([[x+dx,yy[-1],zz[-1]-eps], [x+dx,yy[-1]-h,zz[-1]-eps], [x-dx,yy[-1]-h,zz[-1]-eps], [x-dx,yy[-1],zz[-1]-eps]])
-                box.append([[x-dx,yy[0]+h,zz[0]+eps], [x-dx,yy[0],zz[0]+eps], [x+dx,yy[0],zz[0]+eps], [x+dx,yy[0]+h,zz[0]+eps]])
-                box.append([[x+dx,yy[0]+h,zz[-1]-eps], [x+dx,yy[0],zz[-1]-eps], [x-dx,yy[0],zz[-1]-eps], [x-dx,yy[0]+h,zz[-1]-eps]])
+                box.append([[x-dx,yy[-1]+h,zz[0]], [x-dx,yy[-1],zz[0]], [x+dx,yy[-1],zz[0]], [x+dx,yy[-1]+h,zz[0]]])
+                box.append([[x+dx,yy[-1]+h,zz[-1]], [x+dx,yy[-1],zz[-1]], [x-dx,yy[-1],zz[-1]], [x-dx,yy[-1]+h,zz[-1]]])
+                box.append([[x-dx,yy[0],zz[0]], [x-dx,yy[0]-h,zz[0]], [x+dx,yy[0]-h,zz[0]], [x+dx,yy[0],zz[0]]])
+                box.append([[x+dx,yy[0],zz[-1]], [x+dx,yy[0]-h,zz[-1]], [x-dx,yy[0]-h,zz[-1]], [x-dx,yy[0],zz[-1]]])
 
         for y in yy[1:-1]:
-            y_str = yfunc(y)
+            y_str = yf(y)
             text.extend([y_str, y_str, y_str, y_str])
-            bg.extend([[0,0.5,0], [0,0.5,0], [0,0.5,0], [0,0.5,0]])
 
             if self.haxis == 'z':
                 loc.extend([20, 21, 22, 23])
-                box.append([[xx[0]+eps,y-dy,zz[-1]], [xx[0]+eps,y-dy,zz[-1]-h], [xx[0]+eps,y+dy,zz[-1]-h], [xx[0]+eps,y+dy,zz[-1]]])
-                box.append([[xx[-1]-eps,y+dy,zz[-1]], [xx[-1]-eps,y+dy,zz[-1]-h], [xx[-1]-eps,y-dy,zz[-1]-h], [xx[-1]-eps,y-dy,zz[-1]]])
-                box.append([[xx[0]+eps,y-dy,zz[0]+h], [xx[0]+eps,y-dy,zz[0]], [xx[0]+eps,y+dy,zz[0]], [xx[0]+eps,y+dy,zz[0]+h]])
-                box.append([[xx[-1]-eps,y+dy,zz[0]+h], [xx[-1]-eps,y+dy,zz[0]], [xx[-1]-eps,y-dy,zz[0]], [xx[-1]-eps,y-dy,zz[0]+h]])
+                box.append([[xx[0],y-dy,zz[-1]+h], [xx[0],y-dy,zz[-1]], [xx[0],y+dy,zz[-1]], [xx[0],y+dy,zz[-1]+h]])
+                box.append([[xx[-1],y+dy,zz[-1]+h], [xx[-1],y+dy,zz[-1]], [xx[-1],y-dy,zz[-1]], [xx[-1],y-dy,zz[-1]+h]])
+                box.append([[xx[0],y-dy,zz[0]], [xx[0],y-dy,zz[0]-h], [xx[0],y+dy,zz[0]-h], [xx[0],y+dy,zz[0]]])
+                box.append([[xx[-1],y+dy,zz[0]], [xx[-1],y+dy,zz[0]-h], [xx[-1],y-dy,zz[0]-h], [xx[-1],y-dy,zz[0]]])
             else:
                 loc.extend([0, 1, 2, 3])
-                box.append([[xx[0]+eps,y+dy,zz[-1]-h], [xx[0]+eps,y+dy,zz[-1]], [xx[0]+eps,y-dy,zz[-1]], [xx[0]+eps,y-dy,zz[-1]-h]])
-                box.append([[xx[0]+h,y+dy,zz[0]+eps], [xx[0],y+dy,zz[0]+eps], [xx[0],y-dy,zz[0]+eps], [xx[0]+h,y-dy,zz[0]+eps]])
-                box.append([[xx[-1]-eps,y+dy,zz[0]+h], [xx[-1]-eps,y+dy,zz[0]], [xx[-1]-eps,y-dy,zz[0]], [xx[-1]-eps,y-dy,zz[0]+h]])
-                box.append([[xx[-1]-h,y+dy,zz[-1]-eps], [xx[-1],y+dy,zz[-1]-eps], [xx[-1],y-dy,zz[-1]-eps], [xx[-1]-h,y-dy,zz[-1]-eps]])
+                box.append([[xx[0],y+dy,zz[-1]], [xx[0],y+dy,zz[-1]+h], [xx[0],y-dy,zz[-1]+h], [xx[0],y-dy,zz[-1]]])
+                box.append([[xx[0],y+dy,zz[0]], [xx[0]-h,y+dy,zz[0]], [xx[0]-h,y-dy,zz[0]], [xx[0],y-dy,zz[0]]])
+                box.append([[xx[-1],y+dy,zz[0]], [xx[-1],y+dy,zz[0]-h], [xx[-1],y-dy,zz[0]-h], [xx[-1],y-dy,zz[0]]])
+                box.append([[xx[-1],y+dy,zz[-1]], [xx[-1]+h,y+dy,zz[-1]], [xx[-1]+h,y-dy,zz[-1]], [xx[-1],y-dy,zz[-1]]])
 
         for z in zz[1:-1]:
-            z_str = zfunc(z)
+            z_str = zf(z)
             text.extend([z_str, z_str, z_str, z_str])
-            bg.extend([[0,0,0.6], [0,0,0.6], [0,0,0.6], [0,0,0.6]])
 
             if self.haxis == 'z':
                 loc.extend([0, 1, 2, 3])
-                box.append([[xx[0]+eps,yy[0]+h,z+dz], [xx[0]+eps,yy[0],z+dz], [xx[0]+eps,yy[0],z-dz], [xx[0]+eps,yy[0]+h,z-dz]])
-                box.append([[xx[0]+h,yy[-1]-eps,z+dz], [xx[0],yy[-1]-eps,z+dz], [xx[0],yy[-1]-eps,z-dz], [xx[0]+h,yy[-1]-eps,z-dz]])
-                box.append([[xx[-1]-eps,yy[-1]-h,z+dz], [xx[-1]-eps,yy[-1],z+dz], [xx[-1]-eps,yy[-1],z-dz], [xx[-1]-eps,yy[-1]-h,z-dz]])
-                box.append([[xx[-1]-h,yy[0]+eps,z+dz], [xx[-1],yy[0]+eps,z+dz], [xx[-1],yy[0]+eps,z-dz], [xx[-1]-h,yy[0]+eps,z-dz]])
+                box.append([[xx[0],yy[0],z+dz], [xx[0],yy[0]-h,z+dz], [xx[0],yy[0]-h,z-dz], [xx[0],yy[0],z-dz]])
+                box.append([[xx[0],yy[-1],z+dz], [xx[0]-h,yy[-1],z+dz], [xx[0]-h,yy[-1],z-dz], [xx[0],yy[-1],z-dz]])
+                box.append([[xx[-1],yy[-1],z+dz], [xx[-1],yy[-1]+h,z+dz], [xx[-1],yy[-1]+h,z-dz], [xx[-1],yy[-1],z-dz]])
+                box.append([[xx[-1],yy[0],z+dz], [xx[-1]+h,yy[0],z+dz], [xx[-1]+h,yy[0],z-dz], [xx[-1],yy[0],z-dz]])
             else:
                 loc.extend([20, 21, 22, 23])
-                box.append([[xx[0]+eps,yy[-1],z+dz], [xx[0]+eps,yy[-1]-h,z+dz], [xx[0]+eps,yy[-1]-h,z-dz], [xx[0]+eps,yy[-1],z-dz]])
-                box.append([[xx[-1]-eps,yy[-1],z-dz], [xx[-1]-eps,yy[-1]-h,z-dz], [xx[-1]-eps,yy[-1]-h,z+dz], [xx[-1]-eps,yy[-1],z+dz]])
-                box.append([[xx[0]+eps,yy[0]+h,z+dz], [xx[0]+eps,yy[0],z+dz], [xx[0]+eps,yy[0],z-dz], [xx[0]+eps,yy[0]+h,z-dz]])
-                box.append([[xx[-1]-eps,yy[0]+h,z-dz], [xx[-1]-eps,yy[0],z-dz], [xx[-1]-eps,yy[0],z+dz], [xx[-1]-eps,yy[0]+h,z+dz]])
+                box.append([[xx[0],yy[-1]+h,z+dz], [xx[0],yy[-1],z+dz], [xx[0],yy[-1],z-dz], [xx[0],yy[-1]+h,z-dz]])
+                box.append([[xx[-1],yy[-1]+h,z-dz], [xx[-1],yy[-1],z-dz], [xx[-1],yy[-1],z+dz], [xx[-1],yy[-1]+h,z+dz]])
+                box.append([[xx[0],yy[0],z+dz], [xx[0],yy[0]-h,z+dz], [xx[0],yy[0]-h,z-dz], [xx[0],yy[0],z-dz]])
+                box.append([[xx[-1],yy[0],z-dz], [xx[-1],yy[0]-h,z-dz], [xx[-1],yy[0]-h,z+dz], [xx[-1],yy[0],z+dz]])
 
-        m = text3d_ticks(text, box, self.fg, bg, loc, 'back', 'center')
-        self.model(None, m)
+        text.extend(['X', 'X', 'X', 'X'])
+        x = (xx[0]+xx[-1])/2
+        if self.haxis == 'z':
+            loc.extend([10, 11, 12, 13])
+            box.append([[x-dx,yy[-1],zz[-1]+d2], [x-dx,yy[-1],zz[-1]+d1], [x+dx,yy[-1],zz[-1]+d1], [x+dx,yy[-1],zz[-1]+d2]])
+            box.append([[x+dx,yy[0],zz[-1]+d2], [x+dx,yy[0],zz[-1]+d1], [x-dx,yy[0],zz[-1]+d1], [x-dx,yy[0],zz[-1]+d2]])
+            box.append([[x-dx,yy[-1],zz[0]-d1], [x-dx,yy[-1],zz[0]-d2], [x+dx,yy[-1],zz[0]-d2], [x+dx,yy[-1],zz[0]-d1]])
+            box.append([[x+dx,yy[0],zz[0]-d1], [x+dx,yy[0],zz[0]-d2], [x-dx,yy[0],zz[0]-d2], [x-dx,yy[0],zz[0]-d1]])
+        else:
+            loc.extend([10, 11, 12, 13])
+            box.append([[x-dx,yy[-1]+d2,zz[0]], [x-dx,yy[-1]+d1,zz[0]], [x+dx,yy[-1]+d1,zz[0]], [x+dx,yy[-1]+d2,zz[0]]])
+            box.append([[x+dx,yy[-1]+d2,zz[-1]], [x+dx,yy[-1]+d1,zz[-1]], [x-dx,yy[-1]+d1,zz[-1]], [x-dx,yy[-1]+d2,zz[-1]]])
+            box.append([[x-dx,yy[0]-d1,zz[0]], [x-dx,yy[0]-d2,zz[0]], [x+dx,yy[0]-d2,zz[0]], [x+dx,yy[0]-d1,zz[0]]])
+            box.append([[x+dx,yy[0]-d1,zz[-1]], [x+dx,yy[0]-d2,zz[-1]], [x-dx,yy[0]-d2,zz[-1]], [x-dx,yy[0]-d1,zz[-1]]])
+
+        text.extend(['Y', 'Y', 'Y', 'Y'])
+        y = (yy[0]+yy[-1])/2
+        if self.haxis == 'z':
+            loc.extend([20, 21, 22, 23])
+            box.append([[xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2]])
+            box.append([[xx[-1],y+dy,zz[-1]+d2], [xx[-1],y+dy,zz[-1]+d1], [xx[-1],y-dy,zz[-1]+d1], [xx[-1],y-dy,zz[-1]+d2]])
+            box.append([[xx[0],y-dy,zz[0]-d1], [xx[0],y-dy,zz[0]-d2], [xx[0],y+dy,zz[0]-d2], [xx[0],y+dy,zz[0]-d1]])
+            box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
+        else:
+            loc.extend([0, 1, 2, 3])
+            box.append([[xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1]])
+            box.append([[xx[0]-d1,y+dy,zz[0]], [xx[0]-d2,y+dy,zz[0]], [xx[0]-d2,y-dy,zz[0]], [xx[0]-d1,y-dy,zz[0]]])
+            box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
+            box.append([[xx[-1]+d1,y+dy,zz[-1]], [xx[-1]+d2,y+dy,zz[-1]], [xx[-1]+d2,y-dy,zz[-1]], [xx[-1]+d1,y-dy,zz[-1]]])
+
+        text.extend(['Z', 'Z', 'Z', 'Z'])
+        z = (zz[0]+zz[-1])/2
+        if self.haxis == 'z':
+            loc.extend([0, 1, 2, 3])
+            box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
+            box.append([[xx[0]-d1,yy[-1],z+dz], [xx[0]-d2,yy[-1],z+dz], [xx[0]-d2,yy[-1],z-dz], [xx[0]-d1,yy[-1],z-dz]])
+            box.append([[xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz], [xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz]])
+            box.append([[xx[-1]+d1,yy[0],z+dz], [xx[-1]+d2,yy[0],z+dz], [xx[-1]+d2,yy[0],z-dz], [xx[-1]+d1,yy[0],z-dz]])
+        else:
+            loc.extend([20, 21, 22, 23])
+            box.append([[xx[0],yy[-1]+d2,z+dz], [xx[0],yy[-1]+d1,z+dz], [xx[0],yy[-1]+d1,z-dz], [xx[0],yy[-1]+d2,z-dz]])
+            box.append([[xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz], [xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz]])
+            box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
+            box.append([[xx[-1],yy[0]-d1,z-dz], [xx[-1],yy[0]-d2,z-dz], [xx[-1],yy[0]-d2,z+dz], [xx[-1],yy[0]-d1,z+dz]])
+
+        m = text3d_ticks(text, box, self.fg, loc, 'back', 'center', padding=20)
+        self.model(m)
 
     def grid(self, **kwds):
         """网格和刻度
         kwds        - 关键字参数
             size            - 刻度文本字号，默认32
-            xfunc           - x轴标注格式化函数
-            yfunc           - y轴标注格式化函数
-            zfunc           - z轴标注格式化函数
+            xf              - x轴标注格式化函数
+            yf              - y轴标注格式化函数
+            zf              - z轴标注格式化函数
         """
 
+        for key in kwds:
+            if key not in [size, xf, yf, zf]:
+                raise KeyError('不支持的关键字参数：%s'%key)
+        
         self.ticks = {
             'size':     kwds.get('size', 32),
-            'xfunc':    kwds.get('xfunc', str),
-            'yfunc':    kwds.get('yfunc', str),
-            'zfunc':    kwds.get('zfunc', str)
+            'xf':       kwds.get('xf', str),
+            'yf':       kwds.get('yf', str),
+            'zf':       kwds.get('zf', str)
         }
 
     def title(self, title, size=32, color=None, family=None, weight='normal'):
@@ -1251,7 +1435,7 @@ class Scheme:
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         """
 
-        color = self.fg if color is None else util.format_color(color)
+        color = self.fg if color is None else self._format_color(color)
         im_text = util.text2img(title, 64, color, family=family, weight=weight)
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
@@ -1278,13 +1462,13 @@ class Scheme:
         self.models[1].update({'caption_text': m_text})
         self.models[1].update({'caption_line': m_line})
 
-    def colorbar(self, cm, data, formatfunc=str, endpoint=True):
+    def colorbar(self, cm, data, ff=str, endpoint=True):
         """设置调色板
 
         cm          - 调色板名称
         data        - 值域范围或刻度序列：长度大于1的元组或列表
         kwds        - 关键字参数
-        formatfunc  - 刻度标注格式化函数，默认str
+        ff          - 刻度标注格式化函数，默认str
         endpoint    - 刻度是否包含值域范围的两个端点值
         """
  
@@ -1322,7 +1506,7 @@ class Scheme:
             ys.append(y)
 
         vs_line = np.array(vs_line, dtype=np.float32)
-        color_line = util.format_color(self.fg, vs_line.shape[0])
+        color_line = self._format_color(self.fg, vs_line.shape[0])
 
         m_line = light.get_model(GL_LINES, vs_line, color=color_line, method='isolate', inside=False)
         m_line.verify()
@@ -1333,7 +1517,7 @@ class Scheme:
         im_arr, texcoord, box = list(), list(), list()
         rows_max, cols_max = 0, 0
         for i in range(len(data)):
-            im = util.text2img(formatfunc(data[i]), 64, self.fg)
+            im = util.text2img(ff(data[i]), 64, self.fg)
             rows_max = max(im.shape[0], rows_max)
             cols_max = max(im.shape[1], cols_max)
             im_arr.append(im)

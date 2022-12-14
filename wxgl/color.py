@@ -11,7 +11,6 @@ class ColorManager:
     def __init__(self):
         """构造函数"""
  
-        self.cid = -1
         self.default_colors = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#1f77b4', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
         self._colors = matplotlib.colors.cnames
         self._cmaps = [
@@ -102,23 +101,17 @@ class ColorManager:
             return self._hex2color(color)
         else:
             raise ValueError('未定义的或不符合规则的颜色：%s'%color)
- 
-    def _none2color(self):
-        """返回下一个默认的颜色"""
 
-        self.cid = (self.cid+1)%10
-
-        return self._hex2color(self.default_colors[self.cid])
-
-    def format_color(self, color, repeat=None):
+    def format_color(self, color, cid=0, repeat=None):
         """检查颜色参数，将字符串、元组、列表等类型的颜色转为浮点型的numpy数组
 
         color       - 预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组
+        cid         - 缺省颜色id
         repeat      - 若color为单个颜色，repeat表示重复次数或重复行列数
         """
 
         if color is None:
-            color = self._none2color()
+            color = self._hex2color(self.default_colors[cid])
         elif isinstance(color, str):
             color = self._str2color(color)
         elif isinstance(color, (list, tuple, np.ndarray)):

@@ -18,7 +18,7 @@ class QtFigure(QMainWindow):
 
         kwds        - 关键字参数
             size        - 窗口分辨率，默认960×640
-            bg          - 画布背景色，默认(0.0, 0.0, 0.0)
+            bg          - 画布背景色，默认(1.0, 1.0, 1.0)
             haxis       - 高度轴，默认y轴，可选z轴，不支持x轴
             fovy        - 相机水平视野角度，默认50°
             azim        - 方位角，默认0°
@@ -30,7 +30,7 @@ class QtFigure(QMainWindow):
 
         super().__init__()
 
-        self.setWindowTitle('GLTK')
+        self.setWindowTitle('WxGL')
         self.setWindowIcon(self.get_qicon('appicon', 'ico'))
         self.statusBar()
 

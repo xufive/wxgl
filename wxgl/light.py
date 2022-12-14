@@ -502,7 +502,7 @@ class BaseLight(_Light):
 class SunLight(_Light):
     """平行光照模型"""
 
-    def __init__(self, direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.5,0.5,0.5), **kwds):
+    def __init__(self, direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), **kwds):
         """构造函数"""
 
         _Light.__init__(self, 

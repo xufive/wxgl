@@ -147,13 +147,14 @@ class FontManager:
  
         return pixels
  
-    def text2img(self, text, size, color, bg=None, family=None, weight='normal'):
+    def text2img(self, text, size, color, bg=None, padding=0, family=None, weight='normal'):
         """文本转图像，返回图像数据和size元组
  
         text        - 文本字符串
         size        - 文字大小，整型
         color       - 文本颜色，numpy数组
         bg          - 背景色，None表示背景透明
+        padding     - 留白
         family      - （系统支持的）字体
         weight      - 字体的浓淡：'normal'-正常（默认），'light'-轻，'bold'-重
         """
@@ -187,13 +188,16 @@ class FontManager:
             b = np.ones(pixels.shape)*color[2]*255
             im = np.dstack((r,g,b,pixels)).astype(np.uint8)
 
-        if  not bg is None:
+        if bg is None:
+            bg = np.array([0, 0, 0, 0], dtype=np.uint8)
+        else:
             bg = np.array([int(255*bg[0]), int(255*bg[1]), int(255*bg[2]), 255], dtype=np.uint8)
             im[im[...,3] == 0] = bg
 
-            ext = np.tile(bg, (im.shape[0], 8, 1))
+        if padding > 0:
+            ext = np.tile(bg, (im.shape[0], padding, 1))
             im = np.hstack((ext, im, ext))
-            ext = np.tile(bg, (8, im.shape[1], 1))
+            ext = np.tile(bg, (padding, im.shape[1], 1))
             im = np.vstack((ext, im, ext))
  
         return im

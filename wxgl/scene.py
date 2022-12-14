@@ -20,46 +20,46 @@ class BaseScene:
     def __init__(self, scheme, **kwds):
         """构造函数"""
         
-        self.scheme = scheme                                        # 展示方案
-        self.viewport = [None, None, None]                          # 主视区、标题区、调色板区视口
-        self.mns = [[[],[]], [[],[]], [[],[]]]                      # 主视区、标题区、调色板区不透明/透明模型名列表
+        self.scheme = scheme                                            # 展示方案
+        self.viewport = [None, None, None]                              # 主视区、标题区、调色板区视口
+        self.mns = [[[],[]], [[],[]], [[],[]]]                          # 主视区、标题区、调色板区不透明/透明模型名列表
 
-        self.csize = kwds.get('size', (960, 640))                   # 画布分辨率
-        self.bg = kwds.get('bg', [0.0, 0.0, 0.0])                   # 背景色
-        self.haxis = kwds.get('haxis', 'y').lower()                 # 高度轴
-        self.fovy = kwds.get('fovy', 50.0)                          # 相机水平视野角度
-        self.azim = kwds.get('azim', 0.0)                           # 方位角
-        self.elev = kwds.get('elev', 0.0)                           # 高度角
-        self.azim_range = kwds.get('azim_range', (-180.0, 180.0))   # 方位角变化范围
-        self.elev_range = kwds.get('elev_range', (-180.0, 180.0))   # 高度角变化范围
-        self.smooth = kwds.get('smooth', True)                      # 直线和点的反走样开关
+        self.csize = kwds.get('size', (960, 640))                       # 画布分辨率
+        self.bg = util.format_color(kwds.get('bg', [0.0, 0.0, 0.0]))    # 背景色
+        self.haxis = kwds.get('haxis', 'y').lower()                     # 高度轴
+        self.fovy = kwds.get('fovy', 50.0)                              # 相机水平视野角度
+        self.azim = kwds.get('azim', 0.0)                               # 方位角
+        self.elev = kwds.get('elev', 0.0)                               # 高度角
+        self.azim_range = kwds.get('azim_range', (-180.0, 180.0))       # 方位角变化范围
+        self.elev_range = kwds.get('elev_range', (-180.0, 180.0))       # 高度角变化范围
+        self.smooth = kwds.get('smooth', True)                          # 直线和点的反走样开关
 
-        self.oecs = [0.0, 0.0, 0.0]                                 # 视点坐标系ECS原点
-        self.dist = self._DIST                                      # 相机ECS原点的距离
-        self.near = self._NEAR                                      # 相机与视椎体前端面的距离
-        self.far = self._FAR                                        # 相机与视椎体后端面的距离
-        self.aspect = self.csize[0]/self.csize[1]                   # 画布宽高比
-        self.cam = None                                             # 相机位置
-        self.up = None                                              # 指向相机上方的单位向量
-        self.origin = None                                          # 初始位置和姿态
-        self.mmat = np.eye(4, dtype=np.float32)                     # 模型矩阵
-        self.vmat = np.eye(4, dtype=np.float32)                     # 视点矩阵
-        self.pmat = np.eye(4, dtype=np.float32)                     # 投影矩阵
+        self.oecs = [0.0, 0.0, 0.0]                                     # 视点坐标系ECS原点
+        self.dist = self._DIST                                          # 相机ECS原点的距离
+        self.near = self._NEAR                                          # 相机与视椎体前端面的距离
+        self.far = self._FAR                                            # 相机与视椎体后端面的距离
+        self.aspect = self.csize[0]/self.csize[1]                       # 画布宽高比
+        self.cam = None                                                 # 相机位置
+        self.up = None                                                  # 指向相机上方的单位向量
+        self.origin = None                                              # 初始位置和姿态
+        self.mmat = np.eye(4, dtype=np.float32)                         # 模型矩阵
+        self.vmat = np.eye(4, dtype=np.float32)                         # 视点矩阵
+        self.pmat = np.eye(4, dtype=np.float32)                         # 投影矩阵
 
-        self.gl_init_done = False                                   # GL初始化标志
-        self.left_down = False                                      # 左键按下
-        self.mouse_pos = None                                       # 鼠标位置
-        self.scale = 1.0                                            # 眼睛位置自适应调整系数
+        self.gl_init_done = False                                       # GL初始化标志
+        self.left_down = False                                          # 左键按下
+        self.mouse_pos = None                                           # 鼠标位置
+        self.scale = 1.0                                                # 眼睛位置自适应调整系数
 
-        self.tn = 0                                                 # 计数器
-        self.start= time.time()                                     # 开始渲染时的时间戳
-        self.duration = 0                                           # 累计渲染时长，单位毫秒
-        self.tbase = 0                                              # 累计渲染时长基数，单位毫秒
-        self.playing = False                                        # 动画播放中
+        self.tn = 0                                                     # 计数器
+        self.start= time.time()                                         # 开始渲染时的时间戳
+        self.duration = 0                                               # 累计渲染时长，单位毫秒
+        self.tbase = 0                                                  # 累计渲染时长基数，单位毫秒
+        self.playing = False                                            # 动画播放中
 
-        self._update_cam_and_up()                                   # 更新眼睛位置和指向观察者上方的单位向量
-        self._update_view_matrix()                                  # 更新视点矩阵
-        self._update_proj_matrix()                                  # 更新投影矩阵
+        self._update_cam_and_up()                                       # 更新眼睛位置和指向观察者上方的单位向量
+        self._update_view_matrix()                                      # 更新视点矩阵
+        self._update_proj_matrix()                                      # 更新投影矩阵
 
     def _update_cam_and_up(self, oecs=None, dist=None, azim=None, elev=None):
         """根据当前ECS原点位置、距离、方位角、仰角等参数，重新计算眼睛位置和up向量"""
@@ -205,8 +205,8 @@ class BaseScene:
             self.tn += 1 
             self.duration = self.tbase + 1000*time.time() - self.start
 
-            if self.scheme.cruise:
-                v = self.scheme.cruise(self.duration)
+            if self.scheme.cruise_func:
+                v = self.scheme.cruise_func(self.duration)
                 self._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
                 self._update_view_matrix()
 
