@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
 
-import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout
-from PyQt6.QtGui import QIcon, QAction, QScreen, QImage, QPixmap
+import sys, os
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog
+from PyQt6.QtGui import QIcon, QAction, QImage, QPixmap
 from PyQt6.QtCore import Qt, QByteArray
 
 from . qtscene import QtScene
 from . import imgres
 
-app = QApplication(sys.argv)
-
 class QtFigure(QMainWindow):
     """基于qt的画布类"""
 
-    def __init__(self, scheme, **kwds):
-        """构造函数
-
-        kwds        - 关键字参数
-            size        - 窗口分辨率，默认960×640
-            bg          - 画布背景色，默认(1.0, 1.0, 1.0)
-            haxis       - 高度轴，默认y轴，可选z轴，不支持x轴
-            fovy        - 相机水平视野角度，默认50°
-            azim        - 方位角，默认0°
-            elev        - 高度角，默认0°
-            azim_range  - 方位角变化范围，默认-180°～180°
-            elev_range  - 高度角变化范围，默认-180°～180°
-            smooth      - 直线和点的反走样，默认True
-        """
+    def __init__(self, scheme):
+        """构造函"""
 
         super().__init__()
 
@@ -34,12 +20,12 @@ class QtFigure(QMainWindow):
         self.setWindowIcon(self.get_qicon('appicon', 'ico'))
         self.statusBar()
 
-        size = kwds.get('size', (960,640))
+        size = scheme.kwds.get('size', (960,640))
         self.resize(*size)
         screen = self.screen().availableGeometry()
         self.move((screen.width() - size[0])//2, (screen.height() - size[1])//2)
 
-        self.scene = QtScene(self, scheme, **kwds)
+        self.scene = QtScene(self, scheme, **scheme.kwds)
 
         saveAction = QAction(self.get_qicon('save', 'png'), '&保存', self)
         saveAction.setStatusTip('保存画布')
@@ -95,7 +81,23 @@ class QtFigure(QMainWindow):
     def on_save(self):
         """将缓冲区保存为图像文件"""
 
-        self.scene.save()
+        self.scene.stop_idle()
+        im = self.scene.get_buffer()
+
+        file_type = 'PNG files (*.png);;JPEG file (*.jpg)'
+        fname, fext = QFileDialog.getSaveFileName(self, '保存文件', directory=os.getcwd(), filter=file_type)
+        name, ext = os.path.splitext(fname)
+
+        if name:
+            if ext != '.png' and ext != '.jpg':
+                ext = '.png' if fext == 'PNG files (*.png)' else '.jpg'
+
+            if ext == '.jpg':
+                im.convert('RGB').save('%s%s'%(name, ext))
+            else:
+                im.save('%s%s'%(name, ext))
+
+        self.scene.start_idle()
 
     def on_pause(self):
         """动画/暂停"""
@@ -112,9 +114,12 @@ class QtFigure(QMainWindow):
             self.animateAction.setIcon(self.icon_play)
             self.animateAction.setToolTip('动画')
 
-    def loop(self):
-        """显示画布，侦听事件"""
+def show_qtfigure(scheme):
+    """显示画布，侦听事件"""
 
-        self.show() # 显示窗口
-        app.exec()
+    app = QApplication(sys.argv)
+    fig = QtFigure(scheme)
+    fig.show()
+    app.exec()
+    scheme.reset()
 

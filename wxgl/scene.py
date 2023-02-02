@@ -52,7 +52,7 @@ class BaseScene:
         self.scale = 1.0                                                # 眼睛位置自适应调整系数
 
         self.tn = 0                                                     # 计数器
-        self.start= time.time()                                         # 开始渲染时的时间戳
+        self.start= 1000 * time.time()                                  # 开始渲染时的时间戳
         self.duration = 0                                               # 累计渲染时长，单位毫秒
         self.tbase = 0                                                  # 累计渲染时长基数，单位毫秒
         self.playing = False                                            # 动画播放中
@@ -110,20 +110,18 @@ class BaseScene:
  
         self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
 
-    def _get_buffer(self, alpha=True, crop=False):
+    def _get_buffer(self, mode='RGBA', crop=False, buffer='front'):
         """以PIL对象的格式返回场景缓冲区数据
  
-        alpha       - 是否使用透明通道
+        mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
+        buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
         """
- 
-        gl_mode = GL_RGBA if alpha else GL_RGB
-        pil_mode = 'RGBA' if alpha else 'RGB'
 
-        glReadBuffer(GL_FRONT)
- 
+        gl_mode = GL_RGBA if mode=='RGBA' else GL_RGB
+        glReadBuffer(GL_FRONT if buffer=='front' else GL_BACK)
         data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
-        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=pil_mode)
+        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=mode)
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
  
         if crop:
@@ -198,12 +196,15 @@ class BaseScene:
             glEnable(GL_LINE_SMOOTH)                                        # 开启直线反走样
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                          # 最高质量直线反走样
 
-    def _timer(self):
+    def _timer(self, delta=None):
         """定时函数"""
 
         if self.scheme.alive and self.playing:
-            self.tn += 1 
-            self.duration = self.tbase + 1000*time.time() - self.start
+            self.tn += 1
+            if delta is None:
+                self.duration = self.tbase + 1000*time.time() - self.start
+            else:
+                self.duration += delta
 
             if self.scheme.cruise_func:
                 v = self.scheme.cruise_func(self.duration)
@@ -217,6 +218,11 @@ class BaseScene:
         self._update_cam_and_up(dist=self.origin['dist'], azim=self.origin['azim'], elev=self.origin['elev'])
         self._update_view_matrix()
         self._update_proj_matrix()
+
+        self.tn = 0
+        self.start= 1000 * time.time()
+        self.duration = 0
+        self.tbase = 0
 
     def _pause(self):
         """动画/暂停"""
@@ -350,6 +356,11 @@ class BaseScene:
         self._update_cam_and_up()
         self._update_view_matrix()
         self._update_proj_matrix()
+        
+        self.tn = 0
+        self.start= 1000 * time.time()
+        self.duration = 0
+        self.tbase = 0
 
     def _render(self, m):
         """绘制单个模型"""
@@ -439,9 +450,11 @@ class BaseScene:
                 m = self.scheme.models[i][name]
                 for item in m.cshaders:
                     glDeleteShader(item)
-                glDeleteProgram(m.program)
                 
-                if m.indices:
+                if m.program:
+                    glDeleteProgram(m.program)
+                
+                if m.indices and 'ibo' in m.indices:
                     m.indices['ibo'].delete()
                 
                 for key in m.attribute:

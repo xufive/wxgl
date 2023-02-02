@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import wx
 import wx.lib.agw.aui as aui
 from wx.lib.embeddedimage import PyEmbeddedImage
@@ -14,24 +15,10 @@ class WxFigure(wx.Frame):
     ID_SAVE = wx.NewIdRef()     # 保存
     ID_ANIMATE = wx.NewIdRef()  # 动画播放/暂停
 
-    def __init__(self, scheme, **kwds):
-        """构造函数
-
-        kwds        - 关键字参数
-            size        - 窗口分辨率，默认960×640
-            bg          - 画布背景色，默认(1.0, 1.0, 1.0)
-            haxis       - 高度轴，默认y轴，可选z轴，不支持x轴
-            fovy        - 相机水平视野角度，默认50°
-            azim        - 方位角，默认0°
-            elev        - 高度角，默认0°
-            azim_range  - 方位角变化范围，默认-180°～180°
-            elev_range  - 高度角变化范围，默认-180°～180°
-            smooth      - 直线和点的反走样，默认True
-        """
+    def __init__(self, scheme):
+        """构造函数"""
  
-        self.app = wx.App()
-
-        size = kwds.get('size', (960,640))
+        size = scheme.kwds.get('size', (960,640))
         wx.Frame.__init__(self, None, -1, 'WxGL', size=size, style=wx.DEFAULT_FRAME_STYLE)
  
         self.SetIcon(PyEmbeddedImage(imgres.data['appicon']).GetIcon())
@@ -57,7 +44,9 @@ class WxFigure(wx.Frame):
 
         self.tb.Realize()
         self.sb = self.CreateStatusBar()
-        self.scene = WxScene(self, scheme, **kwds)
+        self.scene = WxScene(self, scheme, **scheme.kwds)
+        
+        self.Show()
 
         self._mgr = aui.AuiManager()
         self._mgr.SetManagedWindow(self)
@@ -77,7 +66,25 @@ class WxFigure(wx.Frame):
     def on_save(self, evt):
         """将缓冲区保存为图像文件"""
 
-        self.scene.save()
+        im = self.scene.get_buffer()
+
+        wildcard = 'PNG files (*.png)|*.png|JPEG file (*.jpg)|*.jpg'
+        dlg = wx.FileDialog(self, message='保存为文件', wildcard=wildcard, style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+        dlg.SetFilterIndex(0)
+ 
+        if dlg.ShowModal() == wx.ID_OK:
+            fn = dlg.GetPath()
+            name, ext = os.path.splitext(fn)
+            
+            if ext != '.png' and ext != '.jpg':
+                ext = ['.png', '.jpg'][dlg.GetFilterIndex()]
+
+            if ext == '.jpg':
+                im.convert('RGB').save('%s%s'%(name, ext))
+            else:
+                im.save('%s%s'%(name, ext))
+        
+        dlg.Destroy()
 
     def on_pause(self, evt):
         """动画/暂停"""
@@ -93,9 +100,11 @@ class WxFigure(wx.Frame):
         
         self.tb.Realize()
 
-    def loop(self):
-        """显示画布，侦听事件"""
+def show_wxfigure(scheme):
+    """显示画布"""
 
-        self.Show()
-        self.app.MainLoop()
+    app = wx.App()
+    fig = WxFigure(scheme)
+    app.MainLoop()
+    scheme.reset()
 

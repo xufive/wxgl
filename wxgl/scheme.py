@@ -241,16 +241,20 @@ class Scheme:
         else:
             idx = np.arange(vs.shape[0])
  
-        if isinstance(texture, str) and os.path.exists(texture):
-            texture = Texture(texture)
-
-        if texture is None:
-            if data is None:
-                color = self._format_color(color, vs.shape[0])[idx]
+        if not texture is None:
+            if isinstance(texture, str) and os.path.exists(texture):
+                texture = Texture(texture)
             else:
-                color = util.cmap(np.array(data), cm, alpha=alpha)[idx]
+                raise ValueError('文件不存在：%s'%texture)
+            
+            if isinstance(texture, Texture):
+                color = None
+            else:       
+                raise ValueError('期望texture参数是wxgl.Texture对象')
+        elif data is None:
+            color = self._format_color(color, vs.shape[0])[idx]
         else:
-            color = None
+            color = util.cmap(np.array(data), cm, alpha=alpha)[idx]
  
         self.model(light.get_model(GL_POINTS, vs[idx], 
             color       = color, 
@@ -382,16 +386,21 @@ class Scheme:
             normal[1] += normal[-1]
             normal[-1] = normal[1]
 
-        if isinstance(texture, str) and os.path.exists(texture):
-            texture = Texture(texture)
-
-        if isinstance(texture, Texture):
-            color = None
-            texcoord = np.array(texcoord, dtype=np.float32)
-        elif not data is None:
-            color = util.cmap(np.array(data), cm, alpha=alpha)
-        else:
+        if not texture is None:
+            if isinstance(texture, str) and os.path.exists(texture):
+                texture = Texture(texture)
+            else:
+                raise ValueError('文件不存在：%s'%texture)
+            
+            if isinstance(texture, Texture):
+                color = None
+                texcoord = np.array(texcoord, dtype=np.float32)
+            else:       
+                raise ValueError('期望texture参数是wxgl.Texture对象')
+        elif data is None:
             color = self._format_color(color, vs.shape[0])
+        else:
+            color = util.cmap(np.array(data), cm, alpha=alpha)
  
         self.model(light.get_model(gltype, vs, 
             normal      = normal,
@@ -468,16 +477,21 @@ class Scheme:
             normal[-2] = normal[0]
             normal[-1] = normal[1]
 
-        if isinstance(texture, str) and os.path.exists(texture):
-            texture = Texture(texture)
-
-        if isinstance(texture, Texture):
-            color = None
-            texcoord = np.array(texcoord, dtype=np.float32)
-        elif not data is None:
-            color = util.cmap(np.array(data), cm, alpha=alpha)
-        else:
+        if not texture is None:
+            if isinstance(texture, str) and os.path.exists(texture):
+                texture = Texture(texture)
+            else:
+                raise ValueError('文件不存在：%s'%texture)
+            
+            if isinstance(texture, Texture):
+                color = None
+                texcoord = np.array(texcoord, dtype=np.float32)
+            else:       
+                raise ValueError('期望texture参数是wxgl.Texture对象')
+        elif data is None:
             color = self._format_color(color, vs.shape[0])
+        else:
+            color = util.cmap(np.array(data), cm, alpha=alpha)
  
         self.model(light.get_model(gltype, vs, 
             normal      = normal,
@@ -574,19 +588,24 @@ class Scheme:
         if (np.absolute(vs[:,-1] - vs[-1,0]) < 1e-10).all(): # 尾列顶点重合
             normal[:,-1] = normal[0,-1]
 
-        if isinstance(texture, str) and os.path.exists(texture):
-            texture = Texture(texture)
+        if not texture is None:
+            if isinstance(texture, str) and os.path.exists(texture):
+                texture = Texture(texture)
+            else:
+                raise ValueError('文件不存在：%s'%texture)
 
-        if isinstance(texture, Texture):
-            color = None
-            if texcoord is None:
-                u = np.linspace(0, 1, cols)
-                v = np.linspace(0, 1, rows)
-                texcoord = np.float32(np.dstack(np.meshgrid(u, v)).reshape(-1, 2))        
-        elif not data is None:
-            color = util.cmap(np.array(data), cm, alpha=alpha).reshape(-1, 4)
-        else:
+            if isinstance(texture, Texture):
+                color = None
+                if texcoord is None:
+                    u = np.linspace(0, 1, cols)
+                    v = np.linspace(0, 1, rows)
+                    texcoord = np.float32(np.dstack(np.meshgrid(u, v)).reshape(-1, 2))
+            else:       
+                raise ValueError('期望texture参数是wxgl.Texture对象')
+        elif data is None:
             color = self._format_color(color, rows*cols)
+        else:
+            color = util.cmap(np.array(data), cm, alpha=alpha).reshape(-1, 4)
  
         self.model(light.get_model(gltype, vs, 
             normal      = normal,
@@ -1082,6 +1101,21 @@ class Scheme:
         vs = np.stack((xs, ys, zs), axis=1)
  
         self.surface(vs, color=color, method='isolate', indices=indices, **kwds)
+
+    def axes(self, length=1, color=((1,0,0),(0,1,0),(0,0,1))):
+        """坐标轴
+
+        length      - 坐标半轴长度
+        color       - 坐标轴颜色
+        """
+
+        vs = [[-length,0,0], [0.85*length,0,0], [0,-length,0], [0,0.85*length,0], [0,0,-length], [0,0,0.85*length]]
+        colors = np.repeat(np.array(color), 2, axis=0)
+
+        self.line(vs, color=colors, method='isolate')
+        self.cone((length,0,0), (0.85*length,0,0), 0.02*length, color=color[0], bottom=True)
+        self.cone((0,length,0), (0,0.85*length,0), 0.02*length, color=color[1], bottom=True)
+        self.cone((0,0,length), (0,0,0.85*length), 0.02*length, color=color[2], bottom=True)
 
     def _grid(self):
         """网格和刻度 """

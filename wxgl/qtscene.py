@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-import os
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtWidgets import QFileDialog
 from PyQt6.QtCore import Qt
 
 from . scene import BaseScene
@@ -27,8 +25,6 @@ class QtScene(BaseScene, QOpenGLWidget):
     def paintGL(self):
         """重写绘制函数"""
  
-        #self.makeCurrent()
-
         if not self.gl_init_done:
             self._initialize_gl()
             self._assemble()
@@ -54,26 +50,15 @@ class QtScene(BaseScene, QOpenGLWidget):
 
         self._pause()
 
-    def save(self):
-        """将缓冲区保存为图像文件"""
+    def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
+        """以PIL对象的格式返回场景缓冲区数据
+ 
+        mode        - 'RGB'或'RGBA'
+        crop        - 是否将宽高裁切为16的倍数
+        buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
+        """
 
-        self.killTimer(self.timer_id)
-        im = self._get_buffer(alpha=True)
-
-        file_type = 'PNG files (*.png);;JPEG file (*.jpg)'
-        fname, fext = QFileDialog.getSaveFileName(self, '保存文件', directory=os.getcwd(), filter=file_type)
-        name, ext = os.path.splitext(fname)
-
-        if name:
-            if ext != '.png' and ext != '.jpg':
-                ext = '.png' if fext == 'PNG files (*.png)' else '.jpg'
-
-            if ext == '.jpg':
-                im.convert('RGB').save('%s%s'%(name, ext))
-            else:
-                im.save('%s%s'%(name, ext))
-
-        self.timer_id = self.startTimer(0, Qt.TimerType.CoarseTimer)
+        return self._get_buffer(mode=mode, crop=crop, buffer=buffer)
 
     def mousePressEvent(self, evt):
         """重写鼠标按键被按下事件函数"""
@@ -106,4 +91,14 @@ class QtScene(BaseScene, QOpenGLWidget):
         
         self._wheel(evt.angleDelta().y())
         self.update()
+
+    def start_idle(self):
+        """启动idle"""
+        
+        self.timer_id = self.startTimer(0, Qt.TimerType.CoarseTimer)
+
+    def stop_idle(self):
+        """停止idle"""
+        
+        self.killTimer(self.timer_id)
 

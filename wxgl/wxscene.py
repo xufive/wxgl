@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 import wx
 from wx import glcanvas as glc
 
@@ -90,7 +89,7 @@ class WxScene(BaseScene, glc.GLCanvas):
 
     def on_paint(self, evt):
         """重绘事件函数"""
-
+        
         self.SetCurrent(self.context)
 
         if not self.gl_init_done:
@@ -118,27 +117,32 @@ class WxScene(BaseScene, glc.GLCanvas):
 
         self._pause()
 
-    def save(self):
-        """将缓冲区保存为图像文件"""
+    def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
+        """以PIL对象的格式返回场景缓冲区数据
+ 
+        mode        - 'RGB'或'RGBA'
+        crop        - 是否将宽高裁切为16的倍数
+        buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
+        """
 
         self.SetCurrent(self.context)
-        im = self._get_buffer(alpha=True)
+        return self._get_buffer(mode=mode, crop=crop, buffer=buffer)
 
-        wildcard = 'PNG files (*.png)|*.png|JPEG file (*.jpg)|*.jpg'
-        dlg = wx.FileDialog(self, message='保存为文件', wildcard=wildcard, style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
-        dlg.SetFilterIndex(0)
+        #wildcard = 'PNG files (*.png)|*.png|JPEG file (*.jpg)|*.jpg'
+        #dlg = wx.FileDialog(self, message='保存为文件', wildcard=wildcard, style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+        #dlg.SetFilterIndex(0)
  
-        if dlg.ShowModal() == wx.ID_OK:
-            fn = dlg.GetPath()
-            name, ext = os.path.splitext(fn)
-            
-            if ext != '.png' and ext != '.jpg':
-                ext = ['.png', '.jpg'][dlg.GetFilterIndex()]
+        #if dlg.ShowModal() == wx.ID_OK:
+        #    fn = dlg.GetPath()
+        #    name, ext = os.path.splitext(fn)
+        #    
+        #    if ext != '.png' and ext != '.jpg':
+        #        ext = ['.png', '.jpg'][dlg.GetFilterIndex()]
 
-            if ext == '.jpg':
-                im.convert('RGB').save('%s%s'%(name, ext))
-            else:
-                im.save('%s%s'%(name, ext))
-        
-        dlg.Destroy()
+        #    if ext == '.jpg':
+        #        im.convert('RGB').save('%s%s'%(name, ext))
+        #    else:
+        #        im.save('%s%s'%(name, ext))
+        #
+        #dlg.Destroy()
 
