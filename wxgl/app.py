@@ -94,5 +94,5 @@ class App(Scheme):
         if not os.path.isdir(fpath):
             os.makedirs(fpath)
 
-        save_figure(self, outfile=outfile, ext=ext, dpi=dpi, fps=fps, frames=frames, loop=loop, quality=quality)
+        show_figure(self, outfile=outfile, ext=ext, dpi=dpi, fps=fps, frames=frames, loop=loop, quality=quality)
 
