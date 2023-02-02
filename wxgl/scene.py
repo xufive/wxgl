@@ -166,16 +166,16 @@ class BaseScene:
         for i in range(3):
             if self.scheme.models[i]:
                 glViewport(*self.viewport[i])
-                for name, depth in self.mns[i][0]:
-                    self._render(self.scheme.models[i][name])
+                for mid, depth in self.mns[i][0]:
+                    self._render(self.scheme.models[i][mid])
 
                 glDepthMask(False) # 对于半透明模型，禁用深度缓冲（锁定）
                 if (self.up[1]+self.up[2]) > 0 and -90 <= self.azim < 90 or (self.up[1]+self.up[2]) < 0 and (self.azim < -90 or self.azim >= 90):
-                    for name, depth in self.mns[i][1]:
-                        self._render(self.scheme.models[i][name])
+                    for mid, depth in self.mns[i][1]:
+                        self._render(self.scheme.models[i][mid])
                 else:
-                    for name, depth in self.mns[i][1][::-1]:
-                        self._render(self.scheme.models[i][name])
+                    for mid, depth in self.mns[i][1][::-1]:
+                        self._render(self.scheme.models[i][mid])
                 glDepthMask(True) # 释放深度缓冲区
 
     def _initialize_gl(self):
@@ -467,4 +467,11 @@ class BaseScene:
                         textures.append(m.attribute[key]['texture'])
                 if textures:
                     glDeleteTextures(len(textures), textures)
+
+    def set_visible(self, name, visible):
+        """设置部件或模型的可见性"""
+
+        if name in self.scheme.widget:
+            for mid in self.scheme.widget[name]:
+                self.scheme.models[0][mid].visible = visible
 

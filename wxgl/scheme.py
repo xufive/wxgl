@@ -35,6 +35,7 @@ class Scheme:
         self.cruise_func = None                                 # 相机巡航函数
         self.alive = False                                      # 是否使用了动画函数
         self.models = [dict(), dict(), dict()]                  # 主视区、标题区、调色板区模型
+        self.widget = dict()                                    # 由一个或多个模型组成的部件
 
     def _set_range(self, r_x=None, r_y=None, r_z=None):
         """设置坐标轴范围"""
@@ -91,10 +92,16 @@ class Scheme:
         if m.alive:
             self.alive = True
 
+        mid = uuid.uuid1().hex
+        self.models[0].update({mid: m})
+        
         if name is None:
-            name = uuid.uuid1().hex
+            name = mid
 
-        self.models[0].update({name: m})
+        if name in self.widget:
+            self.widget[name].append(mid)
+        else:
+            self.widget.update({name:[mid]})
 
     def _get_series(self, v_min, v_max, endpoint=False, extend=0):
         """返回标注序列
@@ -154,7 +161,7 @@ class Scheme:
             inside      - 模型顶点是否影响模型空间，默认True
             slide       - 幻灯片函数，默认None
             ambient     - 环境光，默认(1.0,1.0,1.0)
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = ['color', 'size', 'align', 'valign', 'family', 'weight', 'visible', 'inside', 'slide', 'ambient', 'name']
@@ -209,7 +216,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
             ambient     - 环境光，默认(1.0,1.0,1.0)
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = ['color', 'size', 'data', 'cm', 'alpha', 'texture', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
@@ -283,7 +290,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
             ambient     - 环境光，默认(1.0,1.0,1.0)
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -344,7 +351,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -438,7 +445,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -528,7 +535,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -640,7 +647,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
             light       - 光照模型（默认基础光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -706,7 +713,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = [
@@ -756,7 +763,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = ['color', 'iterate', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name']
@@ -810,7 +817,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = ['vec', 'color', 'visible', 'inside', 'opacity', 'cull', 'fill', 'slide', 'transform', 'light', 'name']
@@ -857,7 +864,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
  
         keys = [
@@ -909,7 +916,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = [
@@ -966,7 +973,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
         
         keys = [
@@ -1024,7 +1031,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = [
@@ -1076,7 +1083,7 @@ class Scheme:
             slide       - 幻灯片函数，默认None
             transform   - 由旋转、平移和缩放组成的模型几何变换序列
             light       - 光照模型（默认户外光照模型）
-            name        - 模型名
+            name        - 模型或部件名
         """
 
         keys = [
@@ -1102,20 +1109,24 @@ class Scheme:
  
         self.surface(vs, color=color, method='isolate', indices=indices, **kwds)
 
-    def axes(self, length=1, color=((1,0,0),(0,1,0),(0,0,1))):
+    def axes(self, length=1, color=((1,0,0),(0,1,0),(0,0,1)), name=None):
         """坐标轴
 
         length      - 坐标半轴长度
         color       - 坐标轴颜色
+        name        - 部件名
         """
+
+        if name is None:
+            name = uuid.uuid1().hex
 
         vs = [[-length,0,0], [0.85*length,0,0], [0,-length,0], [0,0.85*length,0], [0,0,-length], [0,0,0.85*length]]
         colors = np.repeat(np.array(color), 2, axis=0)
 
         self.line(vs, color=colors, method='isolate')
-        self.cone((length,0,0), (0.85*length,0,0), 0.02*length, color=color[0], bottom=True)
-        self.cone((0,length,0), (0,0.85*length,0), 0.02*length, color=color[1], bottom=True)
-        self.cone((0,0,length), (0,0,0.85*length), 0.02*length, color=color[2], bottom=True)
+        self.cone((length,0,0), (0.85*length,0,0), 0.02*length, color=color[0], bottom=True, name=name)
+        self.cone((0,length,0), (0,0.85*length,0), 0.02*length, color=color[1], bottom=True, name=name)
+        self.cone((0,0,length), (0,0,0.85*length), 0.02*length, color=color[2], bottom=True, name=name)
 
     def _grid(self):
         """网格和刻度 """
@@ -1127,6 +1138,7 @@ class Scheme:
         xf = self.ticks['xf']
         yf = self.ticks['yf']
         zf = self.ticks['zf']
+        name = self.ticks['name']
 
         xx = self._get_series(*self.r_x, extend=0.03)
         yy = self._get_series(*self.r_y, extend=0.03)
@@ -1327,9 +1339,9 @@ class Scheme:
         light = BaseLight()
         bg = np.where(self.bg>0.5, self.bg-0.05, self.bg)
         bg = np.where(bg<0.5, bg+0.05, bg)
-        self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light)
-        self.quad(vs, color=[*bg, 1.0], cull='front', method='isolate', opacity=False, light=light)
-        self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light)
+        self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light, name=name)
+        self.quad(vs, color=[*bg, 1.0], cull='front', method='isolate', opacity=False, light=light, name=name)
+        self.quad(vs, color=[*self.fg, 0.3], fill=False, cull='front', method='isolate', opacity=False, light=light, name=name)
 
         # 以下绘制标注文本
         # ----------------------------------------------------------------------------------------------------
@@ -1337,7 +1349,7 @@ class Scheme:
         dy = yy[2] - yy[1]
         dz = zz[2] - zz[1]
         h = min(dx, dy, dz) * size/200 # 标注文字高度
-        d1, d2 = 1.3*h, 2.5*h
+        d1, d2 = 1.3*h, 2.6*h
         text, bg, box, loc = list(), list(), list(), list()
 
         for x in xx[1:-1]:
@@ -1416,19 +1428,29 @@ class Scheme:
             box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
         else:
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1]])
-            box.append([[xx[0]-d1,y+dy,zz[0]], [xx[0]-d2,y+dy,zz[0]], [xx[0]-d2,y-dy,zz[0]], [xx[0]-d1,y-dy,zz[0]]])
-            box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
-            box.append([[xx[-1]+d1,y+dy,zz[-1]], [xx[-1]+d2,y+dy,zz[-1]], [xx[-1]+d2,y-dy,zz[-1]], [xx[-1]+d1,y-dy,zz[-1]]])
+            box.append([[xx[0],y+d1,zz[-1]+d2], [xx[0],y,zz[-1]+d2], [xx[0],y,zz[-1]+d1], [xx[0],y+d1,zz[-1]+d1]])
+            box.append([[xx[0]-d2,y+d1,zz[0]], [xx[0]-d2,y,zz[0]], [xx[0]-d1,y,zz[0]], [xx[0]-d1,y+d1,zz[0]]])
+            box.append([[xx[-1],y+d1,zz[0]-d2], [xx[-1],y,zz[0]-d2], [xx[-1],y,zz[0]-d1], [xx[-1],y+d1,zz[0]-d1]])
+            box.append([[xx[-1]+d2,y+d1,zz[-1]], [xx[-1]+d2,y,zz[-1]], [xx[-1]+d1,y,zz[-1]], [xx[-1]+d1,y+d1,zz[-1]]])
+            
+            #box.append([[xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1]])
+            #box.append([[xx[0]-d1,y+dy,zz[0]], [xx[0]-d2,y+dy,zz[0]], [xx[0]-d2,y-dy,zz[0]], [xx[0]-d1,y-dy,zz[0]]])
+            #box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
+            #box.append([[xx[-1]+d1,y+dy,zz[-1]], [xx[-1]+d2,y+dy,zz[-1]], [xx[-1]+d2,y-dy,zz[-1]], [xx[-1]+d1,y-dy,zz[-1]]])
 
         text.extend(['Z', 'Z', 'Z', 'Z'])
         z = (zz[0]+zz[-1])/2
         if self.haxis == 'z':
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
-            box.append([[xx[0]-d1,yy[-1],z+dz], [xx[0]-d2,yy[-1],z+dz], [xx[0]-d2,yy[-1],z-dz], [xx[0]-d1,yy[-1],z-dz]])
-            box.append([[xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz], [xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz]])
-            box.append([[xx[-1]+d1,yy[0],z+dz], [xx[-1]+d2,yy[0],z+dz], [xx[-1]+d2,yy[0],z-dz], [xx[-1]+d1,yy[0],z-dz]])
+            box.append([[xx[0],yy[0]-d2,z+d1], [xx[0],yy[0]-d2,z], [xx[0],yy[0]-d1,z], [xx[0],yy[0]-d1,z+d1]])
+            box.append([[xx[0]-d2,yy[-1],z+d1], [xx[0]-d2,yy[-1],z], [xx[0]-d1,yy[-1],z], [xx[0]-d1,yy[-1],z+d1]])
+            box.append([[xx[-1],yy[-1]+d2,z+d1], [xx[-1],yy[-1]+d2,z], [xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1]+d1,z+d1]])
+            box.append([[xx[-1]+d2,yy[0],z+d1], [xx[-1]+d2,yy[0],z], [xx[-1]+d1,yy[0],z], [xx[-1]+d1,yy[0],z+d1]])
+            
+            #box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
+            #box.append([[xx[0]-d1,yy[-1],z+dz], [xx[0]-d2,yy[-1],z+dz], [xx[0]-d2,yy[-1],z-dz], [xx[0]-d1,yy[-1],z-dz]])
+            #box.append([[xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz], [xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz]])
+            #box.append([[xx[-1]+d1,yy[0],z+dz], [xx[-1]+d2,yy[0],z+dz], [xx[-1]+d2,yy[0],z-dz], [xx[-1]+d1,yy[0],z-dz]])
         else:
             loc.extend([20, 21, 22, 23])
             box.append([[xx[0],yy[-1]+d2,z+dz], [xx[0],yy[-1]+d1,z+dz], [xx[0],yy[-1]+d1,z-dz], [xx[0],yy[-1]+d2,z-dz]])
@@ -1437,7 +1459,7 @@ class Scheme:
             box.append([[xx[-1],yy[0]-d1,z-dz], [xx[-1],yy[0]-d2,z-dz], [xx[-1],yy[0]-d2,z+dz], [xx[-1],yy[0]-d1,z+dz]])
 
         m = text3d_ticks(text, box, self.fg, loc, 'back', 'center', padding=20)
-        self.model(m)
+        self.model(m, name=name)
 
     def grid(self, **kwds):
         """网格和刻度
@@ -1446,17 +1468,19 @@ class Scheme:
             xf              - x轴标注格式化函数
             yf              - y轴标注格式化函数
             zf              - z轴标注格式化函数
+            name            - 部件名
         """
 
         for key in kwds:
-            if key not in [size, xf, yf, zf]:
+            if key not in ['size', 'xf', 'yf', 'zf', 'name']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         self.ticks = {
             'size':     kwds.get('size', 32),
             'xf':       kwds.get('xf', str),
             'yf':       kwds.get('yf', str),
-            'zf':       kwds.get('zf', str)
+            'zf':       kwds.get('zf', str),
+            'name':     kwds.get('name', uuid.uuid1().hex)
         }
 
     def title(self, title, size=32, color=None, family=None, weight='normal'):
