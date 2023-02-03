@@ -255,8 +255,11 @@ class BaseScene:
     def _assemble(self):
         """模型装配"""
 
-        if self.scheme.ticks:
-            self.scheme._grid()
+        if self.scheme.expost:
+            if 'grid' in self.scheme.expost:
+                self.scheme._grid()
+            if 'axes' in self.scheme.expost:
+                self.scheme._axes()
 
         for i in range(3):
             for name in self.scheme.models[i]:
