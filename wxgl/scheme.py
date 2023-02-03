@@ -1277,15 +1277,15 @@ class Scheme:
                 box_height = np.linalg.norm(box[i][0] - box[i][1])
                 k_box, k_text = box_width/box_height, nim_arr[i].shape[1]/nim_arr[i].shape[0]
  
-                if align == 'left':
+                if align[i] == 'left':
                     offset = (box[i][2]-box[i][1])*k_text/k_box
                     box[i][2] = box[i][1] + offset
                     box[i][3] = box[i][0] + offset
-                elif align == 'right':
+                elif align[i] == 'right':
                     offset = (box[i][0] - box[i][3])*k_text/k_box
                     box[i][0] = box[i][3] + offset
                     box[i][1] = box[i][2] + offset
-                elif align == 'center':
+                elif align[i] == 'center':
                     offset = (box[i][3] - box[i][0])*(1-k_text/k_box)/2
                     box[i][0] += offset
                     box[i][1] += offset
@@ -1349,12 +1349,13 @@ class Scheme:
         dy = yy[2] - yy[1]
         dz = zz[2] - zz[1]
         h = min(dx, dy, dz) * size/200 # 标注文字高度
-        d1, d2 = 1.3*h, 2.6*h
-        text, bg, box, loc = list(), list(), list(), list()
+        hh, d1 = 0.5*h, 1.0*h
+        text, box, loc, align = list(), list(), list(), list()
 
         for x in xx[1:-1]:
             x_str = xf(x)
             text.extend([x_str, x_str, x_str, x_str])
+            align.extend(['center', 'center', 'center', 'center'])
 
             if self.haxis == 'z':
                 loc.extend([10, 11, 12, 13])
@@ -1375,16 +1376,18 @@ class Scheme:
 
             if self.haxis == 'z':
                 loc.extend([20, 21, 22, 23])
+                align.extend(['center', 'center', 'center', 'center'])
                 box.append([[xx[0],y-dy,zz[-1]+h], [xx[0],y-dy,zz[-1]], [xx[0],y+dy,zz[-1]], [xx[0],y+dy,zz[-1]+h]])
                 box.append([[xx[-1],y+dy,zz[-1]+h], [xx[-1],y+dy,zz[-1]], [xx[-1],y-dy,zz[-1]], [xx[-1],y-dy,zz[-1]+h]])
                 box.append([[xx[0],y-dy,zz[0]], [xx[0],y-dy,zz[0]-h], [xx[0],y+dy,zz[0]-h], [xx[0],y+dy,zz[0]]])
                 box.append([[xx[-1],y+dy,zz[0]], [xx[-1],y+dy,zz[0]-h], [xx[-1],y-dy,zz[0]-h], [xx[-1],y-dy,zz[0]]])
             else:
                 loc.extend([0, 1, 2, 3])
-                box.append([[xx[0],y+dy,zz[-1]], [xx[0],y+dy,zz[-1]+h], [xx[0],y-dy,zz[-1]+h], [xx[0],y-dy,zz[-1]]])
-                box.append([[xx[0],y+dy,zz[0]], [xx[0]-h,y+dy,zz[0]], [xx[0]-h,y-dy,zz[0]], [xx[0],y-dy,zz[0]]])
-                box.append([[xx[-1],y+dy,zz[0]], [xx[-1],y+dy,zz[0]-h], [xx[-1],y-dy,zz[0]-h], [xx[-1],y-dy,zz[0]]])
-                box.append([[xx[-1],y+dy,zz[-1]], [xx[-1]+h,y+dy,zz[-1]], [xx[-1]+h,y-dy,zz[-1]], [xx[-1],y-dy,zz[-1]]])
+                align.extend(['right', 'right', 'right', 'right'])
+                box.append([[xx[0],y+hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]], [xx[0],y+hh,zz[-1]]])
+                box.append([[xx[0]-dx,y+hh,zz[0]], [xx[0]-dx,y-hh,zz[0]], [xx[0],y-hh,zz[0]], [xx[0],y+hh,zz[0]]])
+                box.append([[xx[-1],y+hh,zz[0]-dz], [xx[-1],y-hh,zz[0]-dz], [xx[-1],y-hh,zz[0]], [xx[-1],y+hh,zz[0]]])
+                box.append([[xx[-1]+dx,y+hh,zz[-1]], [xx[-1]+dx,y-hh,zz[-1]], [xx[-1],y-hh,zz[-1]], [xx[-1],y+hh,zz[-1]]])
 
         for z in zz[1:-1]:
             z_str = zf(z)
@@ -1392,73 +1395,72 @@ class Scheme:
 
             if self.haxis == 'z':
                 loc.extend([0, 1, 2, 3])
-                box.append([[xx[0],yy[0],z+dz], [xx[0],yy[0]-h,z+dz], [xx[0],yy[0]-h,z-dz], [xx[0],yy[0],z-dz]])
-                box.append([[xx[0],yy[-1],z+dz], [xx[0]-h,yy[-1],z+dz], [xx[0]-h,yy[-1],z-dz], [xx[0],yy[-1],z-dz]])
-                box.append([[xx[-1],yy[-1],z+dz], [xx[-1],yy[-1]+h,z+dz], [xx[-1],yy[-1]+h,z-dz], [xx[-1],yy[-1],z-dz]])
-                box.append([[xx[-1],yy[0],z+dz], [xx[-1]+h,yy[0],z+dz], [xx[-1]+h,yy[0],z-dz], [xx[-1],yy[0],z-dz]])
+                align.extend(['right', 'right', 'right', 'right'])
+                box.append([[xx[0],yy[0]-dy,z+hh], [xx[0],yy[0]-dy,z-hh], [xx[0],yy[0],z-hh], [xx[0],yy[0],z+hh]])
+                box.append([[xx[0]-dx,yy[-1],z+hh], [xx[0]-dx,yy[-1],z-hh], [xx[0],yy[-1],z-hh], [xx[0],yy[-1],z+hh]])
+                box.append([[xx[-1],yy[-1]+dy,z+hh], [xx[-1],yy[-1]+dy,z-hh], [xx[-1],yy[-1],z-hh], [xx[-1],yy[-1],z+hh]])
+                box.append([[xx[-1]+dx,yy[0],z+hh], [xx[-1]+dx,yy[0],z-hh], [xx[-1],yy[0],z-hh], [xx[-1],yy[0],z+hh]])
             else:
                 loc.extend([20, 21, 22, 23])
+                align.extend(['center', 'center', 'center', 'center'])
                 box.append([[xx[0],yy[-1]+h,z+dz], [xx[0],yy[-1],z+dz], [xx[0],yy[-1],z-dz], [xx[0],yy[-1]+h,z-dz]])
                 box.append([[xx[-1],yy[-1]+h,z-dz], [xx[-1],yy[-1],z-dz], [xx[-1],yy[-1],z+dz], [xx[-1],yy[-1]+h,z+dz]])
                 box.append([[xx[0],yy[0],z+dz], [xx[0],yy[0]-h,z+dz], [xx[0],yy[0]-h,z-dz], [xx[0],yy[0],z-dz]])
                 box.append([[xx[-1],yy[0],z-dz], [xx[-1],yy[0]-h,z-dz], [xx[-1],yy[0]-h,z+dz], [xx[-1],yy[0],z+dz]])
 
         text.extend(['X', 'X', 'X', 'X'])
-        x = (xx[0]+xx[-1])/2
+        align.extend(['center', 'center', 'center', 'center'])
+        x = (xx[-1]+xx[-2])/2
         if self.haxis == 'z':
             loc.extend([10, 11, 12, 13])
-            box.append([[x-dx,yy[-1],zz[-1]+d2], [x-dx,yy[-1],zz[-1]+d1], [x+dx,yy[-1],zz[-1]+d1], [x+dx,yy[-1],zz[-1]+d2]])
-            box.append([[x+dx,yy[0],zz[-1]+d2], [x+dx,yy[0],zz[-1]+d1], [x-dx,yy[0],zz[-1]+d1], [x-dx,yy[0],zz[-1]+d2]])
-            box.append([[x-dx,yy[-1],zz[0]-d1], [x-dx,yy[-1],zz[0]-d2], [x+dx,yy[-1],zz[0]-d2], [x+dx,yy[-1],zz[0]-d1]])
-            box.append([[x+dx,yy[0],zz[0]-d1], [x+dx,yy[0],zz[0]-d2], [x-dx,yy[0],zz[0]-d2], [x-dx,yy[0],zz[0]-d1]])
+            box.append([[x,yy[-1],zz[-1]+d1], [x,yy[-1],zz[-1]], [x+d1,yy[-1],zz[-1]], [x+d1,yy[-1],zz[-1]+d1]])
+            box.append([[x+d1,yy[0],zz[-1]+d1], [x+d1,yy[0],zz[-1]], [x,yy[0],zz[-1]], [x,yy[0],zz[-1]+d1]])
+            box.append([[x,yy[-1],zz[0]], [x,yy[-1],zz[0]-d1], [x+d1,yy[-1],zz[0]-d1], [x+d1,yy[-1],zz[0]]])
+            box.append([[x+d1,yy[0],zz[0]], [x+d1,yy[0],zz[0]-d1], [x,yy[0],zz[0]-d1], [x,yy[0],zz[0]]])
         else:
             loc.extend([10, 11, 12, 13])
-            box.append([[x-dx,yy[-1]+d2,zz[0]], [x-dx,yy[-1]+d1,zz[0]], [x+dx,yy[-1]+d1,zz[0]], [x+dx,yy[-1]+d2,zz[0]]])
-            box.append([[x+dx,yy[-1]+d2,zz[-1]], [x+dx,yy[-1]+d1,zz[-1]], [x-dx,yy[-1]+d1,zz[-1]], [x-dx,yy[-1]+d2,zz[-1]]])
-            box.append([[x-dx,yy[0]-d1,zz[0]], [x-dx,yy[0]-d2,zz[0]], [x+dx,yy[0]-d2,zz[0]], [x+dx,yy[0]-d1,zz[0]]])
-            box.append([[x+dx,yy[0]-d1,zz[-1]], [x+dx,yy[0]-d2,zz[-1]], [x-dx,yy[0]-d2,zz[-1]], [x-dx,yy[0]-d1,zz[-1]]])
+            box.append([[x,yy[-1]+d1,zz[0]], [x,yy[-1],zz[0]], [x+d1,yy[-1],zz[0]], [x+d1,yy[-1]+d1,zz[0]]])
+            box.append([[x+d1,yy[-1]+d1,zz[-1]], [x+d1,yy[-1],zz[-1]], [x,yy[-1],zz[-1]], [x,yy[-1]+d1,zz[-1]]])
+            box.append([[x,yy[0],zz[0]], [x,yy[0]-d1,zz[0]], [x+d1,yy[0]-d1,zz[0]], [x+d1,yy[0],zz[0]]])
+            box.append([[x+d1,yy[0],zz[-1]], [x+d1,yy[0]-d1,zz[-1]], [x,yy[0]-d1,zz[-1]], [x,yy[0],zz[-1]]])
 
         text.extend(['Y', 'Y', 'Y', 'Y'])
-        y = (yy[0]+yy[-1])/2
+        align.extend(['center', 'center', 'center', 'center'])
         if self.haxis == 'z':
+            y = (yy[-1]+yy[-2])/2
             loc.extend([20, 21, 22, 23])
-            box.append([[xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2]])
-            box.append([[xx[-1],y+dy,zz[-1]+d2], [xx[-1],y+dy,zz[-1]+d1], [xx[-1],y-dy,zz[-1]+d1], [xx[-1],y-dy,zz[-1]+d2]])
-            box.append([[xx[0],y-dy,zz[0]-d1], [xx[0],y-dy,zz[0]-d2], [xx[0],y+dy,zz[0]-d2], [xx[0],y+dy,zz[0]-d1]])
-            box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
+            box.append([[xx[0],y,zz[-1]+d1], [xx[0],y,zz[-1]], [xx[0],y+d1,zz[-1]], [xx[0],y+d1,zz[-1]+d1]])
+            box.append([[xx[-1],y+d1,zz[-1]+d1], [xx[-1],y+d1,zz[-1]], [xx[-1],y,zz[-1]], [xx[-1],y,zz[-1]+d1]])
+            box.append([[xx[0],y,zz[0]], [xx[0],y,zz[0]-d1], [xx[0],y+d1,zz[0]-d1], [xx[0],y+d1,zz[0]]])
+            box.append([[xx[-1],y+d1,zz[0]], [xx[-1],y+d1,zz[0]-d1], [xx[-1],y,zz[0]-d1], [xx[-1],y,zz[0]]])
         else:
+            y = (yy[-1]+yy[-2])/2
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],y+d1,zz[-1]+d2], [xx[0],y,zz[-1]+d2], [xx[0],y,zz[-1]+d1], [xx[0],y+d1,zz[-1]+d1]])
-            box.append([[xx[0]-d2,y+d1,zz[0]], [xx[0]-d2,y,zz[0]], [xx[0]-d1,y,zz[0]], [xx[0]-d1,y+d1,zz[0]]])
-            box.append([[xx[-1],y+d1,zz[0]-d2], [xx[-1],y,zz[0]-d2], [xx[-1],y,zz[0]-d1], [xx[-1],y+d1,zz[0]-d1]])
-            box.append([[xx[-1]+d2,y+d1,zz[-1]], [xx[-1]+d2,y,zz[-1]], [xx[-1]+d1,y,zz[-1]], [xx[-1]+d1,y+d1,zz[-1]]])
-            
-            #box.append([[xx[0],y+dy,zz[-1]+d1], [xx[0],y+dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d2], [xx[0],y-dy,zz[-1]+d1]])
-            #box.append([[xx[0]-d1,y+dy,zz[0]], [xx[0]-d2,y+dy,zz[0]], [xx[0]-d2,y-dy,zz[0]], [xx[0]-d1,y-dy,zz[0]]])
-            #box.append([[xx[-1],y+dy,zz[0]-d1], [xx[-1],y+dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d2], [xx[-1],y-dy,zz[0]-d1]])
-            #box.append([[xx[-1]+d1,y+dy,zz[-1]], [xx[-1]+d2,y+dy,zz[-1]], [xx[-1]+d2,y-dy,zz[-1]], [xx[-1]+d1,y-dy,zz[-1]]])
+            box.append([[xx[0],y+d1,zz[-1]+d1], [xx[0],y,zz[-1]+d1], [xx[0],y,zz[-1]], [xx[0],y+d1,zz[-1]]])
+            box.append([[xx[0]-d1,y+d1,zz[0]], [xx[0]-d1,y,zz[0]], [xx[0],y,zz[0]], [xx[0],y+d1,zz[0]]])
+            box.append([[xx[-1],y+d1,zz[0]-d1], [xx[-1],y,zz[0]-d1], [xx[-1],y,zz[0]], [xx[-1],y+d1,zz[0]]])
+            box.append([[xx[-1]+d1,y+d1,zz[-1]], [xx[-1]+d1,y,zz[-1]], [xx[-1],y,zz[-1]], [xx[-1],y+d1,zz[-1]]])
 
         text.extend(['Z', 'Z', 'Z', 'Z'])
-        z = (zz[0]+zz[-1])/2
+        align.extend(['center', 'center', 'center', 'center'])
         if self.haxis == 'z':
+            z = (zz[-1]+zz[-2])/2
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],yy[0]-d2,z+d1], [xx[0],yy[0]-d2,z], [xx[0],yy[0]-d1,z], [xx[0],yy[0]-d1,z+d1]])
-            box.append([[xx[0]-d2,yy[-1],z+d1], [xx[0]-d2,yy[-1],z], [xx[0]-d1,yy[-1],z], [xx[0]-d1,yy[-1],z+d1]])
-            box.append([[xx[-1],yy[-1]+d2,z+d1], [xx[-1],yy[-1]+d2,z], [xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1]+d1,z+d1]])
-            box.append([[xx[-1]+d2,yy[0],z+d1], [xx[-1]+d2,yy[0],z], [xx[-1]+d1,yy[0],z], [xx[-1]+d1,yy[0],z+d1]])
-            
-            #box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
-            #box.append([[xx[0]-d1,yy[-1],z+dz], [xx[0]-d2,yy[-1],z+dz], [xx[0]-d2,yy[-1],z-dz], [xx[0]-d1,yy[-1],z-dz]])
-            #box.append([[xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz], [xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz]])
-            #box.append([[xx[-1]+d1,yy[0],z+dz], [xx[-1]+d2,yy[0],z+dz], [xx[-1]+d2,yy[0],z-dz], [xx[-1]+d1,yy[0],z-dz]])
+            box.append([[xx[0],yy[0]-d1,z+d1], [xx[0],yy[0]-d1,z], [xx[0],yy[0],z], [xx[0],yy[0],z+d1]])
+            box.append([[xx[0]-d1,yy[-1],z+d1], [xx[0]-d1,yy[-1],z], [xx[0],yy[-1],z], [xx[0],yy[-1],z+d1]])
+            box.append([[xx[-1],yy[-1]+d1,z+d1], [xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1],z], [xx[-1],yy[-1],z+d1]])
+            box.append([[xx[-1]+d1,yy[0],z+d1], [xx[-1]+d1,yy[0],z], [xx[-1],yy[0],z], [xx[-1],yy[0],z+d1]])
         else:
+            z = (zz[-1]+zz[-2])/2
             loc.extend([20, 21, 22, 23])
-            box.append([[xx[0],yy[-1]+d2,z+dz], [xx[0],yy[-1]+d1,z+dz], [xx[0],yy[-1]+d1,z-dz], [xx[0],yy[-1]+d2,z-dz]])
-            box.append([[xx[-1],yy[-1]+d2,z-dz], [xx[-1],yy[-1]+d1,z-dz], [xx[-1],yy[-1]+d1,z+dz], [xx[-1],yy[-1]+d2,z+dz]])
-            box.append([[xx[0],yy[0]-d1,z+dz], [xx[0],yy[0]-d2,z+dz], [xx[0],yy[0]-d2,z-dz], [xx[0],yy[0]-d1,z-dz]])
-            box.append([[xx[-1],yy[0]-d1,z-dz], [xx[-1],yy[0]-d2,z-dz], [xx[-1],yy[0]-d2,z+dz], [xx[-1],yy[0]-d1,z+dz]])
+            box.append([[xx[0],yy[-1]+d1,z+d1], [xx[0],yy[-1],z+d1], [xx[0],yy[-1],z], [xx[0],yy[-1]+d1,z]])
+            box.append([[xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1],z], [xx[-1],yy[-1],z+d1], [xx[-1],yy[-1]+d1,z+d1]])
+            box.append([[xx[0],yy[0],z+d1], [xx[0],yy[0]-d1,z+d1], [xx[0],yy[0]-d1,z], [xx[0],yy[0],z]])
+            box.append([[xx[-1],yy[0],z], [xx[-1],yy[0]-d1,z], [xx[-1],yy[0]-d1,z+d1], [xx[-1],yy[0],z+d1]])
 
-        m = text3d_ticks(text, box, self.fg, loc, 'back', 'center', padding=20)
+        color = [self.fg for i in range(len(box)-12)] + [self.bg for i in range(12)]
+        bg = [self.bg for i in range(len(box)-12)] + [self.fg for i in range(12)]
+        m = text3d_ticks(text, box, color, loc, 'back', align, bg=bg, padding=20)
         self.model(m, name=name)
 
     def grid(self, **kwds):
