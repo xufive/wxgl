@@ -249,10 +249,8 @@ class Scheme:
             idx = np.arange(vs.shape[0])
 
         if not texture is None:
-            if isinstance(texture, str) and os.path.exists(texture):
+            if isinstance(texture, str):
                 texture = Texture(texture)
-            else:
-                raise ValueError('文件不存在：%s'%texture)
 
             if isinstance(texture, Texture):
                 color = None
@@ -394,10 +392,8 @@ class Scheme:
             normal[-1] = normal[1]
 
         if not texture is None:
-            if isinstance(texture, str) and os.path.exists(texture):
+            if isinstance(texture, str):
                 texture = Texture(texture)
-            else:
-                raise ValueError('文件不存在：%s'%texture)
 
             if isinstance(texture, Texture):
                 color = None
@@ -485,10 +481,8 @@ class Scheme:
             normal[-1] = normal[1]
 
         if not texture is None:
-            if isinstance(texture, str) and os.path.exists(texture):
+            if isinstance(texture, str):
                 texture = Texture(texture)
-            else:
-                raise ValueError('文件不存在：%s'%texture)
 
             if isinstance(texture, Texture):
                 color = None
@@ -596,10 +590,8 @@ class Scheme:
             normal[:,-1] = normal[0,-1]
 
         if not texture is None:
-            if isinstance(texture, str) and os.path.exists(texture):
+            if isinstance(texture, str):
                 texture = Texture(texture)
-            else:
-                raise ValueError('文件不存在：%s'%texture)
 
             if isinstance(texture, Texture):
                 color = None
@@ -787,7 +779,7 @@ class Scheme:
 		    3,10,7, 10,6,7, 6,11,7, 6,0,11, 6,1,0,
 		    10,1,6, 11,0,9, 2,11,9, 5,2,9,  11,2,7
         ])
-        vs = vs[idx]
+        vs = vs[idx] * r
 
         for i in range(iterate):
             p0 = (vs[::3] + vs[1::3]) / 2
