@@ -1,18 +1,108 @@
 #!/usr/bin/env python3
 
-import sys, os
+import sys, os, time
+import numpy as np
+import threading
+import imageio
+import webp
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QIcon, QAction, QImage, QPixmap
-from PyQt6.QtCore import Qt, QByteArray
+from PyQt6.QtCore import Qt, QByteArray, pyqtSignal, QThread
 
 from . qtscene import QtScene
 from . import imgres
 
+class FileCreator(QThread):
+    """图像或动画文件生成器"""
+
+    shoot = pyqtSignal(str)
+    finish = pyqtSignal(str)
+
+    def __init__(self, fig):
+        """构造函数"""
+
+        super(FileCreator, self).__init__()
+        self.fig = fig
+
+    def run(self):
+        """启动服务"""
+
+        self.fig.scene.increment = False
+        self.fig.scene.duration = 0
+
+        ft = round(1000/self.fig.fps)
+        while not self.fig.scene.gl_init_done:
+            time.sleep(0.2)
+        
+        self.shoot.emit('RGBA' if self.fig.ext=='.png' else 'RGB')
+        time.sleep(0.5)
+
+        if self.fig.ext in ('.png', '.jpg', '.jpeg'):
+            if isinstance(self.fig.dpi, (int, float)):
+                self.fig.scene.im_pil.save(self.fig.outfile, dpi=(self.fig.dpi, self.fig.dpi))
+            else:
+                self.fig.scene.im_pil.save(self.fig.outfile)
+        elif self.fig.ext == '.webp':
+            w, h = self.fig.scene.csize
+            enc = webp.WebPAnimEncoder.new(w-49, h-31)
+            cfg = webp.WebPConfig.new(quality=100)
+            timestamp_ms = 0
+            while self.fig.cn < self.fig.frames:
+                pic = webp.WebPPicture.from_pil(self.fig.scene.im_pil)
+                enc.encode_frame(pic, timestamp_ms, cfg)
+                timestamp_ms += ft
+                self.fig.cn += 1
+ 
+                self.fig.scene.duration = self.fig.cn * ft
+                self.shoot.emit('')
+                time.sleep(0.1)
+
+            anim_data = enc.assemble(timestamp_ms)
+            with open(self.fig.outfile, 'wb') as fp:
+                fp.write(anim_data.buffer())
+        else:
+            if self.fig.ext == '.gif':
+                writer = imageio.get_writer(self.fig.outfile, fps=self.fig.fps, loop=self.fig.loop)
+            else:
+                writer = imageio.get_writer(self.fig.outfile, fps=self.fig.fps)
+
+            while self.fig.cn < self.fig.frames:
+                im = np.array(self.fig.scene.im_pil)
+                writer.append_data(im)
+                self.fig.cn +=1
+ 
+                self.fig.scene.duration = self.fig.cn * ft
+                self.shoot.emit('')
+                time.sleep(0.1)
+
+            writer.close()
+
+        self.finish.emit('')
+
 class QtFigure(QMainWindow):
     """基于qt的画布类"""
 
-    def __init__(self, scheme):
-        """构造函"""
+    def __init__(self, scheme, **kwds):
+        """构造函数
+
+        scheme      - 展示方案
+        kwds        - 关键字参数
+            outfile     - 输出文件名
+            ext         - 输出文件扩展名
+            dpi         - 图像文件每英寸像素数
+            fps         - 动画文件帧率
+            frames      - 动画文件总帧数
+            loop        - gif文件播放次数，0表示循环播放
+            quality     - webp文件质量，100表示最高品质
+        """
+
+        self.outfile = kwds.get('outfile')
+        self.ext = kwds.get('ext')
+        self.dpi = kwds.get('dpi')
+        self.fps = kwds.get('fps')
+        self.frames = kwds.get('frames')
+        self.loop = kwds.get('loop')
+        self.quality = kwds.get('quality')
 
         super().__init__()
 
@@ -30,17 +120,17 @@ class QtFigure(QMainWindow):
         saveAction = QAction(self.get_qicon('save', 'png'), '&保存', self)
         saveAction.setStatusTip('保存画布')
         saveAction.triggered.connect(self.on_save)
- 
+
         homeAction = QAction(self.get_qicon('home', 'png'), '&复位', self)
         homeAction.setStatusTip('初始位置')
         homeAction.triggered.connect(self.on_home)
- 
+
         self.icon_play = self.get_qicon('play', 'png')
         self.icon_pause = self.get_qicon('pause', 'png')
         self.animateAction = QAction(self.icon_play, '&动画', self)
         self.animateAction.setStatusTip('动画')
         self.animateAction.triggered.connect(self.on_pause)
- 
+
         if scheme.alive:
             self.animateAction.setIcon(self.icon_pause)
             self.animateAction.setToolTip('暂停')
@@ -59,6 +149,13 @@ class QtFigure(QMainWindow):
         main_widget = QWidget()
         main_widget.setLayout(box)
         self.setCentralWidget(main_widget)
+
+        if not self.outfile is None:
+            self.cn = 0
+            self.creator = FileCreator(self)
+            self.creator.shoot.connect(self.capture)
+            self.creator.finish.connect(self.close)
+            self.creator.start()
 
     def closeEvent(self, evt):
         """重写关闭事件函数"""
@@ -114,12 +211,32 @@ class QtFigure(QMainWindow):
             self.animateAction.setIcon(self.icon_play)
             self.animateAction.setToolTip('动画')
 
-def show_qtfigure(scheme):
-    """显示画布，侦听事件"""
+    def capture(self, msg):
+        """捕捉缓冲区数据"""
+
+        crop = True if 'crop' in msg else False
+        mode = 'RGBA' if 'RGBA' in msg else 'RGB'
+
+        self.scene.update()
+        self.scene.capture(crop=crop, mode=mode)
+
+def show_qtfigure(scheme, **kwds):
+    """保存画布为图像文件或动画文件
+
+    kwds        - 关键字参数
+        outfile     - 输出文件名
+        ext         - 输出文件扩展名
+        dpi         - 图像文件每英寸像素数
+        fps         - 动画文件帧率
+        frames      - 动画文件总帧数
+        loop        - gif文件播放次数，0表示循环播放
+        quality     - webp文件质量，100表示最高品质
+    """
 
     app = QApplication(sys.argv)
-    fig = QtFigure(scheme)
+    fig = QtFigure(scheme, **kwds)
     fig.show()
     app.exec()
+    app.quit()
     scheme.reset()
 

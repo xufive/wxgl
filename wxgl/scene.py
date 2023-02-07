@@ -51,7 +51,8 @@ class BaseScene:
         self.mouse_pos = None                                           # 鼠标位置
         self.scale = 1.0                                                # 眼睛位置自适应调整系数
 
-        self.tn = 0                                                     # 计数器
+        self.im_pil = None                                              # 缓冲区图像数据
+        self.increment = True                                           # 计时器自动增量
         self.start= 1000 * time.time()                                  # 开始渲染时的时间戳
         self.duration = 0                                               # 累计渲染时长，单位毫秒
         self.tbase = 0                                                  # 累计渲染时长基数，单位毫秒
@@ -110,18 +111,20 @@ class BaseScene:
  
         self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
 
-    def _get_buffer(self, mode='RGBA', crop=False, buffer='front'):
+    def _get_buffer(self, mode='RGBA', crop=False, buffer='front', qt=False):
         """以PIL对象的格式返回场景缓冲区数据
  
         mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
+        qt          - 使用Qt作为后端
         """
 
         gl_mode = GL_RGBA if mode=='RGBA' else GL_RGB
         glReadBuffer(GL_FRONT if buffer=='front' else GL_BACK)
         data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
-        im = Image.fromarray(data.reshape(data.shape[1], data.shape[0], -1), mode=mode)
+        data = data.reshape(data.shape[1], data.shape[0], -1)
+        im = Image.fromarray(data[31:, 49:] if qt else data, mode=mode)
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
  
         if crop:
@@ -163,6 +166,15 @@ class BaseScene:
  
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) # 清除屏幕及深度缓存
 
+        if self.scheme.alive and self.playing:
+            if self.increment:
+                self.duration = self.tbase + 1000*time.time() - self.start
+
+            if self.scheme.cruise_func:
+                v = self.scheme.cruise_func(self.duration)
+                self._update_cam_and_up(azim=v.get('azim'), elev=v.get('elev'), dist=v.get('dist'))
+                self._update_view_matrix()
+
         for i in range(3):
             if self.scheme.models[i]:
                 glViewport(*self.viewport[i])
@@ -196,15 +208,12 @@ class BaseScene:
             glEnable(GL_LINE_SMOOTH)                                        # 开启直线反走样
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)                          # 最高质量直线反走样
 
-    def _timer(self, delta=None):
+    def _timer(self):
         """定时函数"""
 
         if self.scheme.alive and self.playing:
-            self.tn += 1
-            if delta is None:
+            if self.increment:
                 self.duration = self.tbase + 1000*time.time() - self.start
-            else:
-                self.duration += delta
 
             if self.scheme.cruise_func:
                 v = self.scheme.cruise_func(self.duration)
@@ -360,10 +369,11 @@ class BaseScene:
         self._update_view_matrix()
         self._update_proj_matrix()
         
-        self.tn = 0
         self.start= 1000 * time.time()
         self.duration = 0
         self.tbase = 0
+        
+        self.gl_init_done = True
 
     def _render(self, m):
         """绘制单个模型"""

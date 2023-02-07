@@ -5,7 +5,6 @@ import numpy as np
 import threading
 import imageio
 import webp
-import queue
 
 from OpenGL.GLUT import *
 
@@ -31,19 +30,16 @@ class GlutFigure(BaseScene):
         self.outfile = kwds.get('outfile')
         self.ext = kwds.get('ext')
         self.dpi = kwds.get('dpi')
-        self.fps = kwds.get('fps', 25)
-        self.frames = kwds.get('frames', 100)
-        self.loop = kwds.get('loop', 0)
-        self.quality = kwds.get('quality', 100)
-        self.ft = None
+        self.fps = kwds.get('fps')
+        self.frames = kwds.get('frames')
+        self.loop = kwds.get('loop')
+        self.quality = kwds.get('quality')
 
         super().__init__(scheme, **scheme.kwds)
         
-        if not self.outfile is None and self.ext not in ('.png', '.jpg', '.jpeg'):
+        if not self.outfile is None:
             self.cn = 0
-            self.q = queue.Queue()
             self.finished = False
-            self.ft = round(1000/self.fps)
             
             threading_record = threading.Thread(target=self.create_animation)
             threading_record.setDaemon(True)
@@ -112,38 +108,43 @@ class GlutFigure(BaseScene):
         self._paint()
         glutSwapBuffers() # 交换缓冲区
 
+        if self.outfile:
+            mode = 'RGB' if self.ext in ('.jpg', '.jpeg') else 'RGBA'
+            self.im_pil = self._get_buffer(mode=mode)
+
     def idle(self):
         """idle事件函数"""
 
-        self._timer(delta=self.ft)
         glutPostRedisplay()
-
-        if not self.outfile is None:
-            if self.ext in ('.png', '.jpg', '.jpeg'):
-                im = self._get_buffer(mode='RGBA' if self.ext=='.png' else 'RGB')
-                if isinstance(self.dpi, (int, float)):
-                    im.save(self.outfile, dpi=(self.dpi, self.dpi))
-                else:
-                    im.save(self.outfile)
-                glutDestroyWindow(glutGetWindow())
-            elif self.finished:
-                glutDestroyWindow(glutGetWindow())
-            else:
-                if self.cn < self.frames:
-                    im = self._get_buffer(crop=True)
-                    self.q.put(im)
+        if self.outfile and self.finished:
+            glutDestroyWindow(glutGetWindow())
 
     def create_animation(self):
         """生成动画文件的线程函数"""
  
-        if self.ext == '.webp':
+        self.increment = False
+        self.duration = 0
+        ft = round(1000/self.fps)
+        while not self.gl_init_done:
+            time.sleep(0.2)
+
+        if self.ext in ('.png', '.jpg', '.jpeg'):
+            if isinstance(self.dpi, (int, float)):
+                time.sleep(0.1)
+                self.im_pil.save(self.outfile, dpi=(self.dpi, self.dpi))
+            else:
+                self.im_pil.save(self.outfile)
+        elif self.ext == '.webp':
             enc = webp.WebPAnimEncoder.new(*self.csize)
             cfg = webp.WebPConfig.new(quality=100)
             timestamp_ms = 0
             while self.cn < self.frames:
-                pic = webp.WebPPicture.from_pil(self.q.get())
+                self.duration = self.cn * ft 
+                time.sleep(0.1)
+
+                pic = webp.WebPPicture.from_pil(self.im_pil)
                 enc.encode_frame(pic, timestamp_ms, cfg)
-                timestamp_ms += int(1000/self.fps)
+                timestamp_ms += ft
                 self.cn += 1
 
             anim_data = enc.assemble(timestamp_ms)
@@ -156,7 +157,10 @@ class GlutFigure(BaseScene):
                 writer = imageio.get_writer(self.outfile, fps=self.fps)
  
             while self.cn < self.frames:
-                im = np.array(self.q.get())
+                self.duration = self.cn * ft 
+                time.sleep(0.1)
+
+                im = np.array(self.im_pil)
                 writer.append_data(im)
                 self.cn +=1
  
@@ -164,25 +168,8 @@ class GlutFigure(BaseScene):
         
         self.finished = True
 
-def xx_show_figure(scheme):
-    """显示画布"""
-
-    fig = GlutFigure(scheme)
-    fig._init_gl()
-    fig.reshape(*fig.csize)
-    fig._assemble()
-
-    glutDisplayFunc(fig.draw)
-    glutIdleFunc(fig.idle)
-    glutReshapeFunc(fig.reshape)
-    glutMouseFunc(fig.click)
-    glutMotionFunc(fig.drag)
-    glutMainLoop()
-    
-    scheme.reset()
-
 def show_figure(scheme, **kwds):
-    """保存画布为图像文件或动画文件
+    """显示或保存画布
 
     kwds        - 关键字参数
         outfile     - 输出文件名

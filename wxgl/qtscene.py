@@ -19,7 +19,6 @@ class QtScene(BaseScene, QOpenGLWidget):
     def timerEvent(self, evt):
         """重写定时事件函数"""
 
-        self._timer()
         self.update()
  
     def paintGL(self):
@@ -28,7 +27,6 @@ class QtScene(BaseScene, QOpenGLWidget):
         if not self.gl_init_done:
             self._initialize_gl()
             self._assemble()
-            self.gl_init_done = True
 
         self._paint()
 
@@ -50,6 +48,16 @@ class QtScene(BaseScene, QOpenGLWidget):
 
         self._pause()
 
+    def capture(self, mode='RGBA', crop=False, buffer='front'):
+        """捕捉缓冲区数据
+ 
+        mode        - 'RGB'或'RGBA'
+        crop        - 是否将宽高裁切为16的倍数
+        buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
+        """
+
+        self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=True)
+
     def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
         """以PIL对象的格式返回场景缓冲区数据
  
@@ -58,7 +66,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
         """
 
-        return self._get_buffer(mode=mode, crop=crop, buffer=buffer)
+        return self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=True)
 
     def mousePressEvent(self, evt):
         """重写鼠标按键被按下事件函数"""

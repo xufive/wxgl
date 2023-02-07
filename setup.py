@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf8") as fp:
 
 setuptools.setup(
     name="wxgl",
-    version="0.9.7",
+    version="0.9.8",
     author="xufive",
     author_email="xufive@gmail.com",
     description="A 3d library based pyOpenGL.",
@@ -23,7 +23,9 @@ setuptools.setup(
     install_requires = [ 
         'pyopengl>=3.1.5',
         'numpy>=1.20.2', 
-        'matplotlib>=3.1.2', 
+        'matplotlib>=3.1.2',
+        'wxpython>=4.2.0',
+        'pyqt6>=6.3.0', 
         'pillow>=8.2.0',
         'freetype-py>=2.3.0',
         'imageio>=2.22.0',
