@@ -16,11 +16,6 @@ class QtScene(BaseScene, QOpenGLWidget):
 
         self.timer_id = self.startTimer(0, Qt.TimerType.CoarseTimer)
 
-    def closeEvent(self, evt):
-        """重写关闭事件函数"""
-
-        self.scene._clear_buffer()
-
     def timerEvent(self, evt):
         """重写定时事件函数"""
 
@@ -131,4 +126,9 @@ class QtScene(BaseScene, QOpenGLWidget):
 
         self._set_visible(name, visible)
         self.update()
+
+    def clear_buffer(self):
+        """删除纹理、顶点缓冲区等显存对象"""
+
+        self._clear_buffer()
 

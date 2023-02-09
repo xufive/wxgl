@@ -62,6 +62,7 @@ class WxScene(BaseScene, glc.GLCanvas):
     def on_right_up(self, evt):
         """响应鼠标右键弹起"""
  
+        self.SetCurrent(self.context)
         self._pick(evt.x, evt.y)
         self.Refresh(False)
  

@@ -86,7 +86,7 @@ class MainFrame(wx.Frame):
         data = np.arange(8)
 
         sch = wxgl.Scheme()
-        sch.line(vs, data=data, alpha=1, method='loop')
+        sch.line(vs, data=data, alpha=1, method='loop', width=5)
         sch.text('2D文字Hello', [0.5,0,0], size=64)
         
         return sch
@@ -102,7 +102,7 @@ class MainFrame(wx.Frame):
         cf = lambda t : {'azim': (0.05*t)%360}
 
         sch = wxgl.Scheme()
-        sch.cruise(cf)
+        #sch.cruise(cf)
         sch.mesh(x, z, y, data=z, light=light_y, ccw=False, fill=False)
 
         return sch

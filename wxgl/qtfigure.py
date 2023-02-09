@@ -159,6 +159,11 @@ class QtFigure(QMainWindow):
             self.creator.finish.connect(self.close)
             self.creator.start()
 
+    def closeEvent(self, evt):
+        """重写关闭事件函数"""
+
+        self.scene.clear_buffer()
+
     def keyPressEvent(self, evt):
         """重写键盘按下事件函数"""
         
