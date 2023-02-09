@@ -69,6 +69,7 @@ class _Light:
  
         m = Model(gltype, vshader, fshader, visible=visible, opacity=opacity, inside=inside)
         m.set_vertex('a_Position', vs, indices)
+        m.set_picked('u_Picked')
 
         if not color is None:
             m.set_color('a_Color', color)
@@ -195,6 +196,7 @@ class ScatterLight(_Light):
  
                 in vec4 v_Color;
                 uniform vec3 u_AmbientColor;
+                uniform int u_Picked;
  
                 void main() { 
                     vec2 temp = gl_PointCoord - vec2(0.5);
@@ -206,7 +208,10 @@ class ScatterLight(_Light):
                     vec3 rgb = v_Color.rgb * u_AmbientColor;
                     vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
                     
-                    gl_FragColor = color;
+                    if (u_Picked == 0)
+                        gl_FragColor = color;
+                    else
+                        gl_FragColor = vec4(min(color.rgb*1.5, vec3(1.0)), color.a);
                 } 
             """
         else:
@@ -215,10 +220,16 @@ class ScatterLight(_Light):
  
                 uniform vec3 u_AmbientColor;
                 uniform sampler2D u_Texture;
+                uniform int u_Picked;
  
                 void main() { 
                     vec4 color = texture(u_Texture, gl_PointCoord);
-                    gl_FragColor = vec4(color.rgb * u_AmbientColor, color.a);
+                    vec3 rgb = color.rgb * u_AmbientColor;
+
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
             """
         
@@ -377,12 +388,16 @@ class Text2dLight(_Light):
             in vec2 v_Texcoord;
             uniform vec3 u_AmbientColor;
             uniform sampler2D u_Texture;
+            uniform int u_Picked;
  
             void main() { 
                 vec4 color = texture(u_Texture, v_Texcoord);
                 vec3 rgb = color.rgb * u_AmbientColor;
 
-                gl_FragColor = vec4(rgb, color.a);
+                if (u_Picked == 0)
+                    gl_FragColor = vec4(rgb, color.a);
+                else
+                    gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
         """
 
@@ -475,10 +490,14 @@ class BaseLight(_Light):
  
                 in vec4 v_Color;
                 uniform vec3 u_AmbientColor;
+                uniform int u_Picked;
  
                 void main() { 
                     vec3 rgb = v_Color.rgb * u_AmbientColor;
-                    gl_FragColor = vec4(rgb, v_Color.a); 
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
                 } 
             """
         else:
@@ -488,12 +507,16 @@ class BaseLight(_Light):
                 in %s v_Texcoord;
                 uniform vec3 u_AmbientColor;
                 uniform %s u_Texture;
+                uniform int u_Picked;
  
                 void main() { 
                     vec4 color = texture(u_Texture, v_Texcoord);
                     vec3 rgb = color.rgb * u_AmbientColor;
                     
-                    gl_FragColor = vec4(rgb, color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
             """ % (self.a_dtype, self.u_dtype)
  
@@ -600,6 +623,7 @@ class SunLight(_Light):
                 uniform float u_Specular; // 镜面反射系数
                 uniform float u_Diffuse; // 漫反射系数
                 uniform float u_Pellucid; // 透光系数
+                uniform int u_Picked;
  
                 void main() { 
                     float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
@@ -617,7 +641,10 @@ class SunLight(_Light):
                     vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                     vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
  
-                    gl_FragColor = vec4(rgb, v_Color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
                 }
             """
         else:
@@ -635,6 +662,7 @@ class SunLight(_Light):
                 uniform float u_Specular; // 镜面反射系数
                 uniform float u_Diffuse; // 漫反射系数
                 uniform float u_Pellucid; // 透光系数
+                uniform int u_Picked;
  
                 void main() { 
                     vec4 color = texture(u_Texture, v_Texcoord);
@@ -653,7 +681,10 @@ class SunLight(_Light):
                     vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                     vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
  
-                    gl_FragColor = vec4(rgb, color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
             """ % (self.a_dtype, self.u_dtype)
 
@@ -762,6 +793,7 @@ class LampLight(_Light):
                 uniform float u_Specular; // 镜面反射系数
                 uniform float u_Diffuse; // 漫反射系数
                 uniform float u_Pellucid; // 透光系数
+                uniform int u_Picked;
  
                 void main() { 
                     float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
@@ -779,7 +811,10 @@ class LampLight(_Light):
                     vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                     vec3 rgb = min(v_Color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
  
-                    gl_FragColor = vec4(rgb, v_Color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a);
                 }
             """
         else:
@@ -797,6 +832,7 @@ class LampLight(_Light):
                 uniform float u_Specular; // 镜面反射系数
                 uniform float u_Diffuse; // 漫反射系数
                 uniform float u_Pellucid; // 透光系数
+                uniform int u_Picked;
  
                 void main() { 
                     vec4 color = texture(u_Texture, v_Texcoord);
@@ -815,7 +851,10 @@ class LampLight(_Light):
                     vec3 reflectedLight = u_LightColor * specularCos; // 反射光
                     vec3 rgb = min(color.rgb * (scatteredLight + reflectedLight), vec3(1.0));
  
-                    gl_FragColor = vec4(rgb, color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a);
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
             """ % (self.a_dtype, self.u_dtype)
 
@@ -899,6 +938,7 @@ class SkyLight(_Light):
                 in float v_Costheta;
                 uniform vec3 u_SkyColor; // 天空光线颜色
                 uniform vec3 u_GroundColor; // 地面光线颜色
+                uniform int u_Picked;
  
                 void main() { 
                     float costheta = v_Costheta;
@@ -906,7 +946,10 @@ class SkyLight(_Light):
                         costheta *= 0.5;
  
                     vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * v_Color.rgb;
-                    gl_FragColor = vec4(rgb, v_Color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a); 
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
                 } 
             """
         else:
@@ -918,6 +961,7 @@ class SkyLight(_Light):
                 uniform %s u_Texture;
                 uniform vec3 u_SkyColor; // 天空光线颜色
                 uniform vec3 u_GroundColor; // 地面光线颜色
+                uniform int u_Picked;
  
                 void main() { 
                     vec4 color = texture(u_Texture, v_Texcoord);
@@ -926,7 +970,10 @@ class SkyLight(_Light):
                         costheta *= 0.5;
 
                     vec3 rgb = mix(u_GroundColor, u_SkyColor, costheta) * color.rgb;
-                    gl_FragColor = vec4(rgb, color.a);
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a); 
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a); 
                 } 
             """ % (self.a_dtype, self.u_dtype)
  
@@ -1138,6 +1185,7 @@ class SphereLight(_Light):
                 const float C5 = 0.247708;
                 %s
                 uniform float u_ScaleFactor;
+                uniform int u_Picked;
  
                 void main() { 
                     vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
@@ -1153,7 +1201,11 @@ class SphereLight(_Light):
  
                     diffuse *= u_ScaleFactor;
                     vec3 rgb = v_Color.rgb * diffuse;
-                    gl_FragColor = vec4(rgb, v_Color.a);
+
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, v_Color.a); 
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), v_Color.a); 
                 } 
             """ % self.parameter
         else: 
@@ -1170,6 +1222,7 @@ class SphereLight(_Light):
                 %s
                 uniform %s u_Texture;
                 uniform float u_ScaleFactor;
+                uniform int u_Picked;
  
                 void main() { 
                     vec3 diffuse = C1 * L22 * (v_Normal.x * v_Normal.x - v_Normal.y * v_Normal.y)
@@ -1186,7 +1239,11 @@ class SphereLight(_Light):
                     diffuse *= u_ScaleFactor;
                     vec4 color = texture(u_Texture, v_Texcoord);
                     vec3 rgb = color.rgb * diffuse;
-                    gl_FragColor = vec4(rgb, color.a);
+
+                    if (u_Picked == 0)
+                        gl_FragColor = vec4(rgb, color.a); 
+                    else
+                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a); 
                 } 
             """ % (self.a_dtype, self.parameter, self.u_dtype)
         

@@ -15,8 +15,8 @@ from . import imgres
 class FileCreator(QThread):
     """图像或动画文件生成器"""
 
-    shoot = pyqtSignal(str)
-    finish = pyqtSignal(str)
+    shoot = pyqtSignal(str, bool)
+    finish = pyqtSignal()
 
     def __init__(self, fig):
         """构造函数"""
@@ -32,12 +32,14 @@ class FileCreator(QThread):
 
         ft = round(1000/self.fig.fps)
         while not self.fig.scene.gl_init_done:
-            time.sleep(0.2)
+            time.sleep(0.1)
         
-        self.shoot.emit('RGBA' if self.fig.ext=='.png' else 'RGB')
-        time.sleep(0.5)
+        #time.sleep(0.5)
 
         if self.fig.ext in ('.png', '.jpg', '.jpeg'):
+            self.shoot.emit('RGBA' if self.fig.ext=='.png' else 'RGB', False)
+            time.sleep(0.1)
+            
             if isinstance(self.fig.dpi, (int, float)):
                 self.fig.scene.im_pil.save(self.fig.outfile, dpi=(self.fig.dpi, self.fig.dpi))
             else:
@@ -48,15 +50,15 @@ class FileCreator(QThread):
             cfg = webp.WebPConfig.new(quality=100)
             timestamp_ms = 0
             while self.fig.cn < self.fig.frames:
+                self.fig.scene.duration = self.fig.cn * ft
+                self.shoot.emit('RGBA', False)
+                time.sleep(0.1)
+
                 pic = webp.WebPPicture.from_pil(self.fig.scene.im_pil)
                 enc.encode_frame(pic, timestamp_ms, cfg)
                 timestamp_ms += ft
                 self.fig.cn += 1
  
-                self.fig.scene.duration = self.fig.cn * ft
-                self.shoot.emit('')
-                time.sleep(0.1)
-
             anim_data = enc.assemble(timestamp_ms)
             with open(self.fig.outfile, 'wb') as fp:
                 fp.write(anim_data.buffer())
@@ -67,17 +69,17 @@ class FileCreator(QThread):
                 writer = imageio.get_writer(self.fig.outfile, fps=self.fig.fps)
 
             while self.fig.cn < self.fig.frames:
+                self.fig.scene.duration = self.fig.cn * ft
+                self.shoot.emit('RGBA', True)
+                time.sleep(0.1)
+
                 im = np.array(self.fig.scene.im_pil)
                 writer.append_data(im)
                 self.fig.cn +=1
  
-                self.fig.scene.duration = self.fig.cn * ft
-                self.shoot.emit('')
-                time.sleep(0.1)
-
             writer.close()
 
-        self.finish.emit('')
+        self.finish.emit()
 
 class QtFigure(QMainWindow):
     """基于qt的画布类"""
@@ -157,10 +159,19 @@ class QtFigure(QMainWindow):
             self.creator.finish.connect(self.close)
             self.creator.start()
 
-    def closeEvent(self, evt):
-        """重写关闭事件函数"""
+    def keyPressEvent(self, evt):
+        """重写键盘按下事件函数"""
+        
+        if evt.key() == Qt.Key.Key_Control.value:
+            self.scene.ctrl_down = True
 
-        self.scene.clear_buffer()
+    def keyReleaseEvent(self, evt):
+        """重写键盘弹起事件函数"""
+        
+        if evt.key() == Qt.Key.Key_Escape.value:
+            self.scene.home()
+        if evt.key() == Qt.Key.Key_Control.value:
+            self.scene.ctrl_down = False
 
     def get_qicon(self, name, ext):
         """返回qicon对象"""
@@ -211,14 +222,11 @@ class QtFigure(QMainWindow):
             self.animateAction.setIcon(self.icon_play)
             self.animateAction.setToolTip('动画')
 
-    def capture(self, msg):
+    def capture(self, mode, crop):
         """捕捉缓冲区数据"""
 
-        crop = True if 'crop' in msg else False
-        mode = 'RGBA' if 'RGBA' in msg else 'RGB'
-
         self.scene.update()
-        self.scene.capture(crop=crop, mode=mode)
+        self.scene.capture(mode=mode, crop=crop)
 
 def show_qtfigure(scheme, **kwds):
     """保存画布为图像文件或动画文件

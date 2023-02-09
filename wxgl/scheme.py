@@ -35,7 +35,7 @@ class Scheme:
         self.cruise_func = None                                 # 相机巡航函数
         self.alive = False                                      # 是否使用了动画函数
         self.models = [dict(), dict(), dict()]                  # 主视区、标题区、调色板区模型
-        self.widget = dict()                                    # 由一个或多个模型组成的部件
+        self.widgets = dict()                                   # 由一个或多个模型组成的部件
 
     def _set_range(self, r_x=None, r_y=None, r_z=None):
         """设置坐标轴范围"""
@@ -93,15 +93,16 @@ class Scheme:
             self.alive = True
 
         mid = uuid.uuid1().hex
-        self.models[0].update({mid: m})
-
         if name is None:
             name = mid
+        
+        m.name = name
+        self.models[0].update({mid: m})
 
-        if name in self.widget:
-            self.widget[name].append(mid)
+        if name in self.widgets:
+            self.widgets[name].append(mid)
         else:
-            self.widget.update({name:[mid]})
+            self.widgets.update({name:[mid]})
 
     def _get_series(self, v_min, v_max, endpoint=False, extend=0):
         """返回标注序列
@@ -173,13 +174,13 @@ class Scheme:
         size = kwds.get('size', 32)
         align = kwds.get('align', 'left')
         valign = kwds.get('valign', 'bottom')
-        family = kwds.get('family', None)
+        family = kwds.get('family')
         weight = kwds.get('weight', 'normal')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
-        slide = kwds.get('slide', None)
+        slide = kwds.get('slide')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
-        name = kwds.get('name', None)
+        name = kwds.get('name')
 
         box = np.tile(np.array(pos, dtype=np.float32), (4,1))
         texcoord = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=np.float32)
@@ -226,16 +227,16 @@ class Scheme:
 
         color = kwds.get('color', self.fg)
         size = kwds.get('size', 3.0)
-        data = kwds.get('data', None)
+        data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
         alpha = kwds.get('alpha', 1.0)
-        texture = kwds.get('texture', None)
+        texture = kwds.get('texture')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
-        slide = kwds.get('slide', None)
-        transform = kwds.get('transform', None)
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
-        name = kwds.get('name', None)
+        name = kwds.get('name')
 
         light = ScatterLight(ambient)
         vs = np.array(vs, dtype=np.float32)
@@ -299,19 +300,19 @@ class Scheme:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
-        color = kwds.get('color', None)
-        data = kwds.get('data', None)
+        color = kwds.get('color')
+        data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
         alpha = kwds.get('alpha', 1.0)
         method = kwds.get('method', 'strip')
-        width = kwds.get('width', None)
-        stipple = kwds.get('stipple', None)
+        width = kwds.get('width')
+        stipple = kwds.get('stipple')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
-        slide = kwds.get('slide', None)
-        transform = kwds.get('transform', None)
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
         ambient = kwds.get('ambient', (1.0,1.0,1.0))
-        name = kwds.get('name', None)
+        name = kwds.get('name')
 
         light = BaseLight(kwds.pop('ambient') if 'ambient' in kwds else (1.0,1.0,1.0))
         gltype = {'isolate':GL_LINES, 'strip':GL_LINE_STRIP, 'loop':GL_LINE_LOOP}[method.lower()]
@@ -360,23 +361,26 @@ class Scheme:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
-        color = kwds.get('color', None)
-        data = kwds.get('data', None)
+        color = kwds.get('color')
+        data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
         alpha = kwds.get('alpha', 1.0)
-        texture = kwds.get('texture', None)
-        texcoord = kwds.get('texcoord', None)
+        texture = kwds.get('texture')
+        texcoord = kwds.get('texcoord')
         method = kwds.get('method', 'isolate')
-        indices = kwds.get('indices', None)
+        indices = kwds.get('indices')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull', None)
-        fill = kwds.get('fill', None)
-        slide = kwds.get('slide', None)
-        transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
-        name = kwds.get('name', None)
+        cull = kwds.get('cull')
+        fill = kwds.get('fill')
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
+        light = kwds.get('light')
+        name = kwds.get('name')
+
+        if light is None:
+            light = SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2))
 
         gltype = {'isolate':GL_TRIANGLES, 'strip':GL_TRIANGLE_STRIP, 'fan':GL_TRIANGLE_FAN}[method.lower()]
         vs = np.array(vs, dtype=np.float32)
@@ -452,23 +456,26 @@ class Scheme:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
-        color = kwds.get('color', None)
-        data = kwds.get('data', None)
+        color = kwds.get('color')
+        data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
         alpha = kwds.get('alpha', 1.0)
-        texture = kwds.get('texture', None)
-        texcoord = kwds.get('texcoord', None)
+        texture = kwds.get('texture')
+        texcoord = kwds.get('texcoord')
         method = kwds.get('method', 'isolate')
-        indices = kwds.get('indices', None)
+        indices = kwds.get('indices')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull', None)
-        fill = kwds.get('fill', None)
-        slide = kwds.get('slide', None)
-        transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
-        name = kwds.get('name', None)
+        cull = kwds.get('cull')
+        fill = kwds.get('fill')
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
+        light = kwds.get('light')
+        name = kwds.get('name')
+
+        if light is None:
+            light = SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2))
 
         gltype = {'isolate':GL_QUADS, 'strip':GL_QUAD_STRIP}[method.lower()]
         vs = np.array(vs, dtype=np.float32)
@@ -540,22 +547,25 @@ class Scheme:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
-        color = kwds.get('color', None)
-        data = kwds.get('data', None)
+        color = kwds.get('color')
+        data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
         alpha = kwds.get('alpha', 1.0)
-        texture = kwds.get('texture', None)
-        texcoord = kwds.get('texcoord', None)
+        texture = kwds.get('texture')
+        texcoord = kwds.get('texcoord')
         ccw = kwds.get('ccw', True)
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
         opacity = kwds.get('opacity', True)
-        cull = kwds.get('cull', None)
-        fill = kwds.get('fill', None)
-        slide = kwds.get('slide', None)
-        transform = kwds.get('transform', None)
-        light = kwds.get('light', SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2)))
-        name = kwds.get('name', None)
+        cull = kwds.get('cull')
+        fill = kwds.get('fill')
+        slide = kwds.get('slide')
+        transform = kwds.get('transform')
+        light = kwds.get('light')
+        name = kwds.get('name')
+
+        if light is None:
+            light = SkyLight(direction=(-0.1,0.2,-1) if self.haxis=='z' else (-0.1,-1,-0.2))
 
         gltype = GL_TRIANGLES
         vs = np.dstack((xs, ys, zs))

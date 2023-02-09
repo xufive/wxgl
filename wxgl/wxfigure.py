@@ -5,6 +5,7 @@ import numpy as np
 import threading
 import imageio
 import webp
+from pynput import keyboard
 import wx
 import wx.lib.agw.aui as aui
 from wx.lib.embeddedimage import PyEmbeddedImage
@@ -80,12 +81,29 @@ class WxFigure(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_home, id=self.ID_RESTORE)
         self.Bind(wx.EVT_MENU, self.on_save, id=self.ID_SAVE)
         self.Bind(wx.EVT_MENU, self.on_pause, id=self.ID_ANIMATE)
+        
+        monitor_k = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
+        monitor_k.start()
 
         if not self.outfile is None:
             self.cn = 0
             threading_record = threading.Thread(target=self.create_file)
             threading_record.setDaemon(True)
             threading_record.start()
+
+    def _on_press(self, key):
+        """键盘按下"""
+
+        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+            self.scene.ctrl_down = True
+
+    def _on_release(self, key):
+        """键盘弹起"""
+
+        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+            self.scene.ctrl_down = False
+        elif key == keyboard.Key.esc:
+            wx.CallAfter(self.scene.home)
 
     def on_home(self, evt):
         """恢复初始位置和姿态"""
@@ -138,8 +156,10 @@ class WxFigure(wx.Frame):
 
         ft = round(1000/self.fps)
         while not self.scene.gl_init_done:
-            time.sleep(0.2)
-        
+            time.sleep(0.1)
+
+        #time.sleep(0.5)
+
         if self.ext in ('.png', '.jpg', '.jpeg'):
             wx.CallAfter(self.scene.capture, mode='RGBA' if self.ext=='.png' else 'RGB')
             time.sleep(0.1)

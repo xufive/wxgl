@@ -16,6 +16,7 @@ class WxScene(BaseScene, glc.GLCanvas):
 
         self.context = glc.GLContext(self)
         self.SetCurrent(self.context)
+        self.factor_csize = self.GetContentScaleFactor()
 
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)           # 绑定窗口销毁事件
         self.Bind(wx.EVT_SIZE, self.on_resize)                      # 绑定canvas大小改变事件
@@ -32,13 +33,15 @@ class WxScene(BaseScene, glc.GLCanvas):
         """窗口销毁事件函数"""
  
         self.SetCurrent(self.context)
-        self.clear_buffer()
+        self._clear_buffer()
         evt.Skip()
  
     def on_resize(self, evt):
         """窗口改变事件函数"""
  
-        self.csize = self.GetClientSize()
+        self.SetCurrent(self.context)
+        w, h = self.GetClientSize()
+        self.csize = (round(w*self.factor_csize), round(h*self.factor_csize))
         self._resize()
         self.Refresh(False) 
         evt.Skip()
@@ -59,8 +62,8 @@ class WxScene(BaseScene, glc.GLCanvas):
     def on_right_up(self, evt):
         """响应鼠标右键弹起"""
  
-        self.home()
-        evt.Skip()
+        self._pick(evt.x, evt.y)
+        self.Refresh(False)
  
     def on_mouse_motion(self, evt):
         """响应鼠标移动"""
@@ -90,6 +93,7 @@ class WxScene(BaseScene, glc.GLCanvas):
     def on_paint(self, evt):
         """重绘事件函数"""
         
+        dc = wx.PaintDC(self)
         self.SetCurrent(self.context)
 
         if not self.gl_init_done:
@@ -136,3 +140,12 @@ class WxScene(BaseScene, glc.GLCanvas):
 
         return self._get_buffer(mode=mode, crop=crop, buffer=buffer)
 
+    def set_visible(self, name, visible):
+        """设置部件或模型的可见性
+
+        name        - 部件名或模型id
+        visible     - bool型
+        """
+
+        self._set_visible(name, visible)
+        self.Refresh(False)

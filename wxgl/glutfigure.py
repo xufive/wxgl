@@ -41,7 +41,7 @@ class GlutFigure(BaseScene):
             self.cn = 0
             self.finished = False
             
-            threading_record = threading.Thread(target=self.create_animation)
+            threading_record = threading.Thread(target=self.create_file)
             threading_record.setDaemon(True)
             threading_record.start()
 
@@ -119,14 +119,16 @@ class GlutFigure(BaseScene):
         if self.outfile and self.finished:
             glutDestroyWindow(glutGetWindow())
 
-    def create_animation(self):
-        """生成动画文件的线程函数"""
+    def create_file(self):
+        """生成图像或动画文件的线程函数"""
  
         self.increment = False
         self.duration = 0
         ft = round(1000/self.fps)
         while not self.gl_init_done:
-            time.sleep(0.2)
+            time.sleep(0.1)
+
+        #time.sleep(0.5)
 
         if self.ext in ('.png', '.jpg', '.jpeg'):
             if isinstance(self.dpi, (int, float)):

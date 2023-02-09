@@ -36,6 +36,7 @@ class Model:
  
         self.gltype = gltype                            # GL基本图元
  
+        self.name = None                                # 模型（部件）名
         self.visible = visible                          # 模型可见性，默认可见
         self.opacity = opacity                          # 模型不透明属性，默认不透明
         self.inside = inside                            # 模型顶点是否影响模型空间，默认True
