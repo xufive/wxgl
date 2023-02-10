@@ -73,7 +73,7 @@ class MainFrame(wx.Frame):
         cf = lambda t : {'azim': (0.05*t)%360}
 
         sch = wxgl.Scheme()
-        ########sch.cruise(cf)
+        sch.cruise(cf)
         sch.surface(vs[indices], texture='res/earth.jpg', texcoord=texcoord, transform=None)
         
         return sch

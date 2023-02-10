@@ -103,6 +103,7 @@ class WxScene(BaseScene, glc.GLCanvas):
 
         self._paint()
         self.SwapBuffers()
+        self.painted = True
 
     def on_idle(self, evt):
         """idle事件函数"""
@@ -129,7 +130,7 @@ class WxScene(BaseScene, glc.GLCanvas):
         """
 
         self.SetCurrent(self.context)
-        self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer)
+        self._capture(mode=mode, crop=crop, buffer=buffer)
 
     def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
         """以PIL对象的格式返回场景缓冲区数据

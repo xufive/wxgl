@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 import setuptools
 
@@ -24,8 +24,8 @@ setuptools.setup(
         'pyopengl>=3.1.5',
         'numpy>=1.20.2', 
         'matplotlib>=3.1.2',
-        'wxpython>=4.2.0',
-        'pyqt6>=6.3.0', 
+        #'wxpython>=4.2.0',
+        #'pyqt6>=6.3.0', 
         'pynput>=1.7.6', 
         'pillow>=8.2.0',
         'freetype-py>=2.3.0',

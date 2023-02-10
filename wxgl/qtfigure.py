@@ -16,6 +16,7 @@ class FileCreator(QThread):
     """图像或动画文件生成器"""
 
     shoot = pyqtSignal(str, bool)
+    refresh = pyqtSignal()
     finish = pyqtSignal()
 
     def __init__(self, fig):
@@ -29,16 +30,25 @@ class FileCreator(QThread):
 
         self.fig.scene.increment = False
         self.fig.scene.duration = 0
-
         ft = round(1000/self.fig.fps)
+
         while not self.fig.scene.gl_init_done:
-            time.sleep(0.1)
-        
-        #time.sleep(0.5)
+            time.sleep(0.01)
 
         if self.fig.ext in ('.png', '.jpg', '.jpeg'):
+            self.fig.scene.duration = 0
+
+            time.sleep(0.01)
+            self.fig.scene.painted = False
+            self.refresh.emit()
+            while not self.fig.scene.painted:
+                time.sleep(0.01)
+            
+            time.sleep(0.03)
+            self.fig.scene.im_pil = None
             self.shoot.emit('RGBA' if self.fig.ext=='.png' else 'RGB', False)
-            time.sleep(0.1)
+            while self.fig.scene.im_pil is None:
+                time.sleep(0.01)
             
             if isinstance(self.fig.dpi, (int, float)):
                 self.fig.scene.im_pil.save(self.fig.outfile, dpi=(self.fig.dpi, self.fig.dpi))
@@ -51,8 +61,18 @@ class FileCreator(QThread):
             timestamp_ms = 0
             while self.fig.cn < self.fig.frames:
                 self.fig.scene.duration = self.fig.cn * ft
+
+                time.sleep(0.01)
+                self.fig.scene.painted = False
+                self.refresh.emit()
+                while not self.fig.scene.painted:
+                    time.sleep(0.01)
+            
+                time.sleep(0.03)
+                self.fig.scene.im_pil = None
                 self.shoot.emit('RGBA', False)
-                time.sleep(0.1)
+                while not self.fig.scene.im_pil:
+                    time.sleep(0.01)
 
                 pic = webp.WebPPicture.from_pil(self.fig.scene.im_pil)
                 enc.encode_frame(pic, timestamp_ms, cfg)
@@ -65,13 +85,25 @@ class FileCreator(QThread):
         else:
             if self.fig.ext == '.gif':
                 writer = imageio.get_writer(self.fig.outfile, fps=self.fig.fps, loop=self.fig.loop)
+                crop = False
             else:
                 writer = imageio.get_writer(self.fig.outfile, fps=self.fig.fps)
+                crop = True
 
             while self.fig.cn < self.fig.frames:
                 self.fig.scene.duration = self.fig.cn * ft
-                self.shoot.emit('RGBA', True)
-                time.sleep(0.1)
+
+                time.sleep(0.01)
+                self.fig.scene.painted = False
+                self.refresh.emit()
+                while not self.fig.scene.painted:
+                    time.sleep(0.01)
+            
+                time.sleep(0.03)
+                self.fig.scene.im_pil = None
+                self.shoot.emit('RGBA', crop)
+                while not self.fig.scene.im_pil:
+                    time.sleep(0.01)
 
                 im = np.array(self.fig.scene.im_pil)
                 writer.append_data(im)
@@ -155,7 +187,8 @@ class QtFigure(QMainWindow):
         if not self.outfile is None:
             self.cn = 0
             self.creator = FileCreator(self)
-            self.creator.shoot.connect(self.capture)
+            self.creator.shoot.connect(self.scene.capture)
+            self.creator.refresh.connect(self.scene.update)
             self.creator.finish.connect(self.close)
             self.creator.start()
 
@@ -226,12 +259,6 @@ class QtFigure(QMainWindow):
         else:
             self.animateAction.setIcon(self.icon_play)
             self.animateAction.setToolTip('动画')
-
-    def capture(self, mode, crop):
-        """捕捉缓冲区数据"""
-
-        self.scene.update()
-        self.scene.capture(mode=mode, crop=crop)
 
 def show_qtfigure(scheme, **kwds):
     """保存画布为图像文件或动画文件

@@ -152,17 +152,25 @@ class WxFigure(wx.Frame):
  
         self.scene.increment = False
         self.scene.duration = 0
-        self.scene.Refresh(False)
-
         ft = round(1000/self.fps)
-        while not self.scene.gl_init_done:
-            time.sleep(0.1)
 
-        #time.sleep(0.5)
+        self.scene.Refresh(False)
+        while not self.scene.gl_init_done:
+            time.sleep(0.01)
 
         if self.ext in ('.png', '.jpg', '.jpeg'):
+            self.scene.duration = 0
+            time.sleep(0.01)
+
+            self.scene.painted = False
+            self.scene.Refresh(False)
+            while not self.scene.painted:
+                time.sleep(0.01)
+
+            self.scene.im_pil = None
             wx.CallAfter(self.scene.capture, mode='RGBA' if self.ext=='.png' else 'RGB')
-            time.sleep(0.1)
+            while self.scene.im_pil is None:
+                time.sleep(0.01)
 
             if isinstance(self.dpi, (int, float)):
                 self.scene.im_pil.save(self.outfile, dpi=(self.dpi, self.dpi))
@@ -174,9 +182,17 @@ class WxFigure(wx.Frame):
             timestamp_ms = 0
             while self.cn < self.frames:
                 self.scene.duration = self.cn * ft
+                time.sleep(0.01)
+
+                self.scene.painted = False
                 self.scene.Refresh(False)
+                while not self.scene.painted:
+                    time.sleep(0.01)
+
+                self.scene.im_pil = None
                 wx.CallAfter(self.scene.capture)
-                time.sleep(0.1)
+                while self.scene.im_pil is None:
+                    time.sleep(0.01)
 
                 pic = webp.WebPPicture.from_pil(self.scene.im_pil)
                 enc.encode_frame(pic, timestamp_ms, cfg)
@@ -189,22 +205,32 @@ class WxFigure(wx.Frame):
         else:
             if self.ext == '.gif':
                 writer = imageio.get_writer(self.outfile, fps=self.fps, loop=self.loop)
+                crop = False
             else:
                 writer = imageio.get_writer(self.outfile, fps=self.fps)
+                crop = True
  
             while self.cn < self.frames:
                 self.scene.duration = self.cn * ft
+                time.sleep(0.01)
+
+                self.scene.painted = False
                 self.scene.Refresh(False)
-                wx.CallAfter(self.scene.capture, crop=True)
-                time.sleep(0.2)
-                
+                while not self.scene.painted:
+                    time.sleep(0.01)
+
+                self.scene.im_pil = None
+                wx.CallAfter(self.scene.capture, crop=crop)
+                while self.scene.im_pil is None:
+                    time.sleep(0.01)
+ 
                 im = np.array(self.scene.im_pil)
                 writer.append_data(im)
                 self.cn +=1
  
             writer.close()
 
-        self.Close()
+        wx.CallAfter(self.Close)
 
 def show_wxfigure(scheme, **kwds):
     """保存画布为图像文件或动画文件

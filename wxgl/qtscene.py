@@ -31,6 +31,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         """重写绘制函数"""
  
         self._paint()
+        self.painted = True
 
     def resizeGL(self, width, height):
         """重写改变窗口事件函数"""
@@ -58,7 +59,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
         """
 
-        self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=True)
+        self._capture(mode=mode, crop=crop, buffer=buffer, qt=True)
 
     def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
         """以PIL对象的格式返回场景缓冲区数据

@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 from OpenGL.GL import *
 from wxgl.app import App
 from wxgl.scheme import Scheme
 from wxgl.texture import Texture
 from wxgl.model import Model
-from wxgl.wxscene import WxScene
-from wxgl.qtscene import QtScene
 from wxgl.light import BaseLight, SunLight, LampLight, SkyLight, SphereLight
 from wxgl.util import get_fonts, get_colors, get_cms, cmap, text2img, get_normal
 

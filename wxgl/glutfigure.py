@@ -110,7 +110,8 @@ class GlutFigure(BaseScene):
 
         if self.outfile:
             mode = 'RGB' if self.ext in ('.jpg', '.jpeg') else 'RGBA'
-            self.im_pil = self._get_buffer(mode=mode)
+            crop = True if self.ext in ('.mp4', '.avi', '.wmv', '.mov') else False
+            self.im_pil = self._get_buffer(mode=mode, crop=crop)
 
     def idle(self):
         """idle事件函数"""
@@ -125,14 +126,19 @@ class GlutFigure(BaseScene):
         self.increment = False
         self.duration = 0
         ft = round(1000/self.fps)
-        while not self.gl_init_done:
-            time.sleep(0.1)
 
-        #time.sleep(0.5)
+        while not self.gl_init_done:
+            time.sleep(0.01)
 
         if self.ext in ('.png', '.jpg', '.jpeg'):
+            self.duration = 0
+            time.sleep(0.05)
+
+            self.im_pil = None
+            while self.im_pil is None:
+                time.sleep(0.01)
+
             if isinstance(self.dpi, (int, float)):
-                time.sleep(0.1)
                 self.im_pil.save(self.outfile, dpi=(self.dpi, self.dpi))
             else:
                 self.im_pil.save(self.outfile)
@@ -142,7 +148,11 @@ class GlutFigure(BaseScene):
             timestamp_ms = 0
             while self.cn < self.frames:
                 self.duration = self.cn * ft 
-                time.sleep(0.1)
+                time.sleep(0.05)
+
+                self.im_pil = None
+                while self.im_pil is None:
+                    time.sleep(0.01)
 
                 pic = webp.WebPPicture.from_pil(self.im_pil)
                 enc.encode_frame(pic, timestamp_ms, cfg)
@@ -159,8 +169,12 @@ class GlutFigure(BaseScene):
                 writer = imageio.get_writer(self.outfile, fps=self.fps)
  
             while self.cn < self.frames:
-                self.duration = self.cn * ft 
-                time.sleep(0.1)
+                self.duration = self.cn * ft
+                time.sleep(0.05)
+
+                self.im_pil = None
+                while self.im_pil is None:
+                    time.sleep(0.01)
 
                 im = np.array(self.im_pil)
                 writer.append_data(im)

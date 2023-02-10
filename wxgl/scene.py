@@ -48,6 +48,7 @@ class BaseScene:
         self.pmat = np.eye(4, dtype=np.float32)                         # 投影矩阵
 
         self.gl_init_done = False                                       # GL初始化标志
+        self.painted = False                                            # 期望的重绘已完成 
         self.left_down = False                                          # 左键按下
         self.ctrl_down = False                                          # Ctr键按下
         self.mouse_pos = None                                           # 鼠标位置
@@ -112,6 +113,17 @@ class BaseScene:
         """更新视点矩阵"""
  
         self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
+
+    def _capture(self, mode='RGBA', crop=False, buffer='front', qt=False):
+        """捕捉缓冲区数据
+ 
+        mode        - 'RGB'或'RGBA'
+        crop        - 是否将宽高裁切为16的倍数
+        buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
+        qt          - 使用Qt作为后端
+        """
+
+        self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=qt)
 
     def _get_buffer(self, mode='RGBA', crop=False, buffer='front', qt=False):
         """以PIL对象的格式返回场景缓冲区数据
