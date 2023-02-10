@@ -248,5 +248,6 @@ def show_wxfigure(scheme, **kwds):
     app = wx.App()
     fig = WxFigure(scheme, **kwds)
     app.MainLoop()
+    app.Destroy()
     scheme.reset()
 
