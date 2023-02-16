@@ -14,6 +14,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         super(QtScene, self).__init__(scheme, **kwds)
         super(BaseScene, self).__init__(parent)
 
+        self.factor_csize = int(parent.devicePixelRatio())
         self.timer_id = self.startTimer(0, Qt.TimerType.CoarseTimer)
 
     def timerEvent(self, evt):
@@ -24,19 +25,24 @@ class QtScene(BaseScene, QOpenGLWidget):
     def initializeGL(self):
         """重写初始化函数"""
         
-        self._initialize_gl()
-        self._assemble()
+        pass
+        #self._initialize_gl()
+        #self._assemble()
 
     def paintGL(self):
         """重写绘制函数"""
  
+        if not self.gl_init_done:
+            self._initialize_gl()
+            self._assemble()
+
         self._paint()
         self.painted = True
 
     def resizeGL(self, width, height):
         """重写改变窗口事件函数"""
  
-        self.csize = (width, height)
+        self.csize = (width * self.factor_csize, height * self.factor_csize)
         self._resize()
         self.update()
 
@@ -59,7 +65,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
         """
 
-        self._capture(mode=mode, crop=crop, buffer=buffer, qt=True)
+        self._capture(mode=mode, crop=crop, buffer=buffer, qt=self.factor_csize)
 
     def get_buffer(self, mode='RGBA', crop=False, buffer='front'):
         """以PIL对象的格式返回场景缓冲区数据
@@ -69,7 +75,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
         """
 
-        return self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=True)
+        return self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=self.factor_csize)
 
     def mousePressEvent(self, evt):
         """重写鼠标按键被按下事件函数"""

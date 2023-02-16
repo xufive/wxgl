@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
-import os, time
+import os, sys, time
 import numpy as np
 import threading
 import imageio
-import webp
-from pynput import keyboard
 import wx
 import wx.lib.agw.aui as aui
 from wx.lib.embeddedimage import PyEmbeddedImage
 
 from . wxscene import WxScene
 from . import imgres
+
+if sys.platform.lower() != 'darwin':
+    import webp
 
 class WxFigure(wx.Frame):
     """构造函数"""
@@ -81,28 +82,29 @@ class WxFigure(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_home, id=self.ID_RESTORE)
         self.Bind(wx.EVT_MENU, self.on_save, id=self.ID_SAVE)
         self.Bind(wx.EVT_MENU, self.on_pause, id=self.ID_ANIMATE)
+        self.scene.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+        self.scene.Bind(wx.EVT_KEY_UP, self.on_key_up)
         
-        monitor_k = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
-        monitor_k.start()
-
         if not self.outfile is None:
             self.cn = 0
             threading_record = threading.Thread(target=self.create_file)
             threading_record.setDaemon(True)
             threading_record.start()
 
-    def _on_press(self, key):
+    def on_key_down(self, evt):
         """键盘按下"""
 
-        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+        key = evt.GetKeyCode()
+        if key == wx.WXK_CONTROL:
             self.scene.ctrl_down = True
 
-    def _on_release(self, key):
+    def on_key_up(self, evt):
         """键盘弹起"""
 
-        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+        key = evt.GetKeyCode()
+        if key == wx.WXK_CONTROL:
             self.scene.ctrl_down = False
-        elif key == keyboard.Key.esc:
+        elif key == wx.WXK_ESCAPE:
             wx.CallAfter(self.scene.home)
 
     def on_home(self, evt):

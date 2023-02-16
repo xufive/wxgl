@@ -20,14 +20,9 @@ class FontManager:
                 self.fonts.update({item.name: [item]})
  
         # 设置默认字体
-        if 'Microsoft YaHei' in self.fonts:
-            self.default_font = 'Microsoft YaHei' # 微软雅黑
-        elif 'STSong' in self.fonts:
-            self.default_font = 'STSong' # 宋体
-        elif 'FangSong' in self.fonts:
-            self.default_font = 'FangSong' # 仿宋
-        else:
-            self.default_font = mfm.ttfFontProperty(mfm.get_font(mfm.findfont(''))).name # matplotlib默认字体
+        for item in ('Microsoft YaHei', 'STSong', 'FangSong', 'Songti SC', 'DejaVu Sans'):
+            if item in self.fonts:
+                self.default_font = item
  
     def get_font_list(self):
         """返回当前系统可用字体列表"""

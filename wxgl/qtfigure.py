@@ -4,13 +4,15 @@ import sys, os, time
 import numpy as np
 import threading
 import imageio
-import webp
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QIcon, QAction, QImage, QPixmap
 from PyQt6.QtCore import Qt, QByteArray, pyqtSignal, QThread
 
 from . qtscene import QtScene
 from . import imgres
+
+if sys.platform.lower() != 'darwin':
+    import webp
 
 class FileCreator(QThread):
     """图像或动画文件生成器"""

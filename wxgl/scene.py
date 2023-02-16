@@ -120,7 +120,7 @@ class BaseScene:
         mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
-        qt          - 使用Qt作为后端
+        qt          - 使用Qt作为后端的逻辑像素比
         """
 
         self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=qt)
@@ -131,14 +131,14 @@ class BaseScene:
         mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
-        qt          - 使用Qt作为后端
+        qt          - 使用Qt作为后端的逻辑像素比
         """
 
         gl_mode = GL_RGBA if mode=='RGBA' else GL_RGB
         glReadBuffer(GL_FRONT if buffer=='front' else GL_BACK)
         data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
         data = data.reshape(data.shape[1], data.shape[0], -1)
-        im = Image.fromarray(data[31:, 49:] if qt else data, mode=mode)
+        im = Image.fromarray(data[85*qt:, 113*qt:] if qt else data, mode=mode)
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
  
         if crop:
@@ -344,7 +344,6 @@ class BaseScene:
 
                 if i == 2 and mid == 'cb_label':
                     m.attribute['a_Position']['data'][:,0] /= self.viewport[i][2]/self.viewport[i][3]
-                    #m.attribute['a_Position']['data'][3::4,0] /= self.viewport[i][2]/self.viewport[i][3]
 
                 for src, genre in m.shaders:
                     m.cshaders.append(shaders.compileShader(src, genre))
@@ -526,8 +525,8 @@ class BaseScene:
         for i in range(3):
             for name in self.scheme.models[i]:
                 m = self.scheme.models[i][name]
-                for item in m.cshaders:
-                    glDeleteShader(item)
+                #for item in m.cshaders:
+                #    glDeleteShader(item)
                 
                 if m.program:
                     glDeleteProgram(m.program)

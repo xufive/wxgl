@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import time
+import sys, time
 import numpy as np
 import threading
 import imageio
-import webp
-
 from OpenGL.GLUT import *
 
 from . scene import BaseScene
+
+if sys.platform.lower() != 'darwin':
+    import webp
 
 class GlutFigure(BaseScene):
     """基于OpenGl.GLUT的画布类"""
@@ -210,4 +211,5 @@ def show_figure(scheme, **kwds):
     glutMainLoop()
     
     scheme.reset()
+    sys.exit()
 
