@@ -26,7 +26,7 @@ setuptools.setup(
         'matplotlib>=3.1.2',
         #'wxpython>=4.2.0',
         #'pyqt6>=6.3.0', 
-        'pynput>=1.7.6', 
+        #'pynput>=1.7.6', 
         'pillow>=8.2.0',
         'freetype-py>=2.3.0',
         'imageio>=2.22.0',
