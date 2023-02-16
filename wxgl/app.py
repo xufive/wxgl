@@ -64,7 +64,6 @@ class App(Scheme):
         else:
             fpath, fname = os.path.split(outfile)
             ext = os.path.splitext(fname)[-1].lower()
-            print(outfile, ext)
 
             if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.avi', '.wmv', '.mov'):
                 raise ValueError('不支持的文件格式：%s'%ext)

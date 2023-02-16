@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -25,9 +26,9 @@ class QtScene(BaseScene, QOpenGLWidget):
     def initializeGL(self):
         """重写初始化函数"""
         
-        pass
-        #self._initialize_gl()
-        #self._assemble()
+        if sys.platform.lower != 'darwin':
+            self._initialize_gl()
+            self._assemble()
 
     def paintGL(self):
         """重写绘制函数"""
