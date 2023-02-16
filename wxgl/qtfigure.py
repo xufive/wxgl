@@ -58,7 +58,7 @@ class FileCreator(QThread):
                 self.fig.scene.im_pil.save(self.fig.outfile)
         elif self.fig.ext == '.webp':
             w, h = self.fig.scene.csize
-            enc = webp.WebPAnimEncoder.new(w-49, h-31)
+            enc = webp.WebPAnimEncoder.new(w-self.fig.scene.offset[1], h-self.fig.scene.offset[0])
             cfg = webp.WebPConfig.new(quality=100)
             timestamp_ms = 0
             while self.fig.cn < self.fig.frames:

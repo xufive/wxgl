@@ -114,31 +114,31 @@ class BaseScene:
  
         self.vmat[:] = util.view_matrix(self.cam, self.up, self.oecs)
 
-    def _capture(self, mode='RGBA', crop=False, buffer='front', qt=False):
+    def _capture(self, mode='RGBA', crop=False, buffer='front', qt=None):
         """捕捉缓冲区数据
  
         mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
-        qt          - 使用Qt作为后端的逻辑像素比
+        qt          - 使用Qt作为后端的偏移量
         """
 
         self.im_pil = self._get_buffer(mode=mode, crop=crop, buffer=buffer, qt=qt)
 
-    def _get_buffer(self, mode='RGBA', crop=False, buffer='front', qt=False):
+    def _get_buffer(self, mode='RGBA', crop=False, buffer='front', qt=None):
         """以PIL对象的格式返回场景缓冲区数据
  
         mode        - 'RGB'或'RGBA'
         crop        - 是否将宽高裁切为16的倍数
         buffer      - 'front'（前缓冲区）或'back'（后缓冲区）
-        qt          - 使用Qt作为后端的逻辑像素比
+        qt          - 使用Qt作为后端的偏移量
         """
 
         gl_mode = GL_RGBA if mode=='RGBA' else GL_RGB
         glReadBuffer(GL_FRONT if buffer=='front' else GL_BACK)
         data = glReadPixels(0, 0, self.csize[0], self.csize[1], gl_mode, GL_UNSIGNED_BYTE, outputType=None)
         data = data.reshape(data.shape[1], data.shape[0], -1)
-        im = Image.fromarray(data[85*qt:, 113*qt:] if qt else data, mode=mode)
+        im = Image.fromarray(data[qt[0]:, qt[1]:] if qt else data, mode=mode)
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
  
         if crop:
