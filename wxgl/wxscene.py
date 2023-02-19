@@ -2,7 +2,6 @@
 
 import wx
 from wx import glcanvas as glc
-
 from . scene import BaseScene
 
 class WxScene(BaseScene, glc.GLCanvas):

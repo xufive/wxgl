@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import numpy as np
+import sys
 from OpenGL.GL import *
 from . model import Model
 
@@ -24,8 +24,79 @@ class _Light:
         self.cpos = kwds.get('cpos')                    # 相机位置
         self.mvp = kwds.get('mvp', True)                # 使用MVP矩阵
 
-        self.a_dtype = None                             # 纹理坐标数据类型（attribute变量）
-        self.u_dtype = None                             # 纹理采样器类型（uniform变量）
+        self.texcoodr_type = None                       # 纹理坐标数据类型（attribute变量）
+        self.sampler_type = None                        # 纹理采样器类型（uniform变量）
+        self.texture_func = None                        # 纹理函数
+
+        self.platform = sys.platform.lower()            # 操作系统
+        self.glsl_version = '#version 330 core \n\n'    # 适配的GLSL版本
+        self.glsl_functions = ''                        # 低版本GLSL的扩展函数
+
+        if self.platform == 'darwin':
+            self.glsl_version = ''
+            self.glsl_functions = """
+                mat4 inverse(mat4 m) {
+                    float Coef00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
+                    float Coef02 = m[1][2] * m[3][3] - m[3][2] * m[1][3];
+                    float Coef03 = m[1][2] * m[2][3] - m[2][2] * m[1][3];
+                       
+                    float Coef04 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
+                    float Coef06 = m[1][1] * m[3][3] - m[3][1] * m[1][3];
+                    float Coef07 = m[1][1] * m[2][3] - m[2][1] * m[1][3];
+                       
+                    float Coef08 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
+                    float Coef10 = m[1][1] * m[3][2] - m[3][1] * m[1][2];
+                    float Coef11 = m[1][1] * m[2][2] - m[2][1] * m[1][2];
+                       
+                    float Coef12 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
+                    float Coef14 = m[1][0] * m[3][3] - m[3][0] * m[1][3];
+                    float Coef15 = m[1][0] * m[2][3] - m[2][0] * m[1][3];
+                       
+                    float Coef16 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
+                    float Coef18 = m[1][0] * m[3][2] - m[3][0] * m[1][2];
+                    float Coef19 = m[1][0] * m[2][2] - m[2][0] * m[1][2];
+                       
+                    float Coef20 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
+                    float Coef22 = m[1][0] * m[3][1] - m[3][0] * m[1][1];
+                    float Coef23 = m[1][0] * m[2][1] - m[2][0] * m[1][1];
+                       
+                    const vec4 SignA = vec4( 1.0, -1.0,  1.0, -1.0);
+                    const vec4 SignB = vec4(-1.0,  1.0, -1.0,  1.0);
+                       
+                    vec4 Fac0 = vec4(Coef00, Coef00, Coef02, Coef03);
+                    vec4 Fac1 = vec4(Coef04, Coef04, Coef06, Coef07);
+                    vec4 Fac2 = vec4(Coef08, Coef08, Coef10, Coef11);
+                    vec4 Fac3 = vec4(Coef12, Coef12, Coef14, Coef15);
+                    vec4 Fac4 = vec4(Coef16, Coef16, Coef18, Coef19);
+                    vec4 Fac5 = vec4(Coef20, Coef20, Coef22, Coef23);
+                       
+                    vec4 Vec0 = vec4(m[1][0], m[0][0], m[0][0], m[0][0]);
+                    vec4 Vec1 = vec4(m[1][1], m[0][1], m[0][1], m[0][1]);
+                    vec4 Vec2 = vec4(m[1][2], m[0][2], m[0][2], m[0][2]);
+                    vec4 Vec3 = vec4(m[1][3], m[0][3], m[0][3], m[0][3]);
+                       
+                    vec4 Inv0 = SignA * (Vec1 * Fac0 - Vec2 * Fac1 + Vec3 * Fac2);
+                    vec4 Inv1 = SignB * (Vec0 * Fac0 - Vec2 * Fac3 + Vec3 * Fac4);
+                    vec4 Inv2 = SignA * (Vec0 * Fac1 - Vec1 * Fac3 + Vec3 * Fac5);
+                    vec4 Inv3 = SignB * (Vec0 * Fac2 - Vec1 * Fac4 + Vec2 * Fac5);
+                       
+                    mat4 Inverse = mat4(Inv0, Inv1, Inv2, Inv3);
+                    vec4 Row0 = vec4(Inverse[0][0], Inverse[1][0], Inverse[2][0], Inverse[3][0]);
+                    float Determinant = dot(m[0], Row0);
+                    Inverse /= Determinant;
+                       
+                    return Inverse;
+                }
+
+                mat4 transpose(mat4 m) {
+                    mat4 result = mat4(0.0);
+                    for (int i=0; i<4; i++)
+                        for (int j=0; j<4; j++)
+                            result[i][j] = m[j][i];
+
+                    return result;
+                }
+            """
  
     def _get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
@@ -38,6 +109,7 @@ class _Light:
         align = kwds.get('align')
         tsize = kwds.get('tsize')
         psize = kwds.get('psize')
+        vid = kwds.get('vid')
         cpos = kwds.get('cpos')
         lw = kwds.get('lw')
         ls = kwds.get('ls')
@@ -52,17 +124,24 @@ class _Light:
 
         if texture:
             if texture.ttype == GL_TEXTURE_1D:
-                self.a_dtype = 'float'
-                self.u_dtype = 'sampler1D'
+                self.texcoodr_type = 'float'
+                self.sampler_type = 'sampler1D'
+                self.texture_func = 'texture1D'
             elif texture.ttype == GL_TEXTURE_2D:
-                self.a_dtype = 'vec2'
-                self.u_dtype = 'sampler2D'
+                self.texcoodr_type = 'vec2'
+                self.sampler_type = 'sampler2D'
+                self.texture_func = 'texture2D'
             elif texture.ttype == GL_TEXTURE_2D_ARRAY:
-                self.a_dtype = 'vec3'
-                self.u_dtype = 'sampler2DArray'
+                self.texcoodr_type = 'vec3'
+                self.sampler_type = 'sampler2DArray'
+                self.texture_func = 'texture3D' # 待定
             elif texture.ttype == GL_TEXTURE_3D:
-                self.a_dtype = 'vec3'
-                self.u_dtype = 'sampler3D'
+                self.texcoodr_type = 'vec3'
+                self.sampler_type = 'sampler3D'
+                self.texture_func = 'texture3D'
+
+            if self.platform != 'darwin':
+                self.texture_func = 'texture'
 
         vshader = self.get_vshader(texture)
         fshader = self.get_fshader(texture)
@@ -112,6 +191,8 @@ class _Light:
             m.set_text_size('u_TextSize', tsize)
         if not align is None:
             m.set_argument('u_Align', align)
+        if not vid is None:
+            m.set_argument('a_VertexID', vid)
  
         m.set_cull_mode(cull)
         m.set_fill_mode(fill)
@@ -127,12 +208,12 @@ class _Light:
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
 
-        pass
+        return ''
 
     def get_fshader(self, texture):
         """返回片元着色器源码"""
  
-        pass
+        return ''
 
 class ScatterLight(_Light):
     """散列点专用的光照模型"""
@@ -152,16 +233,14 @@ class ScatterLight(_Light):
         """返回顶点着色器源码"""
  
         if texture is None:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec4 a_Color;
-                in float a_Psize;
+            shader_src = self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec4 a_Color;
+                attribute float a_Psize;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
-                out vec4 v_Color;
+                varying vec4 v_Color;
  
                 void main() { 
                     v_Color = a_Color;
@@ -170,11 +249,9 @@ class ScatterLight(_Light):
                 }
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in float a_Psize;
+            shader_src = self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute float a_Psize;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
@@ -190,23 +267,15 @@ class ScatterLight(_Light):
     def get_fshader(self,texture):
         """返回片元着色器源码"""
  
-        if texture is None:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 v_Color;
+        if self.platform == 'darwin':
+            shader_src = self.glsl_version + """
+                varying vec4 v_Color;
                 uniform vec3 u_AmbientColor;
                 uniform int u_Picked;
  
                 void main() { 
-                    vec2 temp = gl_PointCoord - vec2(0.5);
-                    float f = dot(temp, temp);
- 
-                    if (f > 0.25)
-                        discard;
- 
                     vec3 rgb = v_Color.rgb * u_AmbientColor;
-                    vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
+                    vec4 color = vec4(rgb, v_Color.a);
                     
                     if (u_Picked == 0)
                         gl_FragColor = color;
@@ -215,23 +284,44 @@ class ScatterLight(_Light):
                 } 
             """
         else:
-            shader_src = """
-                #version 330 core
+            if texture is None:
+                shader_src = self.glsl_version + """
+                    varying vec4 v_Color;
+                    uniform vec3 u_AmbientColor;
+                    uniform int u_Picked;
  
-                uniform vec3 u_AmbientColor;
-                uniform sampler2D u_Texture;
-                uniform int u_Picked;
+                    void main() { 
+                        vec2 temp = gl_PointCoord - vec2(0.5);
+                        float f = dot(temp, temp);
  
-                void main() { 
-                    vec4 color = texture(u_Texture, gl_PointCoord);
-                    vec3 rgb = color.rgb * u_AmbientColor;
+                        if (f > 0.25)
+                            discard;
+ 
+                        vec3 rgb = v_Color.rgb * u_AmbientColor;
+                        vec4 color = mix(vec4(rgb, v_Color.a), vec4(rgb, 0.0), smoothstep(0.2, 0.25, f));
+                        
+                        if (u_Picked == 0)
+                            gl_FragColor = color;
+                        else
+                            gl_FragColor = vec4(min(color.rgb*1.5, vec3(1.0)), color.a);
+                    } 
+                """
+            else:
+                shader_src = self.glsl_version + """
+                    uniform vec3 u_AmbientColor;
+                    uniform sampler2D u_Texture;
+                    uniform int u_Picked;
+ 
+                    void main() { 
+                        vec4 color = %s(u_Texture, gl_PointCoord);
+                        vec3 rgb = color.rgb * u_AmbientColor;
 
-                    if (u_Picked == 0)
-                        gl_FragColor = vec4(rgb, color.a);
-                    else
-                        gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
-                } 
-            """
+                        if (u_Picked == 0)
+                            gl_FragColor = vec4(rgb, color.a);
+                        else
+                            gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
+                    } 
+                """ % self.texture_func
         
         return shader_src
 
@@ -252,129 +342,119 @@ class Text2dLight(_Light):
     def get_vshader(self, texture):
         """返回2d文本的顶点着色器源码"""
  
-        return """
-            #version 330 core
- 
-            in vec4 a_Position;
-            in vec2 a_Texcoord;
+        return self.glsl_version + """
+            attribute vec4 a_Position;
+            attribute vec2 a_Texcoord;
+            attribute float a_VertexID;
             uniform mat4 u_ProjMatrix;
             uniform mat4 u_ViewMatrix;
             uniform mat4 u_ModelMatrix;
             uniform vec2 u_TextSize;
             uniform int u_Align;
-            out vec2 v_Texcoord;
+            varying vec2 v_Texcoord;
  
             void main() {
                 v_Texcoord = a_Texcoord;
                 gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
  
-                switch (u_Align) {
-                    case 0:
-                        if (gl_VertexID == 1) {
-                            gl_Position.y -= u_TextSize.y;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.y -= u_TextSize.y;
-                            gl_Position.x += u_TextSize.x;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x;
-                        }
-                        break;
-                    case 1:
-                        if (gl_VertexID == 0) {
-                            gl_Position.y += u_TextSize.y/2;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.x += u_TextSize.x;
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x;
-                            gl_Position.y += u_TextSize.y/2;
-                        }
-                        break;
-                    case 2:
-                        if (gl_VertexID == 0) {
-                            gl_Position.y += u_TextSize.y;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.x += u_TextSize.x;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x;
-                            gl_Position.y += u_TextSize.y;
-                        }
-                        break;
-                    case 3:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x/2;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x/2;
-                            gl_Position.y -= u_TextSize.y;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.x += u_TextSize.x/2;
-                            gl_Position.y -= u_TextSize.y;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x/2;
-                        }
-                        break;
-                    case 4:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x/2;
-                            gl_Position.y += u_TextSize.y/2;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x/2;
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.x += u_TextSize.x/2;
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x/2;
-                            gl_Position.y += u_TextSize.y/2;
-                        }
-                        break;
-                    case 5:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x/2;
-                            gl_Position.y += u_TextSize.y;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x/2;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.x += u_TextSize.x/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.x += u_TextSize.x/2;
-                            gl_Position.y += u_TextSize.y;
-                        }
-                        break;
-                    case 6:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x;
-                            gl_Position.y -= u_TextSize.y;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.y -= u_TextSize.y;
-                        }
-                        break;
-                    case 7:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x;
-                            gl_Position.y += u_TextSize.y/2;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x;
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 3) {
-                            gl_Position.y -= u_TextSize.y/2;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.y += u_TextSize.y/2;
-                        }
-                        break;
-                    default:
-                        if (gl_VertexID == 0) {
-                            gl_Position.x -= u_TextSize.x;
-                            gl_Position.y += u_TextSize.y;
-                        } else if (gl_VertexID == 1) {
-                            gl_Position.x -= u_TextSize.x;
-                        } else if (gl_VertexID == 2) {
-                            gl_Position.y += u_TextSize.y;
-                        }
+                if (u_Align == 0) {
+                    if (a_VertexID == 1.0) {
+                        gl_Position.y -= u_TextSize.y;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.y -= u_TextSize.y;
+                        gl_Position.x += u_TextSize.x;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x;
+                    }
+                } else if (u_Align == 1) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.y += u_TextSize.y/2.0;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.x += u_TextSize.x;
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x;
+                        gl_Position.y += u_TextSize.y/2.0;
+                    }
+                } else if (u_Align == 2) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.y += u_TextSize.y;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.x += u_TextSize.x;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x;
+                        gl_Position.y += u_TextSize.y;
+                    }
+                } else if (u_Align == 3) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                        gl_Position.y -= u_TextSize.y;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                        gl_Position.y -= u_TextSize.y;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                    }
+                } else if (u_Align == 4) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                        gl_Position.y += u_TextSize.y/2.0;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                        gl_Position.y += u_TextSize.y/2.0;
+                    }
+                } else if (u_Align == 5) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                        gl_Position.y += u_TextSize.y;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x/2.0;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.x += u_TextSize.x/2.0;
+                        gl_Position.y += u_TextSize.y;
+                    }
+                } else if (u_Align == 6) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x;
+                        gl_Position.y -= u_TextSize.y;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.y -= u_TextSize.y;
+                    }
+                } else if (u_Align == 7) {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x;
+                        gl_Position.y += u_TextSize.y/2.0;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x;
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 3.0) {
+                        gl_Position.y -= u_TextSize.y/2.0;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.y += u_TextSize.y/2.0;
+                    }
+                } else {
+                    if (a_VertexID == 0.0) {
+                        gl_Position.x -= u_TextSize.x;
+                        gl_Position.y += u_TextSize.y;
+                    } else if (a_VertexID == 1.0) {
+                        gl_Position.x -= u_TextSize.x;
+                    } else if (a_VertexID == 2.0) {
+                        gl_Position.y += u_TextSize.y;
+                    }
                 }
             }
         """
@@ -382,16 +462,14 @@ class Text2dLight(_Light):
     def get_fshader(self, texture):
         """返回片元着色器源码"""
  
-        return """
-            #version 330 core
- 
-            in vec2 v_Texcoord;
+        return self.glsl_version + """
+            varying vec2 v_Texcoord;
             uniform vec3 u_AmbientColor;
             uniform sampler2D u_Texture;
             uniform int u_Picked;
  
             void main() { 
-                vec4 color = texture(u_Texture, v_Texcoord);
+                vec4 color = %s(u_Texture, v_Texcoord);
                 vec3 rgb = color.rgb * u_AmbientColor;
 
                 if (u_Picked == 0)
@@ -399,7 +477,7 @@ class Text2dLight(_Light):
                 else
                     gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
             } 
-        """
+        """ % self.texture_func
 
 class BaseLight(_Light):
     """环境光照模型"""
@@ -420,15 +498,13 @@ class BaseLight(_Light):
  
         if self.mvp:
             if texture is None:
-                shader_src = """
-                    #version 330 core
- 
-                    in vec4 a_Position;
-                    in vec4 a_Color;
+                shader_src = self.glsl_version + """
+                    attribute vec4 a_Position;
+                    attribute vec4 a_Color;
                     uniform mat4 u_ProjMatrix;
                     uniform mat4 u_ViewMatrix;
                     uniform mat4 u_ModelMatrix;
-                    out vec4 v_Color;
+                    varying vec4 v_Color;
  
                     void main() { 
                         v_Color = a_Color;
@@ -436,29 +512,25 @@ class BaseLight(_Light):
                     }
                 """
             else:
-                shader_src = """
-                    #version 330 core
- 
-                    in vec4 a_Position;
-                    in %s a_Texcoord;
+                shader_src = self.glsl_version + """
+                    attribute vec4 a_Position;
+                    attribute %s a_Texcoord;
                     uniform mat4 u_ProjMatrix;
                     uniform mat4 u_ViewMatrix;
                     uniform mat4 u_ModelMatrix;
-                    out %s v_Texcoord;
+                    varying %s v_Texcoord;
  
                     void main() { 
                         v_Texcoord = a_Texcoord;
                         gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     }
-                """ % (self.a_dtype, self.a_dtype)
+                """ % (self.texcoodr_type, self.texcoodr_type)
         else:
             if texture is None:
-                shader_src = """
-                    #version 330 core
- 
-                    in vec4 a_Position;
-                    in vec4 a_Color;
-                    out vec4 v_Color;
+                shader_src = self.glsl_version + """
+                    attribute vec4 a_Position;
+                    attribute vec4 a_Color;
+                    varying vec4 v_Color;
  
                     void main() { 
                         v_Color = a_Color;
@@ -466,18 +538,16 @@ class BaseLight(_Light):
                     }
                 """
             else:
-                shader_src = """
-                    #version 330 core
- 
-                    in vec4 a_Position;
-                    in %s a_Texcoord;
-                    out %s v_Texcoord;
+                shader_src = self.glsl_version + """
+                    attribute vec4 a_Position;
+                    attribute %s a_Texcoord;
+                    varying %s v_Texcoord;
  
                     void main() { 
                         v_Texcoord = a_Texcoord;
                         gl_Position = a_Position; 
                     }
-                """ % (self.a_dtype, self.a_dtype)
+                """ % (self.texcoodr_type, self.texcoodr_type)
  
         return shader_src
  
@@ -485,10 +555,8 @@ class BaseLight(_Light):
         """返回片元着色器源码"""
  
         if texture is None:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 v_Color;
+            shader_src = self.glsl_version + """
+                varying vec4 v_Color;
                 uniform vec3 u_AmbientColor;
                 uniform int u_Picked;
  
@@ -501,16 +569,14 @@ class BaseLight(_Light):
                 } 
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in %s v_Texcoord;
+            shader_src = self.glsl_version + """
+                varying %s v_Texcoord;
                 uniform vec3 u_AmbientColor;
                 uniform %s u_Texture;
                 uniform int u_Picked;
  
                 void main() { 
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     vec3 rgb = color.rgb * u_AmbientColor;
                     
                     if (u_Picked == 0)
@@ -518,7 +584,7 @@ class BaseLight(_Light):
                     else
                         gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
-            """ % (self.a_dtype, self.u_dtype)
+            """ % (self.texcoodr_type, self.sampler_type, self.texture_func)
  
         return shader_src
 
@@ -548,22 +614,22 @@ class SunLight(_Light):
         """返回顶点着色器源码"""
  
         if texture is None:
-            shader_src =  """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in vec4 a_Color;
+            shader_src =  self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute vec4 a_Color;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_CamPos;
                 uniform vec3 u_LightDir; // 定向光方向
-                out vec4 v_Color;
-                out vec3 v_Normal;
-                out vec3 v_LightDir;
-                out vec3 v_MiddleDir;
- 
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
+
+                """ + self.glsl_functions + """
+
                 void main() { 
                     v_Color = a_Color;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
@@ -576,22 +642,22 @@ class SunLight(_Light):
                 }
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in %s a_Texcoord;
+            shader_src = self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute %s a_Texcoord;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_CamPos;
                 uniform vec3 u_LightDir; // 定向光方向
-                out %s v_Texcoord;
-                out vec3 v_Normal;
-                out vec3 v_LightDir;
-                out vec3 v_MiddleDir;
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
  
+                """ % (self.texcoodr_type, self.texcoodr_type) + self.glsl_functions + """
+
                 void main() { 
                     v_Texcoord = a_Texcoord;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
@@ -602,7 +668,7 @@ class SunLight(_Light):
                     v_LightDir = normalize(-u_LightDir); // 光线向量取反后单位化
                     v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
                 }
-            """ % (self.a_dtype, self.a_dtype)
+            """
 
         return shader_src
  
@@ -610,13 +676,11 @@ class SunLight(_Light):
         """返回片元着色器源码"""
  
         if texture is None:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 v_Color;
-                in vec3 v_Normal;
-                in vec3 v_LightDir;
-                in vec3 v_MiddleDir;
+            shader_src = self.glsl_version + """
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
                 uniform vec3 u_LightColor; // 定向光颜色
                 uniform vec3 u_AmbientColor; // 环境光颜色
                 uniform float u_Shiny; // 高光系数
@@ -648,13 +712,11 @@ class SunLight(_Light):
                 }
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in %s v_Texcoord;
-                in vec3 v_Normal;
-                in vec3 v_LightDir;
-                in vec3 v_MiddleDir;
+            shader_src = self.glsl_version + """
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
                 uniform %s u_Texture;
                 uniform vec3 u_LightColor; // 定向光颜色
                 uniform vec3 u_AmbientColor; // 环境光颜色
@@ -665,7 +727,7 @@ class SunLight(_Light):
                 uniform int u_Picked;
  
                 void main() { 
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
                     float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
  
@@ -686,7 +748,7 @@ class SunLight(_Light):
                     else
                         gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
-            """ % (self.a_dtype, self.u_dtype)
+            """ % (self.texcoodr_type, self.sampler_type, self.texture_func)
 
         return shader_src
 
@@ -716,22 +778,22 @@ class LampLight(_Light):
         """返回顶点着色器源码"""
  
         if texture is None:
-            shader_src =  """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in vec4 a_Color;
+            shader_src =  self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute vec4 a_Color;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_CamPos;
                 uniform vec3 u_LightPos;
-                out vec4 v_Color;
-                out vec3 v_Normal;
-                out vec3 v_LightDir;
-                out vec3 v_MiddleDir;
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
  
+                """ + self.glsl_functions + """
+
                 void main() { 
                     v_Color = a_Color;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
@@ -745,22 +807,22 @@ class LampLight(_Light):
                 }
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in %s a_Texcoord;
+            shader_src = self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute %s a_Texcoord;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_CamPos;
                 uniform vec3 u_LightPos;
-                out %s v_Texcoord;
-                out vec3 v_Normal;
-                out vec3 v_LightDir;
-                out vec3 v_MiddleDir;
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
  
+                """ % (self.texcoodr_type, self.texcoodr_type) + self.glsl_functions + """
+
                 void main() { 
                     v_Texcoord = a_Texcoord;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
@@ -772,7 +834,7 @@ class LampLight(_Light):
                     v_LightDir = normalize(u_LightPos - a_Position.xyz); // 光线向量单位化
                     v_MiddleDir = normalize(camDir + v_LightDir); // 视线和光线的中间向量
                 }
-            """ % (self.a_dtype, self.a_dtype)
+            """
 
         return shader_src
  
@@ -780,13 +842,11 @@ class LampLight(_Light):
         """返回片元着色器源码"""
  
         if texture is None:
-            shader_src = """
-                #version 330 core
- 
-                in vec4 v_Color;
-                in vec3 v_Normal;
-                in vec3 v_LightDir;
-                in vec3 v_MiddleDir;
+            shader_src = self.glsl_version + """
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
                 uniform vec3 u_LightColor; // 灯光颜色
                 uniform vec3 u_AmbientColor; // 环境光颜色
                 uniform float u_Shiny; // 高光系数
@@ -818,13 +878,11 @@ class LampLight(_Light):
                 }
             """
         else:
-            shader_src = """
-                #version 330 core
- 
-                in %s v_Texcoord;
-                in vec3 v_Normal;
-                in vec3 v_LightDir;
-                in vec3 v_MiddleDir;
+            shader_src = self.glsl_version + """
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
+                varying vec3 v_LightDir;
+                varying vec3 v_MiddleDir;
                 uniform %s u_Texture;
                 uniform vec3 u_LightColor; // 灯光颜色
                 uniform vec3 u_AmbientColor; // 环境光颜色
@@ -835,7 +893,7 @@ class LampLight(_Light):
                 uniform int u_Picked;
  
                 void main() { 
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     float diffuseCos = u_Diffuse * max(0.0, dot(v_LightDir, v_Normal)); // 光线向量和法向量的内积
                     float specularCos = u_Specular * max(0.0, dot(v_MiddleDir, v_Normal)); // 中间向量和法向量内积
  
@@ -856,7 +914,7 @@ class LampLight(_Light):
                     else
                         gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a);
                 } 
-            """ % (self.a_dtype, self.u_dtype)
+            """ % (self.texcoodr_type, self.sampler_type, self.texture_func)
 
         return shader_src
 
@@ -881,19 +939,19 @@ class SkyLight(_Light):
         """返回使用颜色的顶点着色器源码"""
  
         if texture is None:
-            return """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in vec4 a_Color;
+            return self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute vec4 a_Color;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_LightDir; // 定向光方向
-                out vec4 v_Color;
-                out float v_Costheta;
+                varying vec4 v_Color;
+                varying float v_Costheta;
  
+                """ + self.glsl_functions + """
+
                 void main() { 
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     v_Color = a_Color;
@@ -904,19 +962,19 @@ class SkyLight(_Light):
                 }
             """
         else:
-            return """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in %s a_Texcoord;
+            return self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute %s a_Texcoord;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
                 uniform vec3 u_LightDir; // 定向光方向
-                out %s v_Texcoord;
-                out float v_Costheta;
+                varying %s v_Texcoord;
+                varying float v_Costheta;
  
+                """ % (self.texcoodr_type, self.texcoodr_type) + self.glsl_functions + """
+
                 void main() { 
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     v_Texcoord = a_Texcoord;
@@ -925,17 +983,15 @@ class SkyLight(_Light):
                     vec3 normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
                     v_Costheta = dot(normal, normalize(-u_LightDir)) * 0.5 + 0.5;
                 }
-            """ % (self.a_dtype, self.a_dtype)
+            """
  
     def get_fshader(self, texture):
         """返回使用颜色的片元着色器源码"""
  
         if texture is None:
-            return """
-                #version 330 core
- 
-                in vec4 v_Color;
-                in float v_Costheta;
+            return self.glsl_version + """
+                varying vec4 v_Color;
+                varying float v_Costheta;
                 uniform vec3 u_SkyColor; // 天空光线颜色
                 uniform vec3 u_GroundColor; // 地面光线颜色
                 uniform int u_Picked;
@@ -953,18 +1009,16 @@ class SkyLight(_Light):
                 } 
             """
         else:
-            return """
-                #version 330 core
- 
-                in %s v_Texcoord;
-                in float v_Costheta;
+            return self.glsl_version + """
+                varying %s v_Texcoord;
+                varying float v_Costheta;
                 uniform %s u_Texture;
                 uniform vec3 u_SkyColor; // 天空光线颜色
                 uniform vec3 u_GroundColor; // 地面光线颜色
                 uniform int u_Picked;
  
                 void main() { 
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     float costheta = v_Costheta;
                     if (!gl_FrontFacing) 
                         costheta *= 0.5;
@@ -975,7 +1029,7 @@ class SkyLight(_Light):
                     else
                         gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a); 
                 } 
-            """ % (self.a_dtype, self.u_dtype)
+            """ % (self.texcoodr_type, self.sampler_type, self.texture_func)
  
 class SphereLight(_Light):
     """球谐光照模型"""
@@ -1127,18 +1181,18 @@ class SphereLight(_Light):
         """返回使用颜色的顶点着色器源码"""
  
         if texture is None:
-            return """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in vec4 a_Color;
+            return self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute vec4 a_Color;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
-                out vec4 v_Color;
-                out vec3 v_Normal;
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
  
+                """ + self.glsl_functions + """
+
                 void main() { 
                     v_Color = a_Color;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
@@ -1148,18 +1202,18 @@ class SphereLight(_Light):
                 }
             """
         else:
-            return """
-                #version 330 core
- 
-                in vec4 a_Position;
-                in vec3 a_Normal;
-                in %s a_Texcoord;
+            return self.glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Normal;
+                attribute %s a_Texcoord;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
-                out %s v_Texcoord;
-                out vec3 v_Normal;
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
  
+                """ % (self.texcoodr_type, self.texcoodr_type) + self.glsl_functions + """
+
                 void main() { 
                     v_Texcoord = a_Texcoord;
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
@@ -1167,17 +1221,15 @@ class SphereLight(_Light):
                     mat4 NormalMatrix = transpose(inverse(u_ModelMatrix));
                     v_Normal = normalize(vec3(NormalMatrix * vec4(a_Normal, 1.0)));
                 }
-            """ % (self.a_dtype, self.a_dtype)
+            """
  
     def get_fshader(self, texture):
         """返回使用颜色的片元着色器源码"""
  
         if texture is None:
-            return """
-                #version 330 core
- 
-                in vec4 v_Color;
-                in vec3 v_Normal;
+            return self.glsl_version + """
+                varying vec4 v_Color;
+                varying vec3 v_Normal;
                 const float C1 = 0.429043;
                 const float C2 = 0.511664;
                 const float C3 = 0.743125;
@@ -1209,11 +1261,9 @@ class SphereLight(_Light):
                 } 
             """ % self.parameter
         else: 
-            return """
-                #version 330 core
- 
-                in %s v_Texcoord;
-                in vec3 v_Normal;
+            return self.glsl_version + """
+                varying %s v_Texcoord;
+                varying vec3 v_Normal;
                 const float C1 = 0.429043;
                 const float C2 = 0.511664;
                 const float C3 = 0.743125;
@@ -1237,7 +1287,7 @@ class SphereLight(_Light):
                             + 2.0 * C2 * L10 * v_Normal.z;
  
                     diffuse *= u_ScaleFactor;
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     vec3 rgb = color.rgb * diffuse;
 
                     if (u_Picked == 0)
@@ -1245,5 +1295,5 @@ class SphereLight(_Light):
                     else
                         gl_FragColor = vec4(min(rgb*1.5, vec3(1.0)), color.a); 
                 } 
-            """ % (self.a_dtype, self.parameter, self.u_dtype)
+            """ % (self.texcoodr_type, self.parameter, self.sampler_type, self.texture_func)
         

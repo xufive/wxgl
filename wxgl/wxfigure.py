@@ -7,7 +7,6 @@ import imageio
 import wx
 import wx.lib.agw.aui as aui
 from wx.lib.embeddedimage import PyEmbeddedImage
-
 from . wxscene import WxScene
 from . import imgres
 

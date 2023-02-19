@@ -20,9 +20,17 @@ class FontManager:
                 self.fonts.update({item.name: [item]})
  
         # 设置默认字体
-        for item in ('Microsoft YaHei', 'STSong', 'FangSong', 'Songti SC', 'DejaVu Sans'):
+        for item in ('Microsoft YaHei', 'STSong', 'FangSong', 'Songti SC'):
             if item in self.fonts:
                 self.default_font = item
+                break
+        else:
+            for item in self.fonts:
+                if 'Song' in item or 'Hei' in item:
+                    self.default_font = item
+                    break
+            else:
+                self.default_font = 'DejaVu Sans'
  
     def get_font_list(self):
         """返回当前系统可用字体列表"""

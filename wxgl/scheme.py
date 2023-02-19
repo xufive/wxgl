@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-import os
+import sys
 import uuid
 import numpy as np
 from OpenGL.GL import *
-from . light import *
 from . texture import Texture
 from . import util
+from . light import *
+
+PLATFORM = sys.platform.lower()
 
 class Scheme:
     """应用于三维场景中的展示方案类"""
@@ -190,12 +192,14 @@ class Scheme:
         texture = Texture(im_text, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
         tsize = (size*im_text.shape[1]/im_text.shape[0], size)
         light = Text2dLight(ambient)
+        vid = np.array([0,1,2,3], dtype=np.float32)
 
         self.model(light.get_model(GL_TRIANGLE_STRIP, box, 
             texture     = texture, 
             texcoord    = texcoord, 
             align       = align, 
             tsize       = tsize,
+            vid         = vid,
             visible     = visible,
             inside      = inside,
             slide       = slide
@@ -249,6 +253,10 @@ class Scheme:
         else:
             idx = np.arange(vs.shape[0])
 
+        if PLATFORM == 'darwin' and not texture is None:
+            texture = None
+            print('MacOS平台暂不支持sprite')
+            
         if not texture is None:
             if isinstance(texture, str):
                 texture = Texture(texture)
@@ -1363,17 +1371,24 @@ class Scheme:
         def text3d_ticks(text, box, color, loc, cull, align, bg=None, padding=0):
             """标注"""
 
-            vshader = """
-                #version 330 core
+            if PLATFORM == 'darwin':
+                glsl_version = ''
+                sampler_type = 'sampler3D'
+                texture_name = 'texture3D'
+            else:
+                glsl_version = '#version 330 core \n\n'
+                sampler_type = 'sampler2DArray'
+                texture_name = 'texture'
 
-                in vec4 a_Position;
-                in vec3 a_Texcoord;
-                in float a_TickLoc;
+            vshader = glsl_version + """
+                attribute vec4 a_Position;
+                attribute vec3 a_Texcoord;
+                attribute float a_TickLoc;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
-                out vec3 v_Texcoord;
-                out float v_Loc;
+                varying vec3 v_Texcoord;
+                varying float v_Loc;
 
                 void main() { 
                     gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
@@ -1382,52 +1397,50 @@ class Scheme:
                 }
             """
 
-            fshader = """
-                #version 330 core
-
-                in vec3 v_Texcoord;
-                in float v_Loc;
+            fshader = glsl_version + """
+                varying vec3 v_Texcoord;
+                varying float v_Loc;
                 uniform vec3 u_AmbientColor;
-                uniform sampler2DArray u_Texture;
+                uniform %s u_Texture;
                 uniform vec2 u_Ae;
 
                 void main() { 
-                    if (u_Ae[1] > 90 || u_Ae[1] < -90) discard;
+                    if (u_Ae[1] > 90.0 || u_Ae[1] < -90.0) discard;
 
-                    if (v_Loc == 0.0 && (u_Ae[0] < 0 || u_Ae[0] >= 90)) discard;
-                    if (v_Loc == 1.0 && (u_Ae[0] < -90 || u_Ae[0] >= 0)) discard;
-                    if (v_Loc == 2.0 && u_Ae[0] >= -90) discard;
-                    if (v_Loc == 3.0 && u_Ae[0] < 90) discard;
+                    if (v_Loc == 0.0 && (u_Ae[0] < 0.0 || u_Ae[0] >= 90.0)) discard;
+                    if (v_Loc == 1.0 && (u_Ae[0] < -90.0 || u_Ae[0] >= 0.0)) discard;
+                    if (v_Loc == 2.0 && u_Ae[0] >= -90.0) discard;
+                    if (v_Loc == 3.0 && u_Ae[0] < 90.0) discard;
 
-                    if (u_Ae[1] < 0) {
+                    if (u_Ae[1] < 0.0) {
                         if (v_Loc == 10.0 || v_Loc == 11.0) discard;
-                        if (v_Loc == 13.0 && u_Ae[0] >= -90 && u_Ae[0] < 90) discard;
-                        if (v_Loc == 12.0 && (u_Ae[0] >= 90 || u_Ae[0] < -90)) discard;
+                        if (v_Loc == 13.0 && u_Ae[0] >= -90.0 && u_Ae[0] < 90.0) discard;
+                        if (v_Loc == 12.0 && (u_Ae[0] >= 90.0 || u_Ae[0] < -90.0)) discard;
                     }
 
-                    if (u_Ae[1] >= 0) {
+                    if (u_Ae[1] >= 0.0) {
                         if (v_Loc == 12.0 || v_Loc == 13.0) discard;
-                        if (v_Loc == 11.0 && u_Ae[0] >= -90 && u_Ae[0] < 90) discard;
-                        if (v_Loc == 10.0 && (u_Ae[0] >= 90 || u_Ae[0] < -90)) discard;
+                        if (v_Loc == 11.0 && u_Ae[0] >= -90.0 && u_Ae[0] < 90.0) discard;
+                        if (v_Loc == 10.0 && (u_Ae[0] >= 90.0 || u_Ae[0] < -90.0)) discard;
                     }
 
-                    if (u_Ae[1] < 0) {
+                    if (u_Ae[1] < 0.0) {
                         if (v_Loc == 20.0 || v_Loc == 21.0) discard;
-                        if (v_Loc == 23.0 && u_Ae[0] >= 0) discard;
-                        if (v_Loc == 22.0 && u_Ae[0] < 0) discard;
+                        if (v_Loc == 23.0 && u_Ae[0] >= 0.0) discard;
+                        if (v_Loc == 22.0 && u_Ae[0] < 0.0) discard;
                     }
 
-                    if (u_Ae[1] >= 0) {
+                    if (u_Ae[1] >= 0.0) {
                         if (v_Loc == 22.0 || v_Loc == 23.0) discard;
-                        if (v_Loc == 21.0 && u_Ae[0] >= 0) discard;
-                        if (v_Loc == 20.0 && u_Ae[0] < 0) discard;
+                        if (v_Loc == 21.0 && u_Ae[0] >= 0.0) discard;
+                        if (v_Loc == 20.0 && u_Ae[0] < 0.0) discard;
                     }
 
-                    vec4 color = texture(u_Texture, v_Texcoord);
+                    vec4 color = %s(u_Texture, v_Texcoord);
                     vec3 rgb = color.rgb * u_AmbientColor;
                     gl_FragColor = vec4(rgb, color.a);
                 } 
-            """
+            """ % (sampler_type, texture_name)
 
             loc = np.repeat(np.array(loc, dtype=np.float32), 4)
             color = np.array(color, dtype=np.float32)
@@ -1438,16 +1451,21 @@ class Scheme:
             if bg is None:
                 bg = [None for i in range(len(text))]
 
-            im_arr, texcoord = list(), list()
-            rows_max, cols_max = 0, 0
-            for i in range(len(text)):
+            im_arr, nim_arr, texcoord = list(), list(), list()
+            rows_max, cols_max, text_n = 0, 0, len(text)
+            for i in range(text_n):
                 im = util.text2img(text[i], 64, color[i], bg=bg[i], padding=padding)
                 rows_max = max(im.shape[0], rows_max)
                 cols_max = max(im.shape[1], cols_max)
                 im_arr.append(im)
-                texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
 
-            nim_arr = list()
+                if PLATFORM == 'darwin':
+                    k = i/(text_n-1)
+                    texcoord.append(np.array([[0,0,k],[0,1,k],[1,1,k],[1,0,k]], dtype=np.float32))
+                else:
+                    texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
+            texcoord = np.vstack(texcoord)
+
             for im in im_arr:
                 if im.shape[0] < rows_max:
                     n = rows_max - im.shape[0]
@@ -1490,8 +1508,10 @@ class Scheme:
                     box[i][2] -= offset
                     box[i][3] -= offset
 
-            texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
-            texcoord = np.vstack(texcoord)
+            if PLATFORM == 'darwin':
+                texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_3D, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+            else:
+                texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
 
             m = Model(GL_QUADS, vshader, fshader, visible=True, opacity=True, inside=False)
             m.set_vertex('a_Position', box, None)

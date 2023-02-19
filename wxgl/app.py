@@ -6,7 +6,7 @@ from . scheme import Scheme
 try:
     from . wxfigure import show_wxfigure
     wx_is_available = True
-except Exception as e:
+except:
     wx_is_available = False
     
 try:

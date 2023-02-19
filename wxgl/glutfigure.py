@@ -5,7 +5,6 @@ import numpy as np
 import threading
 import imageio
 from OpenGL.GLUT import *
-
 from . scene import BaseScene
 
 if sys.platform.lower() != 'darwin':

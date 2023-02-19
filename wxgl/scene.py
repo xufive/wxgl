@@ -3,11 +3,9 @@
 import time
 import numpy as np
 from PIL import Image
-
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL import shaders
-
 from . import util
 
 class BaseScene:

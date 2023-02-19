@@ -2,8 +2,7 @@
 
 import sys
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtCore import Qt, pyqtSignal
-
+from PyQt6.QtCore import Qt
 from . scene import BaseScene
 
 PLATFORM = sys.platform.lower()
@@ -18,7 +17,11 @@ class QtScene(BaseScene, QOpenGLWidget):
         super(BaseScene, self).__init__(parent)
 
         self.factor = int(parent.devicePixelRatio())
-        self.offset = (85*self.factor, 113*self.factor) if PLATFORM == 'darwin' else (85*self.factor, 110*self.factor)
+        if PLATFORM == 'darwin':
+            self.offset = (85*self.factor, 113*self.factor)
+        else:
+            self.offset = (80*self.factor, 108*self.factor)
+
         self.timer_id = self.startTimer(0, Qt.TimerType.CoarseTimer)
 
     def timerEvent(self, evt):

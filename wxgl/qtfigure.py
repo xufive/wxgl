@@ -2,7 +2,6 @@
 
 import sys, os, time
 import numpy as np
-import threading
 import imageio
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QIcon, QAction, QImage, QPixmap
