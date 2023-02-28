@@ -253,7 +253,7 @@ class Scheme:
 
         if PLATFORM == 'darwin' and not texture is None:
             texture = None
-            print('MacOS平台暂不支持sprite')
+            print('MacOS平台不支持点精灵模式')
             
         if not texture is None:
             if isinstance(texture, str):
@@ -1179,11 +1179,11 @@ class Scheme:
         self.models[1].update({'caption_text': m_text})
         self.models[1].update({'caption_line': m_line})
 
-    def colorbar(self, cm, data, ff=str, endpoint=True):
+    def colorbar(self, data, cm='viridis', ff=str, endpoint=True):
         """设置调色板
 
-        cm          - 调色板名称
         data        - 值域范围或刻度序列：长度大于1的元组或列表
+        cm          - 调色板名称
         kwds        - 关键字参数
         ff          - 刻度标注格式化函数，默认str
         endpoint    - 刻度是否包含值域范围的两个端点值
@@ -1214,9 +1214,7 @@ class Scheme:
         if len(data) == 2:
             data = self._get_series(data[0], data[-1], endpoint)
 
-        vs_line = list()
-        ys = list()
-        texcoord = np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32)
+        vs_line, ys = list(), list()
         for t in data:
             y = (top-bottom)*(t-dmin)/(dmax-dmin) + bottom
             vs_line.extend([[right,y,0], [right+w,y,0]])
@@ -1231,14 +1229,15 @@ class Scheme:
 
         # 绘制刻度文本
         # --------------------------------------------------------------------
-        im_arr, texcoord, box = list(), list(), list()
+        im_arr, tcrd_arr, box = list(), list(), list()
         rows_max, cols_max = 0, 0
         for i in range(len(data)):
             im = util.text2img(ff(data[i]), 64, self.fg)
             rows_max = max(im.shape[0], rows_max)
             cols_max = max(im.shape[1], cols_max)
             im_arr.append(im)
-            texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
+
+            tcrd_arr.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
             box.append([[0,ys[i]+h,0], [0,ys[i]-h,0], [1,ys[i]-h,0], [1,ys[i]+h,0]])
         
         nim_arr = list()
@@ -1270,15 +1269,25 @@ class Scheme:
             k_box, k_text = box_width/box_height, nim_arr[i].shape[1]/nim_arr[i].shape[0]
 
             offset = (box[i][2]-box[i][1])*k_text/k_box
+            if PLATFORM == 'darwin':
+                offset *= 3.5
+
             box[i][2] = box[i][1] + offset
             box[i][3] = box[i][0] + offset
 
-        texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
-        texcoord = np.vstack(texcoord)
-        
-        m_label = light.get_model(GL_QUADS, box, texture=texture, texcoord=texcoord, opacity=False, inside=False)
-        m_label.verify()
-        self.models[2].update({'cb_label': m_label})
+        if PLATFORM == 'darwin':
+            for i in range(len(nim_arr)):
+                texture = Texture(nim_arr[i], ttype=GL_TEXTURE_2D, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+                m_label = light.get_model(GL_QUADS, box[i], texture=texture, texcoord=tcrd_arr[i][:,:2], opacity=False, inside=False)
+                m_label.verify()
+                self.models[2].update({'cb_label_%d'%i: m_label})
+        else:
+            texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+            texcoord = np.vstack(tcrd_arr)
+
+            m_label = light.get_model(GL_QUADS, box, texture=texture, texcoord=texcoord, opacity=False, inside=False)
+            m_label.verify()
+            self.models[2].update({'cb_label': m_label})
 
     def _axes(self):
         """坐标轴"""
