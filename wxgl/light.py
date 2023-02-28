@@ -22,7 +22,7 @@ class _Light:
         self.pellucid = kwds.get('pellucid')            # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
         self.factor = kwds.get('factor')                # 反射衰减因子：值域范围[0.0,1.0]，仅用于球谐光照模型
         self.cpos = kwds.get('cpos')                    # 相机位置
-        self.mvp = kwds.get('mvp', True)                # 使用MVP矩阵
+        self.fixed = kwds.get('fixed', False)           # 使用固定的MVP矩阵
 
         self.texcoodr_type = None                       # 纹理坐标数据类型（attribute变量）
         self.sampler_type = None                        # 纹理采样器类型（uniform变量）
@@ -133,8 +133,11 @@ class _Light:
                 self.texture_func = 'texture2D'
             elif texture.ttype == GL_TEXTURE_2D_ARRAY:
                 self.texcoodr_type = 'vec3'
-                self.sampler_type = 'sampler2DArray'
-                self.texture_func = 'texture3D' # 待定
+                if self.platform == 'darwin':
+                    self.sampler_type = 'sampler3D'
+                    self.texture_func = 'texture3D'
+                else:
+                    self.sampler_type = 'sampler2DArray'
             elif texture.ttype == GL_TEXTURE_3D:
                 self.texcoodr_type = 'vec3'
                 self.sampler_type = 'sampler3D'
@@ -198,7 +201,7 @@ class _Light:
         m.set_fill_mode(fill)
         m.set_slide(slide)
 
-        if self.mvp:
+        if not self.fixed:
             m.set_proj_matrix('u_ProjMatrix')
             m.set_view_matrix('u_ViewMatrix')
             m.set_model_matrix('u_ModelMatrix', transform)
@@ -482,10 +485,10 @@ class Text2dLight(_Light):
 class BaseLight(_Light):
     """环境光照模型"""
  
-    def __init__(self, ambient=(1.0,1.0,1.0), mvp=True):
+    def __init__(self, ambient=(1.0,1.0,1.0), fixed=False):
         """构造函数"""
  
-        _Light.__init__(self, ambient=ambient, mvp=mvp)
+        _Light.__init__(self, ambient=ambient, fixed=fixed)
  
     def get_model(self, gltype, vs, **kwds):
         """返回模型对象"""
@@ -496,33 +499,27 @@ class BaseLight(_Light):
     def get_vshader(self, texture):
         """返回顶点着色器源码"""
  
-        if self.mvp:
+        if self.fixed:
             if texture is None:
                 shader_src = self.glsl_version + """
                     attribute vec4 a_Position;
                     attribute vec4 a_Color;
-                    uniform mat4 u_ProjMatrix;
-                    uniform mat4 u_ViewMatrix;
-                    uniform mat4 u_ModelMatrix;
                     varying vec4 v_Color;
  
                     void main() { 
                         v_Color = a_Color;
-                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                        gl_Position = a_Position; 
                     }
                 """
             else:
                 shader_src = self.glsl_version + """
                     attribute vec4 a_Position;
                     attribute %s a_Texcoord;
-                    uniform mat4 u_ProjMatrix;
-                    uniform mat4 u_ViewMatrix;
-                    uniform mat4 u_ModelMatrix;
                     varying %s v_Texcoord;
  
                     void main() { 
                         v_Texcoord = a_Texcoord;
-                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
+                        gl_Position = a_Position; 
                     }
                 """ % (self.texcoodr_type, self.texcoodr_type)
         else:
@@ -530,22 +527,28 @@ class BaseLight(_Light):
                 shader_src = self.glsl_version + """
                     attribute vec4 a_Position;
                     attribute vec4 a_Color;
+                    uniform mat4 u_ProjMatrix;
+                    uniform mat4 u_ViewMatrix;
+                    uniform mat4 u_ModelMatrix;
                     varying vec4 v_Color;
  
                     void main() { 
                         v_Color = a_Color;
-                        gl_Position = a_Position; 
+                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     }
                 """
             else:
                 shader_src = self.glsl_version + """
                     attribute vec4 a_Position;
                     attribute %s a_Texcoord;
+                    uniform mat4 u_ProjMatrix;
+                    uniform mat4 u_ViewMatrix;
+                    uniform mat4 u_ModelMatrix;
                     varying %s v_Texcoord;
  
                     void main() { 
                         v_Texcoord = a_Texcoord;
-                        gl_Position = a_Position; 
+                        gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position; 
                     }
                 """ % (self.texcoodr_type, self.texcoodr_type)
  

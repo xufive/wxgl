@@ -214,7 +214,6 @@ class Scheme:
             size        - 点的大小：数值或数值型元组、列表或numpy数组
             data        - 数据集：元组、列表或numpy数组，shape=(n,)
             cm          - 调色板
-            alpha       - 透明度
             texture     - 纹理图片，或2D纹理对象
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
@@ -224,16 +223,15 @@ class Scheme:
             name        - 模型或部件名
         """
 
-        keys = ['color', 'size', 'data', 'cm', 'alpha', 'texture', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
+        keys = ['color', 'size', 'data', 'cm', 'texture', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
         for key in kwds:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
-        color = kwds.get('color', self.fg)
+        color = kwds.get('color')
         size = kwds.get('size', 3.0)
         data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
-        alpha = kwds.get('alpha', 1.0)
         texture = kwds.get('texture')
         visible = kwds.get('visible', True)
         inside = kwds.get('inside', True)
@@ -268,7 +266,7 @@ class Scheme:
         elif data is None:
             color = self._format_color(color, vs.shape[0])[idx]
         else:
-            color = util.cmap(np.array(data), cm, alpha=alpha)[idx]
+            color = util.cmap(np.array(data), cm)[idx]
 
         self.model(light.get_model(GL_POINTS, vs[idx], 
             color       = color, 
@@ -288,7 +286,6 @@ class Scheme:
             color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
             data        - 数据集：元组、列表或numpy数组，shape=(n,)
             cm          - 调色板
-            alpha       - 透明度
             method      - 绘制方法：'isolate'-独立线段，'strip'-连续线段（默认），'loop'-闭合线段
             width       - 线宽：0.0~10.0之间，None使用默认设置
             stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
@@ -300,10 +297,7 @@ class Scheme:
             name        - 模型或部件名
         """
 
-        keys = [
-            'color','data','cm','alpha','method','width','stipple',
-            'visible','inside','slide','transform','ambient','name'
-        ]
+        keys = ['color', 'data', 'cm', 'method', 'width', 'stipple', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
         for key in kwds:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
@@ -311,7 +305,6 @@ class Scheme:
         color = kwds.get('color')
         data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
-        alpha = kwds.get('alpha', 1.0)
         method = kwds.get('method', 'strip')
         width = kwds.get('width')
         stipple = kwds.get('stipple')
@@ -325,7 +318,7 @@ class Scheme:
         light = BaseLight(kwds.pop('ambient') if 'ambient' in kwds else (1.0,1.0,1.0))
         gltype = {'isolate':GL_LINES, 'strip':GL_LINE_STRIP, 'loop':GL_LINE_LOOP}[method.lower()]
         vs = np.array(vs, dtype=np.float32)
-        color = self._format_color(color, vs.shape[0]) if data is None else util.cmap(np.array(data), cm, alpha=alpha)
+        color = self._format_color(color, vs.shape[0]) if data is None else util.cmap(np.array(data), cm)
 
         self.model(light.get_model(gltype, vs, 
             color       = color, 
@@ -372,7 +365,7 @@ class Scheme:
         color = kwds.get('color')
         data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
-        alpha = kwds.get('alpha', 1.0)
+        alpha = kwds.get('alpha')
         texture = kwds.get('texture')
         texcoord = kwds.get('texcoord')
         method = kwds.get('method', 'isolate')
@@ -467,7 +460,7 @@ class Scheme:
         color = kwds.get('color')
         data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
-        alpha = kwds.get('alpha', 1.0)
+        alpha = kwds.get('alpha')
         texture = kwds.get('texture')
         texcoord = kwds.get('texcoord')
         method = kwds.get('method', 'isolate')
@@ -558,7 +551,7 @@ class Scheme:
         color = kwds.get('color')
         data = kwds.get('data')
         cm = kwds.get('cm', 'viridis')
-        alpha = kwds.get('alpha', 1.0)
+        alpha = kwds.get('alpha')
         texture = kwds.get('texture')
         texcoord = kwds.get('texcoord')
         ccw = kwds.get('ccw', True)
@@ -1178,7 +1171,7 @@ class Scheme:
         vs = [[-0.8,-0.9,0], [0,-0.9,0], [0.8,-0.9,0]]
         color = [[*color[:3],0.2], [*color[:3],1.0], [*color[:3],0.2]]
 
-        light = BaseLight(mvp=False)
+        light = BaseLight(fixed=True)
         m_text = light.get_model(GL_QUADS, box, texture=texture, texcoord=texcoord, opacity=False, inside=False)
         m_line = light.get_model(GL_LINE_STRIP, vs, color=color, lw=1)
         m_text.verify()
@@ -1196,7 +1189,7 @@ class Scheme:
         endpoint    - 刻度是否包含值域范围的两个端点值
         """
  
-        light = BaseLight(mvp=False)
+        light = BaseLight(fixed=True)
         left, right, top, bottom = -0.8, -0.3, 0.8, -0.8
         w, h = 0.2, 0.025 # 刻度线长度、标注文本高度
 
