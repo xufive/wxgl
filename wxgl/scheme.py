@@ -333,7 +333,6 @@ class Scheme:
         yy = self._get_series(*self.r_y, extend=0.03)
         zz = self._get_series(*self.r_z, extend=0.03)
 
-        # -----------------------------------------------------------------------------------------
         def mesh2quad(xs, ys, zs):
             """mesh转quad"""
 
@@ -346,27 +345,29 @@ class Scheme:
 
             return vs.reshape(-1,3)[idx]
 
-        # -----------------------------------------------------------------------------------------
         def text3d_ticks(text, box, color, loc, cull, align, bg=None, padding=0):
             """标注"""
 
+            print(len(text), len(box), len(loc), len(align), len(bg))
             if PLATFORM == 'darwin':
                 glsl_version = ''
-                sampler_type = 'sampler3D'
-                texture_name = 'texture3D'
+                texcoord_type = 'vec2'
+                sampler_type = 'sampler2D'
+                texture_name = 'texture2D'
             else:
                 glsl_version = '#version 330 core \n\n'
+                texcoord_type = 'vec3'
                 sampler_type = 'sampler2DArray'
                 texture_name = 'texture'
 
             vshader = glsl_version + """
                 attribute vec4 a_Position;
-                attribute vec3 a_Texcoord;
+                attribute %s a_Texcoord;
                 attribute float a_TickLoc;
                 uniform mat4 u_ProjMatrix;
                 uniform mat4 u_ViewMatrix;
                 uniform mat4 u_ModelMatrix;
-                varying vec3 v_Texcoord;
+                varying %s v_Texcoord;
                 varying float v_Loc;
 
                 void main() { 
@@ -374,10 +375,10 @@ class Scheme:
                     v_Texcoord = a_Texcoord;
                     v_Loc = a_TickLoc;
                 }
-            """
+            """ % (texcoord_type, texcoord_type)
 
             fshader = glsl_version + """
-                varying vec3 v_Texcoord;
+                varying %s v_Texcoord;
                 varying float v_Loc;
                 uniform vec3 u_AmbientColor;
                 uniform %s u_Texture;
@@ -419,7 +420,7 @@ class Scheme:
                     vec3 rgb = color.rgb * u_AmbientColor;
                     gl_FragColor = vec4(rgb, color.a);
                 } 
-            """ % (sampler_type, texture_name)
+            """ % (texcoord_type, sampler_type, texture_name)
 
             loc = np.repeat(np.array(loc, dtype=np.float32), 4)
             color = np.array(color, dtype=np.float32)
@@ -431,19 +432,17 @@ class Scheme:
                 bg = [None for i in range(len(text))]
 
             im_arr, nim_arr, texcoord = list(), list(), list()
-            rows_max, cols_max, text_n = 0, 0, len(text)
-            for i in range(text_n):
+            rows_max, cols_max = 0, 0
+            for i in range(len(text)):
                 im = util.text2img(text[i], 64, color[i], bg=bg[i], padding=padding)
                 rows_max = max(im.shape[0], rows_max)
                 cols_max = max(im.shape[1], cols_max)
                 im_arr.append(im)
 
                 if PLATFORM == 'darwin':
-                    k = i/(text_n-1)
-                    texcoord.append(np.array([[0,0,k],[0,1,k],[1,1,k],[1,0,k]], dtype=np.float32))
+                    texcoord.append(np.array([[0,0],[0,1],[1,1],[1,0]], dtype=np.float32))
                 else:
                     texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
-            texcoord = np.vstack(texcoord)
 
             for im in im_arr:
                 if im.shape[0] < rows_max:
@@ -487,24 +486,39 @@ class Scheme:
                     box[i][2] -= offset
                     box[i][3] -= offset
 
+            m_list = list()
             if PLATFORM == 'darwin':
-                texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_3D, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+                for i in range(len(nim_arr)):
+                    texture = Texture(nim_arr[i], ttype=GL_TEXTURE_2D, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+                    m = Model(GL_QUADS, vshader, fshader, visible=True, opacity=True, inside=False)
+                    m.set_vertex('a_Position', box[i], None)
+                    m.set_texcoord('a_Texcoord', texcoord[i])
+                    m.add_texture('u_Texture', texture)
+                    m.set_argument('u_AmbientColor', (1.0,1.0,1.0))
+                    m.set_proj_matrix('u_ProjMatrix')
+                    m.set_view_matrix('u_ViewMatrix')
+                    m.set_model_matrix('u_ModelMatrix')
+                    m.set_argument('a_TickLoc', loc[i*4:i*4+4])
+                    m.set_ae('u_Ae')
+                    m.set_cull_mode(cull)
+                    m_list.append(m)
             else:
+                texcoord = np.vstack(texcoord)
                 texture = Texture(np.stack(nim_arr), ttype=GL_TEXTURE_2D_ARRAY, s_tile=GL_CLAMP_TO_EDGE, t_tile=GL_CLAMP_TO_EDGE)
+                m = Model(GL_QUADS, vshader, fshader, visible=True, opacity=True, inside=False)
+                m.set_vertex('a_Position', box, None)
+                m.set_texcoord('a_Texcoord', texcoord)
+                m.add_texture('u_Texture', texture)
+                m.set_argument('u_AmbientColor', (1.0,1.0,1.0))
+                m.set_proj_matrix('u_ProjMatrix')
+                m.set_view_matrix('u_ViewMatrix')
+                m.set_model_matrix('u_ModelMatrix')
+                m.set_argument('a_TickLoc', loc)
+                m.set_ae('u_Ae')
+                m.set_cull_mode(cull)
+                m_list.append(m)
 
-            m = Model(GL_QUADS, vshader, fshader, visible=True, opacity=True, inside=False)
-            m.set_vertex('a_Position', box, None)
-            m.set_texcoord('a_Texcoord', texcoord)
-            m.add_texture('u_Texture', texture)
-            m.set_argument('u_AmbientColor', (1.0,1.0,1.0))
-            m.set_proj_matrix('u_ProjMatrix')
-            m.set_view_matrix('u_ViewMatrix')
-            m.set_model_matrix('u_ModelMatrix')
-            m.set_argument('a_TickLoc', loc)
-            m.set_ae('u_Ae')
-            m.set_cull_mode(cull)
-
-            return m
+            return m_list
 
         # 以下绘制网格
         # ----------------------------------------------------------------------------------------------------
@@ -657,8 +671,9 @@ class Scheme:
 
         color = [self.fg for i in range(len(box)-12)] + [self.bg for i in range(12)]
         bg = [None for i in range(len(box)-12)] + [self.fg for i in range(12)]
-        m = text3d_ticks(text, box, color, loc, 'back', align, bg=bg, padding=20)
-        self.model(m, name=name)
+
+        for m in text3d_ticks(text, box, color, loc, 'back', align, bg=bg, padding=20):
+            self.model(m, name=name)
 
     def xrange(self, range_tuple):
         """设置x轴范围"""
