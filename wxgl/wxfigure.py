@@ -250,5 +250,4 @@ def show_wxfigure(scheme, **kwds):
     fig = WxFigure(scheme, **kwds)
     app.MainLoop()
     app.Destroy()
-    scheme.reset()
 

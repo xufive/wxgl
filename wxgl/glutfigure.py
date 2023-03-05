@@ -209,6 +209,5 @@ def show_figure(scheme, **kwds):
     glutMotionFunc(fig.drag)
     glutMainLoop()
     
-    scheme.reset()
     sys.exit()
 

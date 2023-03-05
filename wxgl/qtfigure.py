@@ -279,5 +279,4 @@ def show_qtfigure(scheme, **kwds):
     fig.show()
     app.exec()
     app.quit()
-    scheme.reset()
 

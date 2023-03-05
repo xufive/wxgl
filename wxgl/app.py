@@ -104,4 +104,5 @@ class App(Scheme):
         """显示画布"""
 
         self.savefig(None)
+        self._reset()
 
