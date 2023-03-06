@@ -309,7 +309,7 @@ class Scheme:
                 vs.extend([[x0, y0, z0-ext], [x0, y0, z0+ext]])
                 cones.append([[x0, y0, z0+ext], [x0, y0, z0+ext+h]]) 
 
-        self.multiline(vs, color=colors, inside=False)
+        self.line(vs, color=colors, pair=True, inside=False)
         self.cone(cones[0][1], cones[0][0], r, color=cx, name=name, inside=False)
         self.cone(cones[1][1], cones[1][0], r, color=cy, name=name, inside=False)
         self.cone(cones[2][1], cones[2][0], r, color=cz, name=name, inside=False)
@@ -348,7 +348,6 @@ class Scheme:
         def text3d_ticks(text, box, color, loc, cull, align, bg=None, padding=0):
             """标注"""
 
-            print(len(text), len(box), len(loc), len(align), len(bg))
             if PLATFORM == 'darwin':
                 glsl_version = ''
                 texcoord_type = 'vec2'
@@ -1033,6 +1032,7 @@ class Scheme:
             cm          - 调色板
             width       - 线宽：0.0~10.0之间，None使用默认设置
             stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
+            pair        - 顶点两两成对绘制多条线段，默认False
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             slide       - 幻灯片函数，默认None
@@ -1046,38 +1046,13 @@ class Scheme:
         cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
         width = kwds.pop('width') if 'width' in kwds else None
         stipple = kwds.pop('stipple') if 'stipple' in kwds else None
+        pair = kwds.pop('pair') if 'pair' in kwds else False
 
+        gltype = GL_LINES if pair else GL_LINE_STRIP
         if not data is None:
             color = util.cmap(np.array(data), cm)
-        self._line(vs, GL_LINE_STRIP, color, width, stipple, **kwds)
 
-    def multiline(self, vs, **kwds):
-        """多条线段
-
-        vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
-        kwds        - 关键字参数
-            color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
-            data        - 数据集：元组、列表或numpy数组，shape=(n,)
-            cm          - 调色板
-            width       - 线宽：0.0~10.0之间，None使用默认设置
-            stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
-            visible     - 是否可见，默认True
-            inside      - 模型顶点是否影响模型空间，默认True
-            slide       - 幻灯片函数，默认None
-            transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
-            ambient     - 环境光，默认(1.0,1.0,1.0)
-            name        - 模型或部件名
-        """
-
-        color = kwds.pop('color') if 'color' in kwds else None
-        data = kwds.pop('data') if 'data' in kwds else None
-        cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
-        width = kwds.pop('width') if 'width' in kwds else None
-        stipple = kwds.pop('stipple') if 'stipple' in kwds else None
-
-        if not data is None:
-            color = util.cmap(np.array(data), cm)
-        self._line(vs, GL_LINES, color, width, stipple, **kwds)
+        self._line(vs, gltype, color, width, stipple, **kwds)
 
     def surface(self, vs, **kwds):
         """曲面
