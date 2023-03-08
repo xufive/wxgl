@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 
 import sys
+import os, sys
 import numpy as np
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout
-from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QFileDialog
 from PyQt6.QtCore import Qt
-
 import wxgl
-import wxgl.qtscene
 
 class MyWindow(QWidget):
     """从QWidget类派生的桌面应用程序窗口类"""
@@ -17,103 +15,94 @@ class MyWindow(QWidget):
         
         super().__init__()
         
-        self.setWindowTitle('多场景测试')
+        self.setWindowTitle('在PyQt中使用WxGL')
         self.setGeometry(0, 0, 1200, 800) # 设置窗位置和大小
         
-        self.canvas_1 = wxgl.qtscene.QtScene(self, self.draw_scatter())
-        self.canvas_2 = wxgl.qtscene.QtScene(self, self.draw_line(), menu=False)
-        self.canvas_3 = wxgl.qtscene.QtScene(self, self.draw_mesh())
-        self.canvas_4 = wxgl.qtscene.QtScene(self, self.draw_surface())
+        self.scene = wxgl.qtscene.QtScene(self, self.draw())
+        self.visible = True
 
-        hbox_1 = QHBoxLayout()
-        hbox_1.addSpacing(10)
-        hbox_1.addWidget(self.canvas_1)
-        hbox_1.addWidget(self.canvas_2)
-        hbox_1.addSpacing(10)
-        
-        hbox_2 = QHBoxLayout()
-        hbox_2.addSpacing(10)
-        hbox_2.addWidget(self.canvas_3)
-        hbox_2.addWidget(self.canvas_4)
-        hbox_2.addSpacing(10)
+        btn_home = QPushButton('复位')
+        btn_animate = QPushButton('启动/停止')
+        btn_visible = QPushButton('隐藏/显示')
+        btn_save = QPushButton('保存')
 
         vbox = QVBoxLayout() 
-        vbox.addSpacing(10)
-        vbox.addLayout(hbox_1)
-        vbox.addSpacing(5)
-        vbox.addLayout(hbox_2)
-        vbox.addSpacing(10)
+        vbox.addSpacing(40)
+        vbox.addWidget(btn_home)
+        vbox.addSpacing(40)
+        vbox.addWidget(btn_animate)
+        vbox.addSpacing(40)
+        vbox.addWidget(btn_visible)
+        vbox.addSpacing(40)
+        vbox.addWidget(btn_save)
+        vbox.addStretch(1)
 
-        # 将垂直布局管理器应用到窗口
-        self.setLayout(vbox)
+        hbox = QHBoxLayout()
+        hbox.setSpacing(20)
+        hbox.setContentsMargins(10,10,20,10)
+        hbox.addWidget(self.scene, stretch=1)
+        hbox.addLayout(vbox)
+        
+        self.setLayout(hbox)
+        self.show()
 
-        self.show() # 显示窗口
+        btn_home.clicked.connect(self.on_home)
+        btn_animate.clicked.connect(self.on_animate)
+        btn_visible.clicked.connect(self.on_visible)
+        btn_save.clicked.connect(self.on_save)
 
     def closeEvent(self, evt):
-        self.canvas_1.clear_buffer()
-        self.canvas_2.clear_buffer()
-        self.canvas_3.clear_buffer()
-        self.canvas_4.clear_buffer()
+        self.scene.clear_buffer()
 
-    def draw_scatter(self):
-        vs = np.random.random((30, 3))*2-1
-        data = np.arange(30)
+    def draw(self):
+        """绘制网格球和圆柱的组合体"""
 
+        tf = lambda t : ((0, 1, 0, (0.03*t)%360), )
         sch = wxgl.Scheme()
-        sch.scatter(vs, data=data, size=50, alpha=0.8)
+        sch.sphere((0,0,0), 1, fill=False)
+        sch.cylinder((-1.2,0,0), (1.2,0,0), 0.3, color='cyan', transform=tf, name='cudgel')
+        sch.circle((-1.2,0,0), 0.3, vec=(-1,0,0), color='cyan', transform=tf, name='cudgel')
+        sch.circle((1.2,0,0), 0.3, vec=(1,0,0), color='cyan', transform=tf, name='cudgel')
+        sch.axes()
         
         return sch
 
-    def draw_surface(self):
-        vs = np.array([
-            [-0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [-0.5, -0.5, 0.5],
-            [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]
-        ], dtype=np.float32)
+    def on_home(self):
+        """点击复位按钮"""
 
-        indices = np.array([
-            0, 3, 1, 1, 3, 2, 4, 0, 5, 5, 0, 1, 3, 7, 2, 2, 7, 6, 
-            7, 4, 6, 6, 4, 5, 1, 2, 5, 5, 2, 6, 4, 7, 0, 0, 7, 3  
-        ], dtype=np.int32)
+        self.scene.home()
 
-        texcoord = np.tile(np.array([[0,0],[0,1],[1,0],[1,0],[0,1],[1,1]], dtype=np.float32), (6,1))
-        #light = wxgl.SunLight(direction=(0.2,-0.5,-1))
-        tf = lambda t : ((1,0,0,(0.05*t)%360),)
-        cf = lambda t : {'azim': (0.05*t)%360}
+    def on_animate(self):
+        """点击启动/停止按钮"""
 
-        sch = wxgl.Scheme()
-        sch.cruise(cf)
-        sch.surface(vs[indices], texture='res/earth.jpg', texcoord=texcoord, transform=tf)
-        
-        return sch
+        self.scene.pause()
 
-    def draw_line(self):
-        vs = np.array([
-            [-0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [-0.5, -0.5, 0.5],
-            [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]
-        ], dtype=np.float32)
-        data = np.arange(8)
+    def on_visible(self):
+        """点击隐藏/显示按钮"""
 
-        sch = wxgl.Scheme()
-        sch.line(vs, data=data, alpha=1, method='loop')
-        sch.text('2D文字Hello', [0.5,0,0], size=64)
-        
-        return sch
+        self.visible = not self.visible
+        self.scene.set_visible('cudgel', self.visible)
 
-    def draw_mesh(self):
-        v, u = np.mgrid[-0.5*np.pi:0.5*np.pi:30j, 0:2*np.pi:60j]
-        x = np.cos(v)*np.cos(u)
-        y = np.cos(v)*np.sin(u)
-        z = np.sin(v)
+    def on_save(self):
+        """点击保存按钮"""
 
-        light_y = wxgl.SunLight(direction=(0.2, -0.5, -1))
-        light_z = wxgl.SunLight(direction=(0.2, 1, -0.5))
-        cf = lambda t : {'azim': (0.05*t)%360}
+        self.scene.stop_idle()
+        im = self.scene.get_buffer()
 
-        sch = wxgl.Scheme()
-        sch.cruise(cf)
-        sch.mesh(x, z, y, data=z, light=light_y, ccw=False, fill=False)
+        file_type = 'PNG files (*.png);;JPEG file (*.jpg)'
+        fname, fext = QFileDialog.getSaveFileName(self, '保存文件', directory=os.getcwd(), filter=file_type)
+        name, ext = os.path.splitext(fname)
 
-        return sch
+        if name:
+            if ext != '.png' and ext != '.jpg':
+                ext = '.png' if fext == 'PNG files (*.png)' else '.jpg'
+
+            if ext == '.jpg':
+                im.convert('RGB').save('%s%s'%(name, ext))
+            else:
+                im.save('%s%s'%(name, ext))
+
+        self.scene.start_idle()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv) 

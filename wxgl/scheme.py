@@ -313,9 +313,9 @@ class Scheme:
         self.cone(cones[0][1], cones[0][0], r, color=cx, name=name, inside=False)
         self.cone(cones[1][1], cones[1][0], r, color=cy, name=name, inside=False)
         self.cone(cones[2][1], cones[2][0], r, color=cz, name=name, inside=False)
-        self.fan(cones[0][0], r, vec=np.array(cones[0][0])-np.array(cones[0][1]), color=cx, name=name, inside=False)
-        self.fan(cones[1][0], r, vec=np.array(cones[1][0])-np.array(cones[1][1]), color=cy, name=name, inside=False)
-        self.fan(cones[2][0], r, vec=np.array(cones[2][0])-np.array(cones[2][1]), color=cz, name=name, inside=False)
+        self.circle(cones[0][0], r, vec=np.array(cones[0][0])-np.array(cones[0][1]), color=cx, name=name, inside=False)
+        self.circle(cones[1][0], r, vec=np.array(cones[1][0])-np.array(cones[1][1]), color=cy, name=name, inside=False)
+        self.circle(cones[2][0], r, vec=np.array(cones[2][0])-np.array(cones[2][1]), color=cz, name=name, inside=False)
 
     def _grid(self):
         """网格和刻度 """
@@ -1121,7 +1121,7 @@ class Scheme:
         ccw = kwds.pop('ccw') if 'ccw' in kwds else True
         gltype = GL_QUADS if quad else GL_TRIANGLES
 
-        if not texture is None and not texcoord is None:
+        if not texture is None:
             self._mesh(xs, ys, zs, gltype, texture=texture, ccw=ccw, **kwds)
         else:
             if not data is None:
@@ -1319,11 +1319,11 @@ class Scheme:
 
         self._mesh(vs[...,0], vs[...,1], vs[...,2], GL_QUADS, color=color, ccw=True, **kwds)
 
-    def fan(self, center, r, **kwds):
-        """扇
+    def circle(self, center, r, **kwds):
+        """圆
 
-        center      - 锥底圆心：元组、列表或numpy数组
-        r           - 锥底半径：浮点型
+        center      - 圆心：元组、列表或numpy数组
+        r           - 半径：浮点型
         kwds        - 关键字参数
             color       - 颜色：浮点型元组、列表或numpy数组
             arc         - 弧度角范围：默认0°~360°
