@@ -479,6 +479,8 @@ class BaseScene:
                 tsid += 1
             elif tag == 'picked':
                 glUniform1i(loc, m.picked)
+            elif tag == 'timestamp':
+                glUniform1f(loc, self.duration)
             elif tag == 'campos':
                 glUniform3f(loc, *self.cam)
             elif tag == 'ae':

@@ -7,18 +7,25 @@ from OpenGL.GL import *
 class Model:
     """模型类"""
  
-    def __init__(self, gltype, vshader, fshader, visible=True, opacity=True, inside=True, sprite=False):
+    def __init__(self, gltype, vshader, fshader, **kwds):
         """构造函数
  
         gltype      - GL基本图元
         vshader     - 顶点着色器源码
         fshader     - 片元着色器源码
-        visible     - 模型可见性
-        opacity     - 模型不透明
-        inside      - 模型显示在视锥体内
-        sprite      - 是否开启点精灵
+        kwds        - 关键字参数
+            visible     - 模型可见性
+            opacity     - 模型不透明
+            inside      - 模型显示在视锥体内
+            sprite      - 开启点精灵
+            alive       - 启动渲染计时器
         """
  
+        keys = ['visible', 'opacity', 'inside', 'sprite', 'alive']
+        for key in kwds:
+            if key not in keys:
+                raise KeyError('不支持的关键字参数：%s'%key)
+
         gltypes = (
             GL_POINTS,	        # 绘制一个或多个顶点
             GL_LINES,	        # 绘制线段
@@ -37,13 +44,13 @@ class Model:
         self.gltype = gltype                            # GL基本图元
  
         self.name = None                                # 模型（部件）名
-        self.visible = visible                          # 模型可见性，默认可见
-        self.opacity = opacity                          # 模型不透明属性，默认不透明
-        self.inside = inside                            # 模型顶点是否影响模型空间，默认True
-        self.sprite = sprite                            # 开启点精灵，默认False
+        self.visible = kwds.get('visible', True)        # 模型可见性，默认可见
+        self.opacity = kwds.get('opacity', True)        # 模型不透明属性，默认不透明
+        self.inside = kwds.get('inside', True)          # 模型顶点是否影响模型空间，默认True
+        self.sprite = kwds.get('sprite', False)         # 开启点精灵，默认False
+        self.alive = kwds.get('alive', False)           # 启动渲染计时器，默认False
         self.slide = None                               # 幻灯片函数
         self.depth = dict()                             # 深度轴均值
-        self.alive = False                              # 模型是否有动画函数
         self.picked = False                             # 模型被拾取
  
         self.program = None                             # 着色器程序
@@ -65,7 +72,7 @@ class Model:
         self.add_shader(vshader, GL_VERTEX_SHADER)
         self.add_shader(fshader, GL_FRAGMENT_SHADER)
  
-        if sprite:
+        if self.sprite:
             self.before.append((glPushAttrib, (GL_POINT_BIT,)))
             self.before.append((glEnable, (GL_POINT_SPRITE,)))
             self.before.append((glEnable, (GL_PROGRAM_POINT_SIZE,)))
@@ -193,6 +200,14 @@ class Model:
         """
  
         self.uniform.update({var_name: {'tag':'ae'}})
+ 
+    def set_timestamp(self, var_name):
+        """设置渲染时间戳（以毫秒为单位的浮点数）
+ 
+        var_name    - 渲染时间戳在着色器中的变量名
+        """
+ 
+        self.uniform.update({var_name: {'tag':'timestamp'}})
  
     def set_picked(self, var_name):
         """设置拾取状态

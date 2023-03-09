@@ -154,7 +154,7 @@ normal = normal.reshape(-1, 3)[idx]
 im = np.uint8(np.stack((np.arange(256), np.zeros(256), np.zeros(256)), axis=1))
 texture = wxgl.Texture(im, ttype=wxgl.TEXTURE_1D, s_tile=wxgl.GL_CLAMP_TO_EDGE)
 
-m = wxgl.Model(wxgl.TRIANGLES, vshader, fshader, visible=True, opacity=True, inside=True)
+m = wxgl.Model(wxgl.TRIANGLES, vshader, fshader)
 m.set_vertex('a_Position', vs)
 m.set_normal('a_Normal', normal)
 m.set_argument('u_LightDir', (-5,-1,-5))
