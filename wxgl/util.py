@@ -10,17 +10,17 @@ from . text import FontManager
 CM = ColorManager()
 FM = FontManager()
 
-def get_fonts():
+def font_list():
     """返回可用字体"""
 
     return FM.get_font_list()
 
-def get_colors():
+def color_list():
     """返回可用颜色"""
 
     return CM.colors
 
-def get_cms():
+def cm_list():
     """返回可用调色板"""
 
     return CM.cmaps

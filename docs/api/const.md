@@ -2,152 +2,41 @@
 sort: 1
 ---
 
-# constant
-
-除了常规的模块和版本信息外，WxGL内置了常用的OpenGL常量。
-
-## wxgl.name
-
-模块名。
-
-## wxgl.version
-
-版本号。
-
-## wxgl.version_info
-
-版本信息。
-
-## wxgl.VERTEX_SHADER
-
-OpenGL.GL.GL_VERTEX_SHADER
-
-## wxgl.TESS_CONTROL_SHADER
-
-OpenGL.GL.GL_TESS_CONTROL_SHADER
-
-## wxgl.TESS_EVALUATION_SHADER
-
-OpenGL.GL.GL_TESS_EVALUATION_SHADER
-
-## wxgl.GEOMETRY_SHADER
-
-OpenGL.GL.GL_GEOMETRY_SHADER
-
-## wxgl.FRAGMENT_SHADER
-
-OpenGL.GL.GL_FRAGMENT_SHADER
-
-## wxgl.COMPUTE_SHADER
-
-OpenGL.GL.GL_COMPUTE_SHADER
-
-## wxgl.POINTS
-
-OpenGL.GL.GL_POINTS	      
-
-## wxgl.LINES
-
-OpenGL.GL.GL_LINES	      
-
-## wxgl.LINE_STRIP
-
-OpenGL.GL.GL_LINE_STRIP	  
-
-## wxgl.LINE_LOOP
-
-OpenGL.GL.GL_LINE_LOOP
-
-## wxgl.TRIANGLES
-
-OpenGL.GL.GL_TRIANGLES	  
-
-## wxgl.TRIANGLE_STRIP
-
-OpenGL.GL.GL_TRIANGLE_STRIP
-
-## wxgl.TRIANGLE_FAN
-
-OpenGL.GL.GL_TRIANGLE_FAN  
-
-## wxgl.QUADS
-
-OpenGL.GL.GL_QUADS	      
-
-## wxgl.QUAD_STRIP
-
-OpenGL.GL.GL_QUAD_STRIP
-
-## wxgl.TEXTURE_1D
-
-OpenGL.GL.GL_TEXTURE_1D                         
-
-## wxgl.TEXTURE_1D_ARRAY
-
-OpenGL.GL.GL_TEXTURE_1D_ARRAY                   
-
-## wxgl.TEXTURE_2D
-
-OpenGL.GL.GL_TEXTURE_2D                         
-
-## wxgl.TEXTURE_2D_ARRAY
-
-OpenGL.GL.GL_TEXTURE_2D_ARRAY                   
-
-## wxgl.TEXTURE_3D
-
-OpenGL.GL.GL_TEXTURE_3D                         
-
-## wxgl.TEXTURE_RECTANGLE
-
-OpenGL.GL.GL_TEXTURE_RECTANGLE                  
-
-## wxgl.TEXTURE_CUBE_MAP
-
-OpenGL.GL.GL_TEXTURE_CUBE_MAP                   
-
-## wxgl.TEXTURE_CUBE_MAP_ARRAY
-
-OpenGL.GL.GL_TEXTURE_CUBE_MAP_ARRAY             
-
-## wxgl.TEXTURE_BUFFER
-
-OpenGL.GL.GL_TEXTURE_BUFFER
-  
-## wxgl.NEAREST
-
-OpenGL.GL.GL_NEAREST             
-
-## wxgl.LINEAR
-
-OpenGL.GL.GL_LINEAR              
-
-## wxgl.NEAREST_MIPMAP_NEAREST
-
-OpenGL.GL.GL_NEAREST_MIPMAP_NEAREST
-
-## wxgl.LINEAR_MIPMAP_NEAREST
-
-OpenGL.GL.GL_LINEAR_MIPMAP_NEAREST
-
-## wxgl.NEAREST_MIPMAP_LINEAR
-
-OpenGL.GL.GL_NEAREST_MIPMAP_LINEAR
-
-## wxgl.LINEAR_MIPMAP_LINEAR
-
-OpenGL.GL.GL_LINEAR_MIPMAP_LINEAR
-
-## wxgl.REPEAT
-
-OpenGL.GL.GL_REPEAT         
-
-## wxgl.MIRRORED_REPEAT
-
-OpenGL.GL.GL_MIRRORED_REPEAT
-
-## wxgl.CLAMP_TO_EDGE
-
-OpenGL.GL.GL_CLAMP_TO_EDGE
-
+# 常量
+
+WxGL内置了常用的OpenGL常量。
+
+- wxgl.VERTEX_SHADER
+- wxgl.TESS_CONTROL_SHADER
+- wxgl.TESS_EVALUATION_SHADER
+- wxgl.GEOMETRY_SHADER
+- wxgl.FRAGMENT_SHADER
+- wxgl.COMPUTE_SHADER
+- wxgl.POINTS
+- wxgl.LINES
+- wxgl.LINE_STRIP
+- wxgl.LINE_LOOP
+- wxgl.TRIANGLES
+- wxgl.TRIANGLE_STRIP
+- wxgl.TRIANGLE_FAN
+- wxgl.QUADS
+- wxgl.QUAD_STRIP
+- wxgl.TEXTURE_1D
+- wxgl.TEXTURE_1D_ARRAY
+- wxgl.TEXTURE_2D
+- wxgl.TEXTURE_2D_ARRAY
+- wxgl.TEXTURE_3D
+- wxgl.TEXTURE_RECTANGLE
+- wxgl.TEXTURE_CUBE_MAP
+- wxgl.TEXTURE_CUBE_MAP_ARRAY
+- wxgl.TEXTURE_BUFFER
+- wxgl.NEAREST
+- wxgl.LINEAR
+- wxgl.NEAREST_MIPMAP_NEAREST
+- wxgl.LINEAR_MIPMAP_NEAREST
+- wxgl.NEAREST_MIPMAP_LINEAR
+- wxgl.LINEAR_MIPMAP_LINEAR
+- wxgl.REPEAT
+- wxgl.MIRRORED_REPEAT
+- wxgl.CLAMP_TO_EDGE
 

@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
+---
+sort: 1
+---
 
+# 与wxPython集成
+
+场景类wxgl.wxscene.WxScene是wx.glcanvas.GLCanvas的派生类，因此可以无缝地在wxPython中使用该类。三维绘图功能封装在wxgl.Scheme中，只需要将一个Scheme类实例传到场景类中即可显示三维绘图结果。
+
+```python
 import os
 import wx
 import numpy as np
@@ -99,3 +106,5 @@ if __name__ == '__main__':
     frame = MainFrame()
     frame.Show()
     app.MainLoop()
+```
+

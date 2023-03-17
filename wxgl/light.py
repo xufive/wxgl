@@ -604,7 +604,7 @@ class SunLight(_Light):
             diffuse     = kwds.get('diffuse', 0.8),     # 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮
             specular    = kwds.get('specular', 0.6),    # 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮
             shiny       = kwds.get('shiny', 50),        # 高光系数：值域范围[1, 3000]，数值越大，高光区域越小
-            pellucid    = kwds.get('pellucid', 0.5),    # 透光系数：值域范围[0.0,1.0]，数值越大，反面越亮
+            pellucid    = kwds.get('pellucid', 0.5),    # 透光系数：值域范围[0.0,1.0]，数值越大，背面越亮
             cpos        = True                          # 着色器需要传入相机位置
         )
  
@@ -1037,7 +1037,7 @@ class SkyLight(_Light):
 class SphereLight(_Light):
     """球谐光照模型"""
 
-    def __init__(self, factor=0.8, style=0):
+    def __init__(self, style=0, factor=0.8):
         """构造函数"""
  
         _Light.__init__(self)

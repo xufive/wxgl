@@ -12,24 +12,28 @@ class Texture:
         """构造函数
  
         tsrc            - 图像全路径或者np.array数组
-        ttype           - 纹理类型，默认2D纹理
+        ttype           - 纹理类型
+            - wxgl.TEXTURE_1D
+            - wxgl.TEXTURE_2D（默认）
+            - wxgl.TEXTURE_2D_ARRAY
+            - wxgl.TEXTURE_3D
         kwds            - 关键字参数
             level           - 纹理分级数，默认1
             min_filter      - 纹理缩小滤波器
-                                - GL_NEAREST
-                                - GL_LINEAR
-                                - GL_NEAREST_MIPMAP_NEAREST
-                                - GL_LINEAR_MIPMAP_NEAREST
-                                - GL_NEAREST_MIPMAP_LINEAR
-                                - GL_LINEAR_MIPMAP_LINEAR
+                - GL_NEAREST
+                - GL_LINEAR
+                - GL_NEAREST_MIPMAP_NEAREST（默认）
+                - GL_LINEAR_MIPMAP_NEAREST
+                - GL_NEAREST_MIPMAP_LINEAR
+                - GL_LINEAR_MIPMAP_LINEAR
             mag_filter      - 纹理放大滤波器
-                                - GL_NEAREST
-                                - GL_LINEAR
-            s_tile          - S方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            t_tile          - T方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            r_tile          - R方向纹理铺贴方式，GL_REPEAT|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
-            xflip           - 图像左右翻转
-            yflip           - 图像上下翻转
+                - GL_NEAREST
+                - GL_LINEAR（默认）
+            s_tile          - S方向纹理铺贴方式，GL_REPEAT（默认）|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            t_tile          - T方向纹理铺贴方式，GL_REPEAT（默认）|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            r_tile          - R方向纹理铺贴方式，GL_REPEAT（默认）|GL_MIRRORED_REPEAT|GL_CLAMP_TO_EDGE
+            xflip           - 图像左右翻转，默认False
+            yflip           - 图像上下翻转，默认False
         """
  
         if ttype not in (GL_TEXTURE_1D, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_3D):

@@ -57,7 +57,8 @@ class Scheme:
     def _format_color(self, color, repeat=None):
         """将颜色参数转为浮点型的numpy数组"""
 
-        self.cid = (self.cid+1)%10
+        if color is None:
+            self.cid = (self.cid+1)%10
 
         return util.format_color(color, self.cid, repeat=repeat)
 
@@ -71,7 +72,7 @@ class Scheme:
         """
 
         ks = (1, 2, 2.5, 5) # 分段选项
-        s_min, s_max = 3, 5 # 分段数 
+        s_min, s_max = 4, 7 # 分段数 
         r = v_max - v_min
         tmp = np.array([[abs(float(('%E'%(r/i)).split('E')[0])-k) for i in range(s_min,s_max)] for k in ks])
         i, j = divmod(tmp.argmin(), tmp.shape[1])
@@ -324,6 +325,9 @@ class Scheme:
             return # '模型空间不存在，返回
 
         size = self.expost['grid']['size']
+        xlabel = self.expost['grid']['xlabel']
+        ylabel = self.expost['grid']['ylabel']
+        zlabel = self.expost['grid']['zlabel']
         xf = self.expost['grid']['xf']
         yf = self.expost['grid']['yf']
         zf = self.expost['grid']['zf']
@@ -345,7 +349,7 @@ class Scheme:
 
             return vs.reshape(-1,3)[idx]
 
-        def text3d_ticks(text, box, color, loc, cull, align, bg=None, padding=0):
+        def text3d_ticks(text, box, color, loc, cull, align, bg, padding):
             """标注"""
 
             if PLATFORM == 'darwin':
@@ -443,7 +447,7 @@ class Scheme:
                 else:
                     texcoord.append(np.array([[0,0,i],[0,1,i],[1,1,i],[1,0,i]], dtype=np.float32))
 
-            for im in im_arr:
+            for im, agn in zip(im_arr, align):
                 if im.shape[0] < rows_max:
                     n = rows_max - im.shape[0]
                     nu = n // 2
@@ -455,10 +459,16 @@ class Scheme:
 
                 if im.shape[1] < cols_max:   
                     n = cols_max - im.shape[1]
-                    nl = n // 2
-                    nr = n - nl
+                    if agn == 'left':
+                        nl, nr = 0, n
+                    elif agn == 'right':
+                        nl, nr = n, 0
+                    else:
+                        nl = n // 2
+                        nr = n - nl
 
-                    im = np.hstack((im, np.zeros((im.shape[0], nr, im.shape[-1]), dtype=np.uint8)))
+                    if nr > 0:
+                        im = np.hstack((im, np.zeros((im.shape[0], nr, im.shape[-1]), dtype=np.uint8)))
                     if nl > 0:
                         im = np.hstack((np.zeros((im.shape[0], nl, im.shape[-1]), dtype=np.uint8), im))
 
@@ -466,20 +476,20 @@ class Scheme:
 
             box = np.stack(box, axis=0)
             for i in range(box.shape[0]):
-                box_width = np.linalg.norm(box[i][0] - box[i][3])
-                box_height = np.linalg.norm(box[i][0] - box[i][1])
-                k_box, k_text = box_width/box_height, nim_arr[i].shape[1]/nim_arr[i].shape[0]
+                box_w = np.linalg.norm(box[i][0] - box[i][3])
+                box_h = np.linalg.norm(box[i][0] - box[i][1])
+                k_box, k_text = box_w/box_h, nim_arr[i].shape[1]/nim_arr[i].shape[0]
 
                 if align[i] == 'left':
-                    offset = (box[i][2]-box[i][1])*k_text/k_box
+                    offset = (box[i][2]-box[i][1]) * k_text/k_box
                     box[i][2] = box[i][1] + offset
                     box[i][3] = box[i][0] + offset
                 elif align[i] == 'right':
-                    offset = (box[i][0] - box[i][3])*k_text/k_box
+                    offset = (box[i][0] - box[i][3]) * k_text/k_box
                     box[i][0] = box[i][3] + offset
                     box[i][1] = box[i][2] + offset
                 elif align[i] == 'center':
-                    offset = (box[i][3] - box[i][0])*(1-k_text/k_box)/2
+                    offset = (box[i][3] - box[i][0]) * (1-k_text/k_box)/2
                     box[i][0] += offset
                     box[i][1] += offset
                     box[i][2] -= offset
@@ -559,7 +569,7 @@ class Scheme:
         dy = yy[2] - yy[1]
         dz = zz[2] - zz[1]
         h = min(dx, dy, dz) * size/200 # 标注文字高度
-        hh, d1 = 0.5*h, 1.0*h
+        dh, qh, hh, gh = 0.1*h, 0.25*h, 0.5*h, 1.1*h
         text, box, loc, align = list(), list(), list(), list()
 
         for x in xx[1:-1]:
@@ -569,16 +579,16 @@ class Scheme:
 
             if self.haxis == 'z':
                 loc.extend([10, 11, 12, 13])
-                box.append([[x-dx,yy[-1],zz[-1]+h], [x-dx,yy[-1],zz[-1]], [x+dx,yy[-1],zz[-1]], [x+dx,yy[-1],zz[-1]+h]])
-                box.append([[x+dx,yy[0],zz[-1]+h], [x+dx,yy[0],zz[-1]], [x-dx,yy[0],zz[-1]], [x-dx,yy[0],zz[-1]+h]])
-                box.append([[x-dx,yy[-1],zz[0]], [x-dx,yy[-1],zz[0]-h], [x+dx,yy[-1],zz[0]-h], [x+dx,yy[-1],zz[0]]])
-                box.append([[x+dx,yy[0],zz[0]], [x+dx,yy[0],zz[0]-h], [x-dx,yy[0],zz[0]-h], [x-dx,yy[0],zz[0]]])
+                box.append([[x-dx,yy[-1],zz[-1]+gh], [x-dx,yy[-1],zz[-1]+dh], [x+dx,yy[-1],zz[-1]+dh], [x+dx,yy[-1],zz[-1]+gh]])
+                box.append([[x+dx,yy[0],zz[-1]+gh], [x+dx,yy[0],zz[-1]+dh], [x-dx,yy[0],zz[-1]+dh], [x-dx,yy[0],zz[-1]+gh]])
+                box.append([[x-dx,yy[-1],zz[0]-dh], [x-dx,yy[-1],zz[0]-gh], [x+dx,yy[-1],zz[0]-gh], [x+dx,yy[-1],zz[0]-dh]])
+                box.append([[x+dx,yy[0],zz[0]-dh], [x+dx,yy[0],zz[0]-gh], [x-dx,yy[0],zz[0]-gh], [x-dx,yy[0],zz[0]-dh]])
             else:
                 loc.extend([10, 11, 12, 13])
-                box.append([[x-dx,yy[-1]+h,zz[0]], [x-dx,yy[-1],zz[0]], [x+dx,yy[-1],zz[0]], [x+dx,yy[-1]+h,zz[0]]])
-                box.append([[x+dx,yy[-1]+h,zz[-1]], [x+dx,yy[-1],zz[-1]], [x-dx,yy[-1],zz[-1]], [x-dx,yy[-1]+h,zz[-1]]])
-                box.append([[x-dx,yy[0],zz[0]], [x-dx,yy[0]-h,zz[0]], [x+dx,yy[0]-h,zz[0]], [x+dx,yy[0],zz[0]]])
-                box.append([[x+dx,yy[0],zz[-1]], [x+dx,yy[0]-h,zz[-1]], [x-dx,yy[0]-h,zz[-1]], [x-dx,yy[0],zz[-1]]])
+                box.append([[x-dx,yy[-1]+gh,zz[0]], [x-dx,yy[-1]+dh,zz[0]], [x+dx,yy[-1]+dh,zz[0]], [x+dx,yy[-1]+gh,zz[0]]])
+                box.append([[x+dx,yy[-1]+gh,zz[-1]], [x+dx,yy[-1]+dh,zz[-1]], [x-dx,yy[-1]+dh,zz[-1]], [x-dx,yy[-1]+gh,zz[-1]]])
+                box.append([[x-dx,yy[0]-dh,zz[0]], [x-dx,yy[0]-gh,zz[0]], [x+dx,yy[0]-gh,zz[0]], [x+dx,yy[0]-dh,zz[0]]])
+                box.append([[x+dx,yy[0]-dh,zz[-1]], [x+dx,yy[0]-gh,zz[-1]], [x-dx,yy[0]-gh,zz[-1]], [x-dx,yy[0]-dh,zz[-1]]])
 
         for y in yy[1:-1]:
             y_str = yf(y)
@@ -587,17 +597,17 @@ class Scheme:
             if self.haxis == 'z':
                 loc.extend([20, 21, 22, 23])
                 align.extend(['center', 'center', 'center', 'center'])
-                box.append([[xx[0],y-dy,zz[-1]+h], [xx[0],y-dy,zz[-1]], [xx[0],y+dy,zz[-1]], [xx[0],y+dy,zz[-1]+h]])
-                box.append([[xx[-1],y+dy,zz[-1]+h], [xx[-1],y+dy,zz[-1]], [xx[-1],y-dy,zz[-1]], [xx[-1],y-dy,zz[-1]+h]])
-                box.append([[xx[0],y-dy,zz[0]], [xx[0],y-dy,zz[0]-h], [xx[0],y+dy,zz[0]-h], [xx[0],y+dy,zz[0]]])
-                box.append([[xx[-1],y+dy,zz[0]], [xx[-1],y+dy,zz[0]-h], [xx[-1],y-dy,zz[0]-h], [xx[-1],y-dy,zz[0]]])
+                box.append([[xx[0],y-dy,zz[-1]+gh], [xx[0],y-dy,zz[-1]+dh], [xx[0],y+dy,zz[-1]+dh], [xx[0],y+dy,zz[-1]+gh]])
+                box.append([[xx[-1],y+dy,zz[-1]+gh], [xx[-1],y+dy,zz[-1]+dh], [xx[-1],y-dy,zz[-1]+dh], [xx[-1],y-dy,zz[-1]+gh]])
+                box.append([[xx[0],y-dy,zz[0]-dh], [xx[0],y-dy,zz[0]-gh], [xx[0],y+dy,zz[0]-gh], [xx[0],y+dy,zz[0]-dh]])
+                box.append([[xx[-1],y+dy,zz[0]-dh], [xx[-1],y+dy,zz[0]-gh], [xx[-1],y-dy,zz[0]-gh], [xx[-1],y-dy,zz[0]-dh]])
             else:
                 loc.extend([0, 1, 2, 3])
                 align.extend(['right', 'right', 'right', 'right'])
-                box.append([[xx[0],y+hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]], [xx[0],y+hh,zz[-1]]])
-                box.append([[xx[0]-dx,y+hh,zz[0]], [xx[0]-dx,y-hh,zz[0]], [xx[0],y-hh,zz[0]], [xx[0],y+hh,zz[0]]])
-                box.append([[xx[-1],y+hh,zz[0]-dz], [xx[-1],y-hh,zz[0]-dz], [xx[-1],y-hh,zz[0]], [xx[-1],y+hh,zz[0]]])
-                box.append([[xx[-1]+dx,y+hh,zz[-1]], [xx[-1]+dx,y-hh,zz[-1]], [xx[-1],y-hh,zz[-1]], [xx[-1],y+hh,zz[-1]]])
+                box.append([[xx[0],y+hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]+dz], [xx[0],y-hh,zz[-1]+qh], [xx[0],y+hh,zz[-1]+qh]])
+                box.append([[xx[0]-dx,y+hh,zz[0]], [xx[0]-dx,y-hh,zz[0]], [xx[0]-qh,y-hh,zz[0]], [xx[0]-qh,y+hh,zz[0]]])
+                box.append([[xx[-1],y+hh,zz[0]-dz], [xx[-1],y-hh,zz[0]-dz], [xx[-1],y-hh,zz[0]-qh], [xx[-1],y+hh,zz[0]-qh]])
+                box.append([[xx[-1]+dx,y+hh,zz[-1]], [xx[-1]+dx,y-hh,zz[-1]], [xx[-1]+qh,y-hh,zz[-1]], [xx[-1]+qh,y+hh,zz[-1]]])
 
         for z in zz[1:-1]:
             z_str = zf(z)
@@ -606,72 +616,74 @@ class Scheme:
             if self.haxis == 'z':
                 loc.extend([0, 1, 2, 3])
                 align.extend(['right', 'right', 'right', 'right'])
-                box.append([[xx[0],yy[0]-dy,z+hh], [xx[0],yy[0]-dy,z-hh], [xx[0],yy[0],z-hh], [xx[0],yy[0],z+hh]])
-                box.append([[xx[0]-dx,yy[-1],z+hh], [xx[0]-dx,yy[-1],z-hh], [xx[0],yy[-1],z-hh], [xx[0],yy[-1],z+hh]])
-                box.append([[xx[-1],yy[-1]+dy,z+hh], [xx[-1],yy[-1]+dy,z-hh], [xx[-1],yy[-1],z-hh], [xx[-1],yy[-1],z+hh]])
-                box.append([[xx[-1]+dx,yy[0],z+hh], [xx[-1]+dx,yy[0],z-hh], [xx[-1],yy[0],z-hh], [xx[-1],yy[0],z+hh]])
+                box.append([[xx[0],yy[0]-dy,z+hh], [xx[0],yy[0]-dy,z-hh], [xx[0],yy[0]-qh,z-hh], [xx[0],yy[0]-qh,z+hh]])
+                box.append([[xx[0]-dx,yy[-1],z+hh], [xx[0]-dx,yy[-1],z-hh], [xx[0]-qh,yy[-1],z-hh], [xx[0]-qh,yy[-1],z+hh]])
+                box.append([[xx[-1],yy[-1]+dy,z+hh], [xx[-1],yy[-1]+dy,z-hh], [xx[-1],yy[-1]+qh,z-hh], [xx[-1],yy[-1]+qh,z+hh]])
+                box.append([[xx[-1]+dx,yy[0],z+hh], [xx[-1]+dx,yy[0],z-hh], [xx[-1]+qh,yy[0],z-hh], [xx[-1]+qh,yy[0],z+hh]])
             else:
                 loc.extend([20, 21, 22, 23])
                 align.extend(['center', 'center', 'center', 'center'])
-                box.append([[xx[0],yy[-1]+h,z+dz], [xx[0],yy[-1],z+dz], [xx[0],yy[-1],z-dz], [xx[0],yy[-1]+h,z-dz]])
-                box.append([[xx[-1],yy[-1]+h,z-dz], [xx[-1],yy[-1],z-dz], [xx[-1],yy[-1],z+dz], [xx[-1],yy[-1]+h,z+dz]])
-                box.append([[xx[0],yy[0],z+dz], [xx[0],yy[0]-h,z+dz], [xx[0],yy[0]-h,z-dz], [xx[0],yy[0],z-dz]])
-                box.append([[xx[-1],yy[0],z-dz], [xx[-1],yy[0]-h,z-dz], [xx[-1],yy[0]-h,z+dz], [xx[-1],yy[0],z+dz]])
+                box.append([[xx[0],yy[-1]+gh,z+dz], [xx[0],yy[-1]+dh,z+dz], [xx[0],yy[-1]+dh,z-dz], [xx[0],yy[-1]+gh,z-dz]])
+                box.append([[xx[-1],yy[-1]+gh,z-dz], [xx[-1],yy[-1]+dh,z-dz], [xx[-1],yy[-1]+dh,z+dz], [xx[-1],yy[-1]+gh,z+dz]])
+                box.append([[xx[0],yy[0]-dh,z+dz], [xx[0],yy[0]-gh,z+dz], [xx[0],yy[0]-gh,z-dz], [xx[0],yy[0]-dh,z-dz]])
+                box.append([[xx[-1],yy[0]-dh,z-dz], [xx[-1],yy[0]-gh,z-dz], [xx[-1],yy[0]-gh,z+dz], [xx[-1],yy[0]-dh,z+dz]])
 
-        text.extend(['X', 'X', 'X', 'X'])
+        text.extend([xlabel, xlabel, xlabel, xlabel])
         align.extend(['center', 'center', 'center', 'center'])
         x = (xx[-1]+xx[-2])/2
         if self.haxis == 'z':
             loc.extend([10, 11, 12, 13])
-            box.append([[x,yy[-1],zz[-1]+d1], [x,yy[-1],zz[-1]], [x+d1,yy[-1],zz[-1]], [x+d1,yy[-1],zz[-1]+d1]])
-            box.append([[x+d1,yy[0],zz[-1]+d1], [x+d1,yy[0],zz[-1]], [x,yy[0],zz[-1]], [x,yy[0],zz[-1]+d1]])
-            box.append([[x,yy[-1],zz[0]], [x,yy[-1],zz[0]-d1], [x+d1,yy[-1],zz[0]-d1], [x+d1,yy[-1],zz[0]]])
-            box.append([[x+d1,yy[0],zz[0]], [x+d1,yy[0],zz[0]-d1], [x,yy[0],zz[0]-d1], [x,yy[0],zz[0]]])
+            box.append([[x,yy[-1],zz[-1]+gh], [x,yy[-1],zz[-1]+dh], [x+h,yy[-1],zz[-1]+dh], [x+h,yy[-1],zz[-1]+gh]])
+            box.append([[x+h,yy[0],zz[-1]+gh], [x+h,yy[0],zz[-1]+dh], [x,yy[0],zz[-1]+dh], [x,yy[0],zz[-1]+gh]])
+            box.append([[x,yy[-1],zz[0]-dh], [x,yy[-1],zz[0]-gh], [x+h,yy[-1],zz[0]-gh], [x+h,yy[-1],zz[0]-dh]])
+            box.append([[x+h,yy[0],zz[0]-dh], [x+h,yy[0],zz[0]-gh], [x,yy[0],zz[0]-gh], [x,yy[0],zz[0]-dh]])
         else:
             loc.extend([10, 11, 12, 13])
-            box.append([[x,yy[-1]+d1,zz[0]], [x,yy[-1],zz[0]], [x+d1,yy[-1],zz[0]], [x+d1,yy[-1]+d1,zz[0]]])
-            box.append([[x+d1,yy[-1]+d1,zz[-1]], [x+d1,yy[-1],zz[-1]], [x,yy[-1],zz[-1]], [x,yy[-1]+d1,zz[-1]]])
-            box.append([[x,yy[0],zz[0]], [x,yy[0]-d1,zz[0]], [x+d1,yy[0]-d1,zz[0]], [x+d1,yy[0],zz[0]]])
-            box.append([[x+d1,yy[0],zz[-1]], [x+d1,yy[0]-d1,zz[-1]], [x,yy[0]-d1,zz[-1]], [x,yy[0],zz[-1]]])
+            box.append([[x,yy[-1]+gh,zz[0]], [x,yy[-1]+dh,zz[0]], [x+h,yy[-1]+dh,zz[0]], [x+h,yy[-1]+gh,zz[0]]])
+            box.append([[x+h,yy[-1]+gh,zz[-1]], [x+h,yy[-1]+dh,zz[-1]], [x,yy[-1]+dh,zz[-1]], [x,yy[-1]+gh,zz[-1]]])
+            box.append([[x,yy[0]-dh,zz[0]], [x,yy[0]-gh,zz[0]], [x+h,yy[0]-gh,zz[0]], [x+h,yy[0]-dh,zz[0]]])
+            box.append([[x+h,yy[0]-dh,zz[-1]], [x+h,yy[0]-gh,zz[-1]], [x,yy[0]-gh,zz[-1]], [x,yy[0]-dh,zz[-1]]])
 
-        text.extend(['Y', 'Y', 'Y', 'Y'])
-        align.extend(['center', 'center', 'center', 'center'])
+        text.extend([ylabel, ylabel, ylabel, ylabel])
         if self.haxis == 'z':
+            align.extend(['center', 'center', 'center', 'center'])
             y = (yy[-1]+yy[-2])/2
             loc.extend([20, 21, 22, 23])
-            box.append([[xx[0],y,zz[-1]+d1], [xx[0],y,zz[-1]], [xx[0],y+d1,zz[-1]], [xx[0],y+d1,zz[-1]+d1]])
-            box.append([[xx[-1],y+d1,zz[-1]+d1], [xx[-1],y+d1,zz[-1]], [xx[-1],y,zz[-1]], [xx[-1],y,zz[-1]+d1]])
-            box.append([[xx[0],y,zz[0]], [xx[0],y,zz[0]-d1], [xx[0],y+d1,zz[0]-d1], [xx[0],y+d1,zz[0]]])
-            box.append([[xx[-1],y+d1,zz[0]], [xx[-1],y+d1,zz[0]-d1], [xx[-1],y,zz[0]-d1], [xx[-1],y,zz[0]]])
+            box.append([[xx[0],y,zz[-1]+gh], [xx[0],y,zz[-1]+dh], [xx[0],y+h,zz[-1]+dh], [xx[0],y+h,zz[-1]+gh]])
+            box.append([[xx[-1],y+h,zz[-1]+gh], [xx[-1],y+h,zz[-1]+dh], [xx[-1],y,zz[-1]+dh], [xx[-1],y,zz[-1]+gh]])
+            box.append([[xx[0],y,zz[0]-dh], [xx[0],y,zz[0]-gh], [xx[0],y+h,zz[0]-gh], [xx[0],y+h,zz[0]-dh]])
+            box.append([[xx[-1],y+h,zz[0]-dh], [xx[-1],y+h,zz[0]-gh], [xx[-1],y,zz[0]-gh], [xx[-1],y,zz[0]-dh]])
         else:
+            align.extend(['right', 'right', 'right', 'right'])
             y = (yy[-1]+yy[-2])/2
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],y+d1,zz[-1]+d1], [xx[0],y,zz[-1]+d1], [xx[0],y,zz[-1]], [xx[0],y+d1,zz[-1]]])
-            box.append([[xx[0]-d1,y+d1,zz[0]], [xx[0]-d1,y,zz[0]], [xx[0],y,zz[0]], [xx[0],y+d1,zz[0]]])
-            box.append([[xx[-1],y+d1,zz[0]-d1], [xx[-1],y,zz[0]-d1], [xx[-1],y,zz[0]], [xx[-1],y+d1,zz[0]]])
-            box.append([[xx[-1]+d1,y+d1,zz[-1]], [xx[-1]+d1,y,zz[-1]], [xx[-1],y,zz[-1]], [xx[-1],y+d1,zz[-1]]])
+            box.append([[xx[0],y+h,zz[-1]+gh], [xx[0],y,zz[-1]+gh], [xx[0],y,zz[-1]+dh], [xx[0],y+h,zz[-1]+dh]])
+            box.append([[xx[0]-gh,y+h,zz[0]], [xx[0]-gh,y,zz[0]], [xx[0]-dh,y,zz[0]], [xx[0]-dh,y+h,zz[0]]])
+            box.append([[xx[-1],y+h,zz[0]-gh], [xx[-1],y,zz[0]-gh], [xx[-1],y,zz[0]-dh], [xx[-1],y+h,zz[0]-dh]])
+            box.append([[xx[-1]+gh,y+h,zz[-1]], [xx[-1]+gh,y,zz[-1]], [xx[-1]+dh,y,zz[-1]], [xx[-1]+dh,y+h,zz[-1]]])
 
-        text.extend(['Z', 'Z', 'Z', 'Z'])
-        align.extend(['center', 'center', 'center', 'center'])
+        text.extend([zlabel, zlabel, zlabel, zlabel])
         if self.haxis == 'z':
+            align.extend(['right', 'right', 'right', 'right'])
             z = (zz[-1]+zz[-2])/2
             loc.extend([0, 1, 2, 3])
-            box.append([[xx[0],yy[0]-d1,z+d1], [xx[0],yy[0]-d1,z], [xx[0],yy[0],z], [xx[0],yy[0],z+d1]])
-            box.append([[xx[0]-d1,yy[-1],z+d1], [xx[0]-d1,yy[-1],z], [xx[0],yy[-1],z], [xx[0],yy[-1],z+d1]])
-            box.append([[xx[-1],yy[-1]+d1,z+d1], [xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1],z], [xx[-1],yy[-1],z+d1]])
-            box.append([[xx[-1]+d1,yy[0],z+d1], [xx[-1]+d1,yy[0],z], [xx[-1],yy[0],z], [xx[-1],yy[0],z+d1]])
+            box.append([[xx[0],yy[0]-gh,z+h], [xx[0],yy[0]-gh,z], [xx[0],yy[0]-dh,z], [xx[0],yy[0]-dh,z+h]])
+            box.append([[xx[0]-gh,yy[-1],z+h], [xx[0]-gh,yy[-1],z], [xx[0]-dh,yy[-1],z], [xx[0]-dh,yy[-1],z+h]])
+            box.append([[xx[-1],yy[-1]+gh,z+h], [xx[-1],yy[-1]+gh,z], [xx[-1],yy[-1]+dh,z], [xx[-1],yy[-1]+dh,z+h]])
+            box.append([[xx[-1]+gh,yy[0],z+h], [xx[-1]+gh,yy[0],z], [xx[-1]+dh,yy[0],z], [xx[-1]+dh,yy[0],z+h]])
         else:
+            align.extend(['center', 'center', 'center', 'center'])
             z = (zz[-1]+zz[-2])/2
             loc.extend([20, 21, 22, 23])
-            box.append([[xx[0],yy[-1]+d1,z+d1], [xx[0],yy[-1],z+d1], [xx[0],yy[-1],z], [xx[0],yy[-1]+d1,z]])
-            box.append([[xx[-1],yy[-1]+d1,z], [xx[-1],yy[-1],z], [xx[-1],yy[-1],z+d1], [xx[-1],yy[-1]+d1,z+d1]])
-            box.append([[xx[0],yy[0],z+d1], [xx[0],yy[0]-d1,z+d1], [xx[0],yy[0]-d1,z], [xx[0],yy[0],z]])
-            box.append([[xx[-1],yy[0],z], [xx[-1],yy[0]-d1,z], [xx[-1],yy[0]-d1,z+d1], [xx[-1],yy[0],z+d1]])
+            box.append([[xx[0],yy[-1]+gh,z+h], [xx[0],yy[-1]+dh,z+h], [xx[0],yy[-1]+dh,z], [xx[0],yy[-1]+gh,z]])
+            box.append([[xx[-1],yy[-1]+gh,z], [xx[-1],yy[-1]+dh,z], [xx[-1],yy[-1]+dh,z+h], [xx[-1],yy[-1]+gh,z+h]])
+            box.append([[xx[0],yy[0]-dh,z+h], [xx[0],yy[0]-gh,z+h], [xx[0],yy[0]-gh,z], [xx[0],yy[0]-dh,z]])
+            box.append([[xx[-1],yy[0]-dh,z], [xx[-1],yy[0]-gh,z], [xx[-1],yy[0]-gh,z+h], [xx[-1],yy[0]-dh,z+h]])
 
         color = [self.fg for i in range(len(box)-12)] + [self.bg for i in range(12)]
         bg = [None for i in range(len(box)-12)] + [self.fg for i in range(12)]
 
-        for m in text3d_ticks(text, box, color, loc, 'back', align, bg=bg, padding=20):
+        for m in text3d_ticks(text, box, color, loc, 'back', align, bg, 8):
             self.model(m, name=name)
 
     def xrange(self, range_tuple):
@@ -690,7 +702,12 @@ class Scheme:
         self._set_range(r_z=range_tuple)
 
     def cruise(self, func):
-        """设置相机巡航函数"""
+        """设置相机巡航函数
+        func        - 以时间t（毫秒）为参数的函数，返回包含下述key的字典
+            azim        - 方位角：None或表达式
+            elev        - 高度角：None或表达式
+            dist        - 相机到OES坐标系原定的距离：None或表达式
+        """
 
         if hasattr(func, '__call__'):
             self.cruise_func = func
@@ -707,7 +724,10 @@ class Scheme:
     def grid(self, **kwds):
         """网格和刻度
         kwds        - 关键字参数
-            size            - 刻度文本字号，默认32
+            size            - 文本字号，默认32
+            xlabel          - x轴名称
+            ylabel          - y轴名称
+            zlabel          - z轴名称
             xf              - x轴标注格式化函数
             yf              - y轴标注格式化函数
             zf              - z轴标注格式化函数
@@ -715,11 +735,14 @@ class Scheme:
         """
 
         for key in kwds:
-            if key not in ['size', 'xf', 'yf', 'zf', 'name']:
+            if key not in ['size', 'xlabel', 'ylabel', 'zlabel', 'xf', 'yf', 'zf', 'name']:
                 raise KeyError('不支持的关键字参数：%s'%key)
         
         self.expost.update({'grid': {
             'size':     kwds.get('size', 32),
+            'xlabel':   kwds.get('xlabel', 'X'),
+            'ylabel':   kwds.get('ylabel', 'Y'),
+            'zlabel':   kwds.get('zlabel', 'Z'),
             'xf':       kwds.get('xf', str),
             'yf':       kwds.get('yf', str),
             'zf':       kwds.get('zf', str),
@@ -764,12 +787,12 @@ class Scheme:
         self.models[1].update({'caption_line': m_line})
 
     def colorbar(self, data, cm='viridis', ff=str, endpoint=True):
-        """设置调色板
+        """调色板
 
         data        - 值域范围或刻度序列：长度大于1的元组或列表
         cm          - 调色板名称
         kwds        - 关键字参数
-        ff          - 刻度标注格式化函数，默认str
+        ff          - 刻度标注格式化函数
         endpoint    - 刻度是否包含值域范围的两个端点值
         """
  
@@ -897,7 +920,7 @@ class Scheme:
             self.widgets.update({name:[mid]})
 
     def text(self, text, pos, **kwds):
-        """2d文字
+        """2D文字
 
         text        - 文本字符串
         pos         - 文本位置：元组、列表或numpy数组，shape=(2|3,)
@@ -1055,7 +1078,7 @@ class Scheme:
         self._line(vs, gltype, color, width, stipple, **kwds)
 
     def surface(self, vs, **kwds):
-        """曲面
+        """由三角面（默认）或四角面构成的曲面
 
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         kwds        - 关键字参数
@@ -1129,7 +1152,7 @@ class Scheme:
             self._mesh(xs, ys, zs, gltype, color=color, ccw=ccw, **kwds)
 
     def text3d(self, text, box, **kwds):
-        """3d文字
+        """3D文字
 
         text        - 文本字符串
         box         - 文本显示区域：左上、左下、右下、右上4个点的坐标，浮点型元组、列表或numpy数组，shape=(4,2|3)
@@ -1186,7 +1209,7 @@ class Scheme:
         self._surface(box, GL_QUADS, texture=texture, texcoord=texcoord, **kwds)
 
     def cone(self, spire, center, r, **kwds):
-        """锥
+        """圆锥
 
         spire       - 锥尖：元组、列表或numpy数组
         center      - 锥底圆心：元组、列表或numpy数组
@@ -1276,7 +1299,7 @@ class Scheme:
         self.mesh(xs, ys, zs, color=color, **kwds)
 
     def sphere(self, center, r, **kwds):
-        """由经纬度网格生成球
+        """由经纬度网格生成的球
 
         center      - 锥底圆心坐标：元组、列表或numpy数组
         r           - 锥底半径：浮点型
@@ -1362,13 +1385,13 @@ class Scheme:
         self._surface(vs, GL_TRIANGLE_FAN, color=color, **kwds)
 
     def cube(self, center, side, **kwds):
-        """六面体
+        """立方体
 
         center      - 中心坐标，元组、列表或numpy数组
         side        - 棱长：数值或长度为3的元组、列表、numpy数组
         kwds        - 关键字参数
             color       - 颜色：浮点型元组、列表或numpy数组
-            vec         - 六面体上表面法向量
+            vec         - 立方体上表面法向量
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明

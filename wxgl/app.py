@@ -29,7 +29,7 @@ class App(Scheme):
 
         backend     - 后端GUI库，可选wx或qt，默认auto（按照wx/qt优先级自动选择）
         kwds        - 关键字参数
-            size        - 窗口分辨率，默认960×640
+            size        - 窗口分辨率，默认(960, 640)
             bg          - 画布背景色，默认(0.0, 0.0, 0.0)
             haxis       - 高度轴，默认y轴，可选z轴，不支持x轴
             fovy        - 相机水平视野角度，默认50°

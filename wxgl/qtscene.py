@@ -142,7 +142,7 @@ class QtScene(BaseScene, QOpenGLWidget):
         self.update()
 
     def clear_buffer(self):
-        """删除纹理、顶点缓冲区等显存对象"""
+        """删除纹理、顶点缓冲区等对象"""
 
         self._clear_buffer()
 

@@ -2,15 +2,13 @@
 sort: 3
 ---
 
-# light
-
-WxGL光照情景模式类。
+# 光照情景模式
 
 ## wxgl.BaseLight
 
-**wxgl.BaseLight(ambient=(1.0,1.0,1.0))**
+wxgl.BaseLight(ambient=(1.0,1.0,1.0))
 
-环境光照情景模式。参数说明如下：
+基础光照情景模式。
 
 ```
 ambient     - 环境光颜色，默认(1.0,1.0,1.0)
@@ -18,59 +16,57 @@ ambient     - 环境光颜色，默认(1.0,1.0,1.0)
 
 ## wxgl.SunLight
 
-**wxgl.SunLight(direction=(-5.0,-1.0,-5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), \*\*kwds)**
+wxgl.SunLight(direction=(0.0,0.0,-1.0), lightcolor=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), \*\*kwds)
 
-太阳光照情景模式。参数说明如下：
+太阳光照情景模式。
 
 ```
-direction   - 太阳光方向，默认(1.0,1.0,1.0)
-color     	- 太阳光颜色，默认(1.0,1.0,1.0)
-ambient     - 环境光颜色，默认(1.0,1.0,1.0)
+direction   - 太阳光方向
+lightcolor  - 太阳光颜色
+ambient     - 环境光颜色
 kwds        - 关键字参数
-                stray           - 是否存在杂散光：默认False
-                roughness       - 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]，默认0.2
-				metalness       - 金属度（1-漫反射系数）：值域范围[0.0,1.0]，默认0.2
-				pellucidness    - 透光度：值域范围[0.0,1.0]，默认0.2
-				shininess       - 光洁度（高光系数）：值域范围(0.0,1.0]，默认0.5
+    diffuse     - 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮。默认值0.8
+    specular    - 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮。默认值0.6
+	shiny       - 高光系数：值域范围[1, 3000]，数值越大，高光区域越小。默认值50
+	pellucid    - 透光系数：值域范围[0.0,1.0]，数值越大，背面越亮。默认值0.5
 ```
 
 ## wxgl.LampLight
 
-**wxgl.LampLight(position=(5.0,1.0,5.0), color=(1.0,1.0,1.0), ambient=(0.3,0.3,0.3), \*\*kwds)**
+wxgl.LampLight(lamp=(0.0,0.0,2.0), lightcolor=(1.0,1.0,1.0), ambient=(0.5,0.5,0.5), \*\*kwds)
 
-定位光照情景模式。参数说明如下：
+定位光照情景模式。
 
 ```
-position    - 灯光位置，默认(5.0,1.0,5.0)
-color     	- 灯光颜色，默认(1.0,1.0,1.0)
-ambient     - 环境光颜色，默认(1.0,1.0,1.0)
+lamp        - 光源位置
+lightcolor  - 光源颜色
+ambient     - 环境光颜色
 kwds        - 关键字参数
-                stray           - 是否存在杂散光：默认False
-                roughness       - 粗糙度（1-镜面反射系数）：值域范围[0.0,1.0]，默认0.2
-				metalness       - 金属度（1-漫反射系数）：值域范围[0.0,1.0]，默认0.2
-				pellucidness    - 透光度：值域范围[0.0,1.0]，默认0.2
-				shininess       - 光洁度（高光系数）：值域范围(0.0,1.0]，默认0.5
+    diffuse     - 漫反射系数：值域范围[0.0, 1.0]，数值越大，表面越亮。默认值0.8
+    specular    - 镜面反射系数：值域范围[0.0, 1.0]，数值越大，高光越亮。默认值0.6
+	shiny       - 高光系数：值域范围[1, 3000]，数值越大，高光区域越小。默认值50
+	pellucid    - 透光系数：值域范围[0.0,1.0]，数值越大，背面越亮。默认值0.5
 ```
 
 ## wxgl.SkyLight
 
-**wxgl.SkyLight(direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.5,0.5,0.5))**
+wxgl.SkyLight(direction=(0.0,-1.0,0.0), sky=(1.0,1.0,1.0), ground=(0.3,0.3,0.3))
 
-户外光照情景模式。参数说明如下：
+户外光照情景模式。
 
 ```
-position    - 主光方向，默认(0.0,-1.0,0.0)
-sky     	- 天光颜色，默认(1.0,1.0,1.0)
-ground      - 地光颜色，默认(0.5,0.5,0.5)
+direction   - 主光方向
+sky     	- 天光颜色
+ground      - 地光颜色
 ```
 
 ## wxgl.SphereLight
 
-**wxgl.SphereLight(key=0, factor=0.8)**
+wxgl.SphereLight(style=0, factor=0.8)
 
-球谐光照情景模式。参数说明如下：
+球谐光照情景模式。
 
 ```
-key         - 情景序号，0~9，默认0
+style       - 情景序号，0~9，默认0
 factor      - 反射衰减因子，值域范围(0.0,1.0]，默认0.8
 ```

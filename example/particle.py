@@ -1,5 +1,10 @@
+import sys
 import numpy as np
 import wxgl
+
+if sys.platform.lower() == 'darwin': 
+    print('MacOS系统不支持OpenGL的点精灵模式，程序自动终止！')
+    sys.exit()
 
 vshader = """
     #version 330 core

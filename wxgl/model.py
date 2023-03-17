@@ -14,11 +14,11 @@ class Model:
         vshader     - 顶点着色器源码
         fshader     - 片元着色器源码
         kwds        - 关键字参数
-            visible     - 模型可见性
-            opacity     - 模型不透明
-            inside      - 模型显示在视锥体内
-            sprite      - 开启点精灵
-            alive       - 启动渲染计时器
+            visible     - 模型可见性，默认True
+            opacity     - 模型不透明，默认True
+            inside      - 模型显示在视锥体内，默认True
+            sprite      - 开启点精灵，默认False
+            alive       - 启动渲染计时器，默认False
         """
  
         keys = ['visible', 'opacity', 'inside', 'sprite', 'alive']
@@ -137,10 +137,10 @@ class Model:
         self.attribute.update({var_name: {'tag':'normal', 'data':data, 'un':data.shape[-1], 'usize':data.itemsize}})
  
     def set_texcoord(self, var_name, data):
-        """设置顶点纹理
+        """设置顶点纹理坐标
  
-        var_name    - 顶点纹理在着色器中的变量名
-        data        - 顶点纹理数据
+        var_name    - 顶点纹理坐标在着色器中的变量名
+        data        - 顶点纹理坐标数据
         """
  
         data = np.array(data, dtype=np.float32)
@@ -200,7 +200,7 @@ class Model:
         """
  
         self.uniform.update({var_name: {'tag':'ae'}})
- 
+
     def set_timestamp(self, var_name):
         """设置渲染时间戳（以毫秒为单位的浮点数）
  

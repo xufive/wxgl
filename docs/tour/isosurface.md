@@ -1,3 +1,12 @@
+---
+sort: 6
+---
+
+# 三维曲面重建
+
+WxGL实现了基于MarchingCube算法的三维曲面重建。下面例子中使用GitHub本项目example路径下的头部CT图片完成头部三维重建。
+
+```python
 import numpy as np
 from PIL import Image
 import wxgl
@@ -14,4 +23,7 @@ app.title('基于MarchingCube算法的三维重建演示')
 app.grid() # 显示网格
 app.cruise(lambda t : {'azim':(0.02*t)%360}) # 相机以20°/s的角速度逆时针环绕模型
 app.show()
+```
+
+![tour_isosurface.png](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/tour_isosurface.png)
 
