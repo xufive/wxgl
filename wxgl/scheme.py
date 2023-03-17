@@ -724,14 +724,14 @@ class Scheme:
     def grid(self, **kwds):
         """网格和刻度
         kwds        - 关键字参数
-            size            - 文本字号，默认32
-            xlabel          - x轴名称
-            ylabel          - y轴名称
-            zlabel          - z轴名称
-            xf              - x轴标注格式化函数
-            yf              - y轴标注格式化函数
-            zf              - z轴标注格式化函数
-            name            - 部件名
+            size        - 文本字号，默认32
+            xlabel      - x轴名称
+            ylabel      - y轴名称
+            zlabel      - z轴名称
+            xf          - x轴标注格式化函数
+            yf          - y轴标注格式化函数
+            zf          - z轴标注格式化函数
+            name        - 部件名
         """
 
         for key in kwds:
