@@ -16,9 +16,9 @@ class MyWindow(QWidget):
         super().__init__()
         
         self.setWindowTitle('在PyQt中使用WxGL')
-        self.setGeometry(0, 0, 1200, 800) # 设置窗位置和大小
+        self.setGeometry(0, 0, 640, 480) # 设置窗位置和大小
         
-        self.scene = wxgl.qtscene.QtScene(self, self.draw())
+        self.scene = wxgl.qtscene.QtScene(self, self.draw(), fovy=40)
         self.visible = True
 
         btn_home = QPushButton('复位')

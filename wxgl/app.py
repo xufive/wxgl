@@ -71,7 +71,7 @@ class App(Scheme):
             if sys.platform.lower() == 'darwin' and ext == '.webp':
                 raise ValueError('MacOS平台上WxGL不支持的文件格式：.webp')
 
-            if not os.path.isdir(fpath):
+            if fpath and not os.path.isdir(fpath):
                 os.makedirs(fpath)
 
         if self.backend == 'wx':

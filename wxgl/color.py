@@ -142,9 +142,8 @@ class ColorManager:
         invalid_c   - 无效数据的颜色
         """
  
-        if cm not in self._cmaps:
-            raise ValueError('未知的调色板%s'%cm)
- 
+        data = np.float64(data)
+
         if not np.isnan(invalid):
             data[data==invalid] = np.nan
         invalid_pos = np.isnan(data) # 记录无效数据位置
@@ -152,16 +151,9 @@ class ColorManager:
         dmin, dmax = (np.nanmin(data), np.nanmax(data)) if drange is None else drange
         data[data<dmin] = dmin
         data[data>dmax] = dmax
- 
-        cmo = mcm.get_cmap(cm)
-        cs, k = list(), 256/cmo.N
-        for i in range(cmo.N):
-            c = cmo(i)
-            for j in range(int(i*k), int((i+1)*k)):
-                cs.append(c)
-        cs = np.array(cs)
- 
         data = np.uint8(255*(data-dmin)/(dmax-dmin))
+ 
+        cs = self.get_cm_colors(cm)
         color = cs[data]
         color[invalid_pos] = invalid_c
  
@@ -173,4 +165,14 @@ class ColorManager:
     def get_cm_colors(self, cm):
         """返回给定调色板的颜色列表"""
 
-        return mcm.get_cmap(cm).colors
+        if cm not in self._cmaps:
+            raise ValueError('未知的调色板%s'%cm)
+ 
+        cmo = mcm.get_cmap(cm)
+        cs, k = list(), 256/cmo.N
+        for i in range(cmo.N):
+            c = cmo(i)
+            for j in range(int(i*k), int((i+1)*k)):
+                cs.append(c)
+        
+        return np.array(cs)

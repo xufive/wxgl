@@ -194,7 +194,7 @@ kwds        - 关键字参数
 
 wxgl.Scheme.line(vs, \*\*kwds)
 
-绘制线段。
+连点成线。
 
 ```
 vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
@@ -203,8 +203,38 @@ kwds        - 关键字参数
     data        - 数据集：元组、列表或numpy数组，shape=(n,)
     cm          - 调色板
     width       - 线宽：0.0~10.0之间，None使用默认设置
-    stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
-    pair        - 顶点两两成对绘制多条线段，默认False
+    stipple     - 线型
+        'solid'     - 实线（默认）
+        'dashed'    - 虚线
+        'doted'     - 点线
+        'dash-dot'  - 点虚线
+    loop        - 首尾闭合，默认False
+    visible     - 是否可见，默认True
+    inside      - 模型顶点是否影响模型空间，默认True
+    slide       - 幻灯片函数，默认None
+    transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+    ambient     - 环境光，默认(1.0,1.0,1.0)
+    name        - 模型或部件名
+```
+
+## wxgl.Scheme.lines
+
+wxgl.Scheme.lines(vs, \*\*kwds)
+
+绘制多条线段。
+
+```
+vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
+kwds        - 关键字参数
+    color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
+    data        - 数据集：元组、列表或numpy数组，shape=(n,)
+    cm          - 调色板
+    width       - 线宽：0.0~10.0之间，None使用默认设置
+    stipple     - 线型
+        'solid'     - 实线（默认）
+        'dashed'    - 虚线
+        'doted'     - 点线
+        'dash-dot'  - 点虚线
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     slide       - 幻灯片函数，默认None
@@ -226,7 +256,7 @@ kwds        - 关键字参数
     data        - 数据集：元组、列表或numpy数组，shape=(m,n)
     cm          - 调色板
     texture     - 纹理图片，或2D纹理对象
-    quad        - 使用四角面构成网格面，默认False（使用三角面）
+    quad        - 使用四角图元绘制：布尔型，默认False（使用三角图元绘制）
     ccw         - 顶点逆时针排序的面为正面，默认True
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
@@ -312,7 +342,7 @@ kwds        - 关键字参数
     cm          - 调色板
     texture     - 纹理图片，或2D/2DArray/3D纹理对象
     texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
-    quad        - 使用四角面构成曲面，默认False（使用三角面）
+    quad        - 使用四角图元绘制：布尔型，默认False（使用三角图元绘制）
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     opacity     - 模型不透明属性，默认True（不透明）

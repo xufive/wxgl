@@ -104,15 +104,17 @@ class Scheme:
 
         return result
 
-    def _line(self, vs, gltype, color, width, stipple, **kwds):
+    def _line(self, vs, gltype, **kwds):
         """线段
 
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         gltype      - 线的三种图元绘制方法之一
-        color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
-        width       - 线宽：0.0~10.0之间，None使用默认设置
-        stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
         kwds        - 关键字参数
+            color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
+            data        - 数据集：元组、列表或numpy数组，shape=(n,)
+            cm          - 调色板
+            width       - 线宽：0.0~10.0之间，None使用默认设置
+            stipple     - 线型：'solid' - 实线（默认），'dashed' - 虚线，'doted' - 点线，'dash-dot' - 点虚线
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             slide       - 幻灯片函数，默认None
@@ -121,13 +123,30 @@ class Scheme:
             name        - 模型或部件名
         """
 
-        keys = ['visible', 'inside', 'slide', 'transform', 'ambient', 'name']
+        keys = ['color', 'data', 'cm', 'width', 'stipple', 'visible', 'inside', 'slide', 'transform', 'ambient', 'name']
         for key in kwds:
             if key not in keys:
                 raise KeyError('不支持的关键字参数：%s'%key)
 
+        color = kwds.pop('color') if 'color' in kwds else None
+        data = kwds.pop('data') if 'data' in kwds else None
+        cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
+        width = kwds.pop('width') if 'width' in kwds else None
+        stipple = kwds.pop('stipple') if 'stipple' in kwds else None
         light = BaseLight(kwds.pop('ambient') if 'ambient' in kwds else (1.0,1.0,1.0))
         name = kwds.pop('name') if 'name' in kwds else None
+
+        if not data is None:
+            color = util.cmap(np.array(data), cm)
+
+        if stipple == 'dashed':
+            stipple = (2, 0xfff0)
+        elif stipple == 'doted':
+            stipple = (1, 0xf0f0)
+        elif stipple == 'dash-dot':
+            stipple = (4, 0xffcc)
+        else:
+            stipple = None
 
         vs = np.array(vs, dtype=np.float32)
         color = self._format_color(color, vs.shape[0])
@@ -310,7 +329,7 @@ class Scheme:
                 vs.extend([[x0, y0, z0-ext], [x0, y0, z0+ext]])
                 cones.append([[x0, y0, z0+ext], [x0, y0, z0+ext+h]]) 
 
-        self.line(vs, color=colors, pair=True, inside=False)
+        self.lines(vs, color=colors, inside=False)
         self.cone(cones[0][1], cones[0][0], r, color=cx, name=name, inside=False)
         self.cone(cones[1][1], cones[1][0], r, color=cy, name=name, inside=False)
         self.cone(cones[2][1], cones[2][0], r, color=cz, name=name, inside=False)
@@ -1046,16 +1065,20 @@ class Scheme:
         ), name)
 
     def line(self, vs, **kwds):
-        """线段
+        """连点成线
 
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         kwds        - 关键字参数
             color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
             data        - 数据集：元组、列表或numpy数组，shape=(n,)
             cm          - 调色板
-            width       - 线宽：0.0~10.0之间，None使用默认设置
-            stipple     - 线型：整数和两字节十六进制整数组成的元组，形如(1,0xFFFF)。None使用默认设置
-            pair        - 顶点两两成对绘制多条线段，默认False
+            width       - 线宽：0.0~10.0之间，默认1.0
+            stipple     - 线型
+                'solid'     - 实线（默认）
+                'dashed'    - 虚线
+                'doted'     - 点线
+                'dash-dot'  - 点虚线
+            loop        - 首尾闭合，默认False
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             slide       - 幻灯片函数，默认None
@@ -1064,21 +1087,37 @@ class Scheme:
             name        - 模型或部件名
         """
 
-        color = kwds.pop('color') if 'color' in kwds else None
-        data = kwds.pop('data') if 'data' in kwds else None
-        cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
-        width = kwds.pop('width') if 'width' in kwds else None
-        stipple = kwds.pop('stipple') if 'stipple' in kwds else None
-        pair = kwds.pop('pair') if 'pair' in kwds else False
+        loop = kwds.pop('loop') if 'loop' in kwds else False
+        gltype = GL_LINE_LOOP if loop else GL_LINE_STRIP
 
-        gltype = GL_LINES if pair else GL_LINE_STRIP
-        if not data is None:
-            color = util.cmap(np.array(data), cm)
+        self._line(vs, gltype, **kwds)
 
-        self._line(vs, gltype, color, width, stipple, **kwds)
+    def lines(self, vs, **kwds):
+        """多条线段
+
+        vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
+        kwds        - 关键字参数
+            color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
+            data        - 数据集：元组、列表或numpy数组，shape=(n,)
+            cm          - 调色板
+            width       - 线宽：0.0~10.0之间，默认1.0
+            stipple     - 线型
+                'solid'     - 实线（默认）
+                'dashed'    - 虚线
+                'doted'     - 点线
+                'dash-dot'  - 点虚线
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列，默认None
+            ambient     - 环境光，默认(1.0,1.0,1.0)
+            name        - 模型或部件名
+        """
+
+        self._line(vs, GL_LINES, **kwds)
 
     def surface(self, vs, **kwds):
-        """由三角面（默认）或四角面构成的曲面
+        """曲面
 
         vs          - 顶点集：元组、列表或numpy数组，shape=(n,2|3)
         kwds        - 关键字参数
@@ -1087,7 +1126,7 @@ class Scheme:
             cm          - 调色板
             texture     - 纹理图片，或2D/2DArray/3D纹理对象
             texcoord    - 纹理坐标集：元组、列表或numpy数组，shape=(n,2|3)
-            quad        - 使用四角面构成曲面，默认False（使用三角面）
+            quad        - 使用四角图元绘制：布尔型，默认False（使用三角图元绘制）
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认True（不透明）
@@ -1123,7 +1162,7 @@ class Scheme:
             data        - 数据集：元组、列表或numpy数组，shape=(m,n)
             cm          - 调色板
             texture     - 纹理图片，或2D纹理对象
-            quad        - 使用四角面构成网格面，默认False（使用三角面）
+            quad        - 使用四角图元绘制：布尔型，默认False（使用三角图元绘制）
             ccw         - 顶点逆时针排序的面为正面，默认True
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
@@ -1140,8 +1179,8 @@ class Scheme:
         data = kwds.pop('data') if 'data' in kwds else None
         cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
         texture = kwds.pop('texture') if 'texture' in kwds else None
-        quad = kwds.pop('quad') if 'quad' in kwds else False
         ccw = kwds.pop('ccw') if 'ccw' in kwds else True
+        quad = kwds.pop('quad') if 'quad' in kwds else False
         gltype = GL_QUADS if quad else GL_TRIANGLES
 
         if not texture is None:

@@ -18,11 +18,11 @@ class MainFrame(wx.Frame):
     def __init__(self):
         """构造函数"""
  
-        wx.Frame.__init__(self, None, -1, '在WxPython中使用WxGL', size=(1200,800), style=wx.DEFAULT_FRAME_STYLE)
+        wx.Frame.__init__(self, None, -1, '在WxPython中使用WxGL', size=(640,480), style=wx.DEFAULT_FRAME_STYLE)
         self.Center()
         self.SetBackgroundColour((224, 224, 224))
 
-        self.scene = wxgl.wxscene.WxScene(self, self.draw())
+        self.scene = wxgl.wxscene.WxScene(self, self.draw(), fovy=40)
         self.visible = True
 
         btn_home = wx.Button(self, -1, '复位', size=(100, -1))
@@ -107,4 +107,6 @@ if __name__ == '__main__':
     frame.Show()
     app.MainLoop()
 ```
+
+![wx.png](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/wx.png)
 
