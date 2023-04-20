@@ -16,7 +16,11 @@ class QtScene(BaseScene, QOpenGLWidget):
         super(QtScene, self).__init__(scheme, **kwds)
         super(BaseScene, self).__init__(parent)
 
+        #self.is_wxgl_app = hasattr(parent, 'sb21')
+        self.is_wxgl_app = hasattr(self.scheme, 'tinfo') and hasattr(self.scheme, 'cinfo')
         self.factor = int(parent.devicePixelRatio())
+        self.parent = parent
+
         if PLATFORM == 'darwin':
             self.offset = (85*self.factor, 113*self.factor)
         else:
@@ -27,6 +31,13 @@ class QtScene(BaseScene, QOpenGLWidget):
     def timerEvent(self, evt):
         """重写定时事件函数"""
 
+        if self.is_wxgl_app:
+            if self.scheme.cinfo:
+                self.parent.cam_info.setText(self.scheme.cinfo(self.azim, self.elev, self.dist))
+        
+            if self.scheme.tinfo:
+                self.parent.time_info.setText(self.scheme.tinfo(self.duration))
+        
         self.update()
 
     def initializeGL(self):

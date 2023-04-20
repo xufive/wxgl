@@ -3,7 +3,7 @@
 import sys, os, time
 import numpy as np
 import imageio
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QToolBar, QHBoxLayout, QFileDialog, QLabel
 from PyQt6.QtGui import QIcon, QAction, QImage, QPixmap
 from PyQt6.QtCore import Qt, QByteArray, pyqtSignal, QThread
 
@@ -138,12 +138,13 @@ class QtFigure(QMainWindow):
         self.frames = kwds.get('frames')
         self.loop = kwds.get('loop')
         self.quality = kwds.get('quality')
+        #self.sb21 = None
 
         super().__init__()
 
         self.setWindowTitle('WxGL')
         self.setWindowIcon(self.get_qicon('appicon', 'ico'))
-        self.statusBar()
+        self.sb = self.statusBar()
 
         size = scheme.kwds.get('size', (960,640))
         self.resize(*size)
@@ -184,6 +185,13 @@ class QtFigure(QMainWindow):
         main_widget = QWidget()
         main_widget.setLayout(box)
         self.setCentralWidget(main_widget)
+
+        self.sb = self.statusBar()
+        self.cam_info = QLabel()
+        self.time_info = QLabel()
+        self.time_info.setStyleSheet("QLabel{padding-left: 80px;}")
+        self.sb.addPermanentWidget(self.cam_info) 
+        self.sb.addPermanentWidget(self.time_info)
 
         if not self.outfile is None:
             self.cn = 0

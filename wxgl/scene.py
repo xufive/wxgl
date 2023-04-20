@@ -321,7 +321,7 @@ class BaseScene:
             if delta > 0: # 滚轮前滚
                 self.fovy *= 0.95
             else: # 滚轮后滚
-                self.fovy += (180 - self.fovy) / 180
+                self.fovy += (120 - self.fovy) / 120
             self._update_proj_matrix()
 
     def _assemble(self):

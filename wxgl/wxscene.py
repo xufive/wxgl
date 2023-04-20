@@ -13,6 +13,9 @@ class WxScene(BaseScene, glc.GLCanvas):
         super(WxScene, self).__init__(scheme, **kwds)
         super(BaseScene, self).__init__(parent, attribList=(glc.WX_GL_RGBA, glc.WX_GL_DOUBLEBUFFER, glc.WX_GL_DEPTH_SIZE, 24))
 
+        self.parent = parent
+        self.is_wxgl_app = hasattr(self.scheme, 'tinfo') and hasattr(self.scheme, 'cinfo')
+
         self.context = glc.GLContext(self)
         self.SetCurrent(self.context)
         self.factor_csize = self.GetContentScaleFactor()
@@ -107,6 +110,13 @@ class WxScene(BaseScene, glc.GLCanvas):
     def on_idle(self, evt):
         """idle事件函数"""
 
+        if self.is_wxgl_app:
+            if self.scheme.cinfo:
+                wx.CallAfter(self.parent.sb.SetStatusText, self.scheme.cinfo(self.azim, self.elev, self.dist), 1)
+        
+            if self.scheme.tinfo:
+                wx.CallAfter(self.parent.sb.SetStatusText, self.scheme.tinfo(self.duration), 2)
+        
         wx.CallAfter(self.Refresh, False)
 
     def home(self):

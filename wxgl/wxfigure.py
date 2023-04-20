@@ -68,6 +68,9 @@ class WxFigure(wx.Frame):
 
         self.tb.Realize()
         self.sb = self.CreateStatusBar()
+        self.sb.SetFieldsCount(3)
+        self.sb.SetStatusWidths([-3, -2, -1])
+        self.sb.SetStatusStyles([wx.SB_RAISED, wx.SB_RAISED, wx.SB_RAISED])
         self.scene = WxScene(self, scheme, **scheme.kwds)
         
         self.Show()
