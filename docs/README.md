@@ -15,4 +15,4 @@ WxGL提供了一套简洁易用、对用户友好的API，将OpenGL的复杂概�
 
 [中文文档](https://xufive.github.io/wxgl)
 
-![cover.png](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/cover.png)
+![cover.png](https://raw.githubusercontent.com/xufive/wxgl/master/example/res/md/solar.png)
