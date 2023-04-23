@@ -134,7 +134,7 @@ class SolarSystemModel:
     def show_ecs(self):
         """绘制黄道坐标系模型"""
 
-        app = wxgl.App(haxis='z', elev=15, fovy=35, backend='qt')
+        app = wxgl.App(haxis='z', elev=15, fovy=35)
         app.title('太阳系模型')
         app.info(time_func=self.dt_func) # 在状态栏中显示日期时间信息
         

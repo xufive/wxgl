@@ -16,7 +16,6 @@ class QtScene(BaseScene, QOpenGLWidget):
         super(QtScene, self).__init__(scheme, **kwds)
         super(BaseScene, self).__init__(parent)
 
-        #self.is_wxgl_app = hasattr(parent, 'sb21')
         self.is_wxgl_app = hasattr(self.scheme, 'tinfo') and hasattr(self.scheme, 'cinfo')
         self.factor = int(parent.devicePixelRatio())
         self.parent = parent
@@ -40,12 +39,12 @@ class QtScene(BaseScene, QOpenGLWidget):
         
         self.update()
 
-    def initializeGL(self):
-        """重写初始化函数"""
-        
-        if PLATFORM != 'darwin':
-            self._initialize_gl()
-            self._assemble()
+    #def initializeGL(self):
+    #    """重写初始化函数"""
+    #    
+    #    if PLATFORM != 'darwin':
+    #        self._initialize_gl()
+    #        self._assemble()
 
     def paintGL(self):
         """重写绘制函数"""
