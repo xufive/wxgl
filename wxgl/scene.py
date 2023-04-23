@@ -49,6 +49,7 @@ class BaseScene:
         self.painted = False                                            # 期望的重绘已完成 
         self.left_down = False                                          # 左键按下
         self.ctrl_down = False                                          # Ctr键按下
+        self.wheel_lag = 0                                              # 滚轮迟滞（消除抖动）
         self.mouse_pos = None                                           # 鼠标位置
         self.scale = 1.0                                                # 眼睛位置自适应调整系数
 
@@ -318,10 +319,12 @@ class BaseScene:
             self._update_cam_and_up(dist=dist)
             self._update_view_matrix()
         else:
-            if delta > 0: # 滚轮前滚
+            if delta > 0 and self.wheel_lag > 0: # 滚轮前滚
                 self.fovy *= 0.95
-            else: # 滚轮后滚
-                self.fovy += (120 - self.fovy) / 120
+            elif delta < 0 and self.wheel_lag < 0: # 滚轮后滚
+                self.fovy = min(160, self.fovy / 0.95)
+            else:
+                self.wheel_lag = int(delta > 0) - 0.5
             self._update_proj_matrix()
 
     def _assemble(self):
