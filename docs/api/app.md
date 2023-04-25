@@ -22,6 +22,17 @@ kwds        - 关键字参数
     smooth      - 直线和点的反走样，默认True
 ```
 
+## wxgl.App.info
+
+wxgl.App.info(time_func=None, cam_func=None)
+
+设置时间信息格式化函数和相机位置信息格式化函数，开启在界面状态栏显示信息功能。
+
+```
+time_func   - 以时间t（毫秒）为参数的时间信息格式化函数，返回字符串
+cam_func    - 以方位角、仰角和距离为参数的相机位置信息格式化函数，返回字符串
+```
+
 ## wxgl.App.save_fig
 
 wxgl.App.save_fig(outfile, dpi=None, fps=25, frames=100, loop=0, quality=100)

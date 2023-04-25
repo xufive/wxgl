@@ -1256,7 +1256,7 @@ class Scheme:
         kwds        - 关键字参数
             color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
             arc         - 弧度角范围：默认0°~360°
-            cell        - 网格精度：默认5°
+            cell        - 圆周分片精度：默认5°
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明
@@ -1300,7 +1300,7 @@ class Scheme:
         kwds        - 关键字参数
             color       - 颜色：浮点型元组、列表或numpy数组
             arc         - 弧度角范围：默认0°~360°
-            cell        - 网格精度：默认5°
+            cell        - 圆周分片精度：默认5°
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明
@@ -1336,6 +1336,54 @@ class Scheme:
         zs = vs[..., 2]
 
         self.mesh(xs, ys, zs, color=color, **kwds)
+
+    def pipe(self, vs, r, **kwds):
+        """圆管
+
+        vs          - 圆管中心线顶点集：元组、列表或numpy数组，shape=(n,3)
+        r           - 圆管半径：浮点型
+        kwds        - 关键字参数
+            color       - 颜色：浮点型元组、列表或numpy数组
+            data        - 数据集：元组、列表或numpy数组，shape=(n,)
+            cm          - 调色板
+            cell        - 圆周分片精度：默认5°
+            visible     - 是否可见，默认True
+            inside      - 模型顶点是否影响模型空间，默认True
+            opacity     - 模型不透明属性，默认不透明
+            cull        - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+            fill        - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+            slide       - 幻灯片函数，默认None
+            transform   - 由旋转、平移和缩放组成的模型几何变换序列
+            light       - 光照模型（默认户外光照模型）
+            name        - 模型或部件名
+        """
+
+        color = kwds.pop('color') if 'color' in kwds else None
+        data = kwds.pop('data') if 'data' in kwds else None
+        cm = kwds.pop('cm') if 'cm' in kwds else 'viridis'
+        cell = kwds.pop('cell') if 'cell' in kwds else 5
+        gltype = GL_QUADS
+
+        vs = np.array(vs, dtype=np.float32).reshape(-1,3)
+        rows, cols = vs.shape[0], int(360/cell)+1
+        circles = list()
+
+        theta = np.linspace(0, 2*np.pi, cols)
+        x = r * np.cos(theta)
+        z = -r * np.sin(theta)
+        y = np.zeros(cols, dtype=np.float64)
+        v = np.stack((x,y,z), axis=1)
+
+        for i in range(1, rows):
+            m = util.y2v(vs[i-1] - vs[i])
+            circles.append(np.dot(v, m) + vs[i-1])
+        circles.append(np.dot(v, m) + vs[rows-1])
+        vs = np.stack(circles, axis=0)
+        xs, ys, zs = vs[...,0], vs[...,1], vs[...,2]
+
+        if not data is None:
+            color = util.cmap(np.repeat(np.array(data), cols), cm)
+        self._mesh(xs, ys, zs, gltype, color=color, **kwds)
 
     def sphere(self, center, r, **kwds):
         """由经纬度网格生成的球
@@ -1389,7 +1437,7 @@ class Scheme:
         kwds        - 关键字参数
             color       - 颜色：浮点型元组、列表或numpy数组
             arc         - 弧度角范围：默认0°~360°
-            cell        - 网格精度：默认5°
+            cell        - 圆周分片精度：默认5°
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明
@@ -1474,7 +1522,7 @@ class Scheme:
             vec         - 环面法向量
             uarc        - u方向范围：默认0°~360°
             varc        - v方向范围：默认0°~360°
-            cell        - 网格精度：默认5°
+            cell        - 圆周分片精度：默认5°
             visible     - 是否可见，默认True
             inside      - 模型顶点是否影响模型空间，默认True
             opacity     - 模型不透明属性，默认不透明

@@ -35,7 +35,7 @@ r           - 半径：浮点型
 kwds        - 关键字参数
     color       - 颜色：浮点型元组、列表或numpy数组
     arc         - 弧度角范围：默认0°~360°
-    cell        - 网格精度：默认5°
+    cell        - 圆周分片精度：默认5°
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     opacity     - 模型不透明属性，默认不透明
@@ -49,7 +49,7 @@ kwds        - 关键字参数
 
 ## wxgl.Scheme.colorbar
 
-wxgl.Scheme.circle(data, cm='viridis', ff=str, endpoint=True)
+wxgl.Scheme.colorbar(data, cm='viridis', ff=str, endpoint=True)
 
 绘制调色板。
 
@@ -63,7 +63,7 @@ endpoint    - 刻度是否包含值域范围的两个端点值
 
 ## wxgl.Scheme.cone
 
-wxgl.Scheme.circle(spire, center, r, \*\*kwds)
+wxgl.Scheme.cone(spire, center, r, \*\*kwds)
 
 绘制圆锥。
 
@@ -74,7 +74,7 @@ r           - 锥底半径：浮点型
 kwds        - 关键字参数
     color       - 颜色或颜色集：预定义颜色、十六进制颜色，或者浮点型元组、列表或numpy数组，值域范围[0,1]
     arc         - 弧度角范围：默认0°~360°
-    cell        - 网格精度：默认5°
+    cell        - 圆周分片精度：默认5°
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     opacity     - 模型不透明属性，默认不透明
@@ -135,7 +135,7 @@ r           - 圆柱半径：浮点型
 kwds        - 关键字参数
     color       - 颜色：浮点型元组、列表或numpy数组
     arc         - 弧度角范围：默认0°~360°
-    cell        - 网格精度：默认5°
+    cell        - 圆周分片精度：默认5°
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     opacity     - 模型不透明属性，默认不透明
@@ -278,6 +278,31 @@ wxgl.Scheme.model(m, name=None)
 ```
 m           - wxgl.Model类的实例
 name        - 模型或部件名
+```
+
+## wxgl.Scheme.pipe
+
+wxgl.Scheme.pipe(vs, r, \*\*kwds)
+
+绘制圆管。
+
+```
+vs          - 圆管中心线顶点集：元组、列表或numpy数组，shape=(n,3)
+r           - 圆管半径：浮点型
+kwds        - 关键字参数
+    color       - 颜色：浮点型元组、列表或numpy数组
+    data        - 数据集：元组、列表或numpy数组，shape=(n,)
+    cm          - 调色板
+    cell        - 圆周分片精度：默认5°
+    visible     - 是否可见，默认True
+    inside      - 模型顶点是否影响模型空间，默认True
+    opacity     - 模型不透明属性，默认不透明
+    cull        - 面剔除，可选项：'front', 'back', None（默认，表示使用当前设置）
+    fill        - 填充，可选项：True, False, None（默认，表示使用当前设置） 
+    slide       - 幻灯片函数，默认None
+    transform   - 由旋转、平移和缩放组成的模型几何变换序列
+    light       - 光照模型（默认户外光照模型）
+    name        - 模型或部件名
 ```
 
 ## wxgl.Scheme.scatter
@@ -431,7 +456,7 @@ kwds        - 关键字参数
     vec         - 环面法向量
     uarc        - u方向范围：默认0°~360°
     varc        - v方向范围：默认0°~360°
-    cell        - 网格精度：默认5°
+    cell        - 圆周分片精度：默认5°
     visible     - 是否可见，默认True
     inside      - 模型顶点是否影响模型空间，默认True
     opacity     - 模型不透明属性，默认不透明

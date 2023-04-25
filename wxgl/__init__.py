@@ -9,8 +9,8 @@ from wxgl.light import BaseLight, SunLight, LampLight, SkyLight, SphereLight
 from wxgl.util import font_list, color_list, cm_list, cmap
 
 name = 'wxgl'
-version = '0.9.13'
-version_info = (0, 9, 13, 0)
+version = '0.9.14'
+version_info = (0, 9, 14, 0)
 
 VERTEX_SHADER                   = GL_VERTEX_SHADER
 TESS_CONTROL_SHADER             = GL_TESS_CONTROL_SHADER
