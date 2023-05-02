@@ -6,6 +6,7 @@ np.seterr(invalid='ignore')
 from OpenGL.GL import *
 from . color import ColorManager
 from . text import FontManager
+from . pointcloud import PointCloudData
 
 CM = ColorManager()
 FM = FontManager()
@@ -52,6 +53,15 @@ def get_cm_colors(cm):
     """返回给定调色板的颜色列表"""
 
     return CM.get_cm_colors(cm)
+
+def read_pcfile(pcfile):
+    """读点云文件，支持.ply和.pcd格式"""
+
+    ds = PointCloudData(pcfile)
+    if ds.info.startswith('正常'):
+        return ds
+    else:
+        return False
 
 def text2img(text, size, color, bg=None, padding=0, family=None, weight='normal'):
     """文本转图像，返回图像数据和size元组

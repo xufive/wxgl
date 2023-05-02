@@ -1,9 +1,11 @@
 # 更新日志
 
-## [0.9.14] - 2023-04-28
+## [0.9.14] - 2023-05-02
 
 ### 新增
 
+* 新增wxgl.read_pcfile函数，用于解读点云数据文件。目前支持ply和pcd格式的文件，返回PointCloudData类。
+* Scheme类新增pointcloud方法，用于绘制点云文件。
 * Scheme类新增pipe方法，用于绘制圆管。不同于cylinder方法（绘制圆柱），pipe可以绘制弯曲的圆管。
 
 <br>

@@ -6,7 +6,7 @@ from wxgl.scheme import Scheme
 from wxgl.texture import Texture
 from wxgl.model import Model
 from wxgl.light import BaseLight, SunLight, LampLight, SkyLight, SphereLight
-from wxgl.util import font_list, color_list, cm_list, cmap
+from wxgl.util import font_list, color_list, cm_list, cmap, read_pcfile
 
 name = 'wxgl'
 version = '0.9.14'

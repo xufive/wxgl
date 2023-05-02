@@ -1592,3 +1592,19 @@ class Scheme:
 
         self._surface(vs, GL_TRIANGLES, color=color, **kwds)
 
+    def pointcloud(self, pcfile, cm='viridis', size=1):
+        """读点云文件并绘制模型
+
+        pcfile      - 点云文件，支持ply、pcd等格式
+        cm          - 调色板。若文件无颜色数据但包含强度数据，则使用调色板将强度映射为颜色
+        size        - 点的大小
+        """
+
+        ds = util.read_pcfile(pcfile)
+        if ds:
+            if ds.rgb is None:
+                return self.scatter(ds.xyz, data=ds.intensity, cm=cm, size=size)
+            else:
+                return self.scatter(ds.xyz, color=ds.rgb, size=size)
+        else:
+            raise RuntimeError(ds.info)
