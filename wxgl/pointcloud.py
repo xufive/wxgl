@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
 import os
-import struct, lzf
+import struct
 import binascii
 import numpy as np
 import wxgl
+
+lzf_is_available = True
+try:
+    import lzf
+except:
+    lzf_is_available = False
 
 class PointCloudData:
     """读取点云数据文件"""
@@ -12,7 +18,8 @@ class PointCloudData:
     def __init__(self, pcfile):
         """构造函数，pcfile为点云数据文件名"""
 
-        self.info = '正常：数据可用'    # 结果可用性说明
+        self.ok = True                  # 数据是否可用
+        self.info = '正常：数据可用'    # 数据可用性说明
         self.raw = dict()               # 解读出来的原始数据
 
         ext = os.path.splitext(pcfile)[1].lower()
@@ -21,8 +28,8 @@ class PointCloudData:
         elif ext == '.pcd':
             self.open_pcd(pcfile)
         else:
-            raise RuntimeError('不支持的点云数据文件格式：%s'%ext) 
-            self.raw.update({'info': '错误：不支持的点云数据文件格式：%s'%ext})
+            self.ok = False
+            self.info = '错误：不支持的点云数据文件格式：%s'%ext
 
     @property
     def fields(self):
@@ -85,12 +92,55 @@ class PointCloudData:
         else:
             return None
 
+    def lzf_decompress(self, content, olen):
+        """LZF解压缩算法，content为压缩内容，olen为解压后的期望长度"""
+
+        iidx, out = 0, list()
+        while iidx < len(content):
+            c = content[iidx]
+            iidx += 1
+
+            if c < 32:
+                c += 1
+                if len(out) + c > olen:
+                    break 
+                
+                for i in range(c):
+                    out.append(content[iidx:iidx+1])
+                    iidx += 1
+            else:
+                k = c >> 5
+                if k == 7:
+                    k += content[iidx]
+                    iidx += 1
+                
+                if (len(out) + k + 2 > olen):
+                    break
+                
+                rf = len(out) - ((c & 0x1f) << 8) - 1 - content[iidx]
+                iidx += 1
+
+                if rf < 0:
+                    break
+                
+                out.append(out[rf])
+                rf += 1
+                out.append(out[rf])
+                rf += 1
+
+                for i in range(k):
+                    out.append(out[rf])
+                    rf += 1
+
+        return b''.join(out)
+
     def open_ply(self, pcfile):
         """读ply格式的点云文件"""
 
         with open(pcfile, 'rb') as fp:
             line = fp.readline().decode().strip()
             if line != 'ply':
+                self.ok = False
                 self.info = '错误：不合规范的PLY文件'
                 return
 
@@ -128,6 +178,7 @@ class PointCloudData:
                                 nb +=  bin_type[dtype][1]
                                 sbin += bin_type[dtype][0]
                         else:
+                            self.ok = False
                             self.info = '错误：未识别的数据类型或长度'
                             return
                 elif pieces[0] == 'end_header':
@@ -135,10 +186,12 @@ class PointCloudData:
                 elif pieces[0] == 'comment':
                     continue
                 else:
+                    self.ok = False
                     self.info = '错误：文件头包含未识别的信息'
                     return
 
             if len(fields) == 0 or len(otypes) != len(fields) or total is None or encoding is None:
+                self.ok = False
                 self.info = '错误：文件头缺项'
                 return
 
@@ -148,6 +201,7 @@ class PointCloudData:
                 try:
                     v = np.array(list(struct.iter_unpack(sbin, fp.read(total*nb))), dtype=np.float64)
                 except:
+                    self.ok = False
                     self.info = '错误：解析二进制数据出现意外'
                     return
  
@@ -161,6 +215,7 @@ class PointCloudData:
         with open(pcfile, 'rb') as fp:
             line = fp.readline().decode().strip()
             if not line.startswith('# .PCD'):
+                self.ok = False
                 self.info = '错误：不合规范的PCD文件'
                 return
 
@@ -183,10 +238,12 @@ class PointCloudData:
                 elif pieces[0] in ('COUNT', 'WIDTH', 'HEIGHT', 'VIEWPOINT'):
                     continue
                 else:
+                    self.ok = False
                     self.info = '错误：文件头包含未识别的信息'
                     return
                 
             if fields is None or sizes is None or types is None or total is None or encoding is None:
+                self.ok = False
                 self.info = '错误：文件头缺项'
                 return
 
@@ -201,14 +258,15 @@ class PointCloudData:
                 '4U':   ('I', np.uint32)
             }
 
-            sbin, nb, otypes = '=', 0, list()
+            sbin, nb, otypes = '', list(), list()
             for s, t in zip(sizes, types):
-                nb += int(s)
+                nb.append(int(s))
                 st = s + t
                 if st in bin_type:
                     sbin += bin_type[st][0]
                     otypes.append(bin_type[st][1])
                 else:
+                    self.ok = False
                     self.info = '错误：未识别的数据类型或长度'
                     return
 
@@ -217,15 +275,26 @@ class PointCloudData:
             elif encoding == 'binary_compressed':
                 try:
                     len_0, len_1 = struct.unpack('II', fp.read(8))
-                    content = lzf.decompress(fp.read()[:len_0], len_1)
-                    v = np.array(list(struct.iter_unpack(sbin, content)), dtype=np.float64)
+                    if lzf_is_available:
+                        content = lzf.decompress(fp.read()[:len_0], len_1)
+                    else:
+                        content = self.lzf_decompress(fp.read()[:len_0], len_1)
+                    
+                    start, v = 0, list()
+                    for s, n in zip(sbin, nb):
+                        end = start + total*n
+                        v.append(np.array(list(struct.iter_unpack(s, content[start:end])), dtype=np.float64))
+                        start = end
+                    v = np.stack(v, axis=0).transpose()[0]
                 except:
+                    self.ok = False
                     self.info = '错误：解析二进制数据出现意外'
                     return
             else:
                 try:
-                    v = np.array(list(struct.iter_unpack(sbin, fp.read(total*nb))), dtype=np.float64)
+                    v = np.array(list(struct.iter_unpack(sbin, fp.read(total*sum(nb)))), dtype=np.float64)
                 except:
+                    self.ok = False
                     self.info = '错误：解析二进制数据出现意外'
                     return
             

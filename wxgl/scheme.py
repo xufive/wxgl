@@ -1601,7 +1601,7 @@ class Scheme:
         """
 
         ds = util.read_pcfile(pcfile)
-        if ds:
+        if ds.ok:
             if ds.rgb is None:
                 return self.scatter(ds.xyz, data=ds.intensity, cm=cm, size=size)
             else:

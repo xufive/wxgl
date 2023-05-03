@@ -37,3 +37,17 @@ invalid     - 无效数据的标识，默认nan
 invalid_c   - 无效数据的颜色，默认(0,0,0,0)
 ```
 
+## wxgl.read_pcfile
+
+wxgl.read_pcfile(pcfile)
+
+读取.ply和.pcd格式的点云文件，返回一个PointCloudData类实例，该实例有以下属性：
+
+* PointCloudData.ok         - 数据是否可用，布尔型
+* PointCloudData.info       - 数据可用性说明，字符串
+* PointCloudData.raw        - 解读出来的原始数据，字典
+* PointCloudData.fields     - 数据字段（项）名称，列表
+* PointCloudData.xyz        - 点的坐标数据，None或者numpy数组（ndarray）
+* PointCloudData.rgb        - 点的颜色数据，None或者numpy数组（ndarray）
+* PointCloudData.intensity  - 点的强度数据，None或者numpy数组（ndarray）
+

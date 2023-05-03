@@ -305,6 +305,18 @@ kwds        - 关键字参数
     name        - 模型或部件名
 ```
 
+## wxgl.Scheme.pointcloud
+
+wxgl.Scheme.pointcloud(pcfile, cm='viridis', size=1)
+
+读点云文件并绘制模型。
+
+```
+pcfile      - 点云文件，支持ply、pcd等格式
+cm          - 调色板。若文件无颜色数据但包含强度数据，则使用调色板将强度映射为颜色
+size        - 点的大小
+```
+
 ## wxgl.Scheme.scatter
 
 wxgl.Scheme.scatter(vs, \*\*kwds)

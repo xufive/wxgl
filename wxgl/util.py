@@ -57,11 +57,7 @@ def get_cm_colors(cm):
 def read_pcfile(pcfile):
     """读点云文件，支持.ply和.pcd格式"""
 
-    ds = PointCloudData(pcfile)
-    if ds.info.startswith('正常'):
-        return ds
-    else:
-        return False
+    return PointCloudData(pcfile)
 
 def text2img(text, size, color, bg=None, padding=0, family=None, weight='normal'):
     """文本转图像，返回图像数据和size元组
